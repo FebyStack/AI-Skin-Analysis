@@ -1,5 +1,12 @@
 import type { CaptureResult } from "../types";
 
+export class RedactError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = "RedactError";
+  }
+}
+
 export interface DecodedBitmap {
   width: number;
   height: number;
@@ -26,9 +33,15 @@ export async function stripMetadata(
   if (!input.type.startsWith("image/")) {
     throw new Error("File is not an image");
   }
-  const bitmap = await codec.decode(input);
-  const clean = await codec.encode(bitmap, mimeType);
-  return { blob: clean, mimeType, width: bitmap.width, height: bitmap.height };
+  try {
+    const bitmap = await codec.decode(input);
+    const clean = await codec.encode(bitmap, mimeType);
+    return { blob: clean, mimeType, width: bitmap.width, height: bitmap.height };
+  } catch (err) {
+    throw new RedactError("Could not process this photo — it may be corrupt or unsupported.", {
+      cause: err,
+    });
+  }
 }
 
 export function toCaptureResult(
@@ -48,7 +61,7 @@ export function toCaptureResult(
 
 export const canvasCodec: ImageCodec = {
   async decode(blob) {
-    const bitmap = await createImageBitmap(blob);
+    const bitmap = await createImageBitmap(blob, { imageOrientation: "from-image" });
     return { width: bitmap.width, height: bitmap.height, source: bitmap };
   },
   async encode(bitmap, mimeType) {
@@ -58,6 +71,7 @@ export const canvasCodec: ImageCodec = {
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("2D canvas unavailable");
     ctx.drawImage(bitmap.source as CanvasImageSource, 0, 0);
+    (bitmap.source as ImageBitmap).close?.();
     const blob: Blob | null = await new Promise((res) =>
       canvas.toBlob(res, mimeType, 0.92),
     );

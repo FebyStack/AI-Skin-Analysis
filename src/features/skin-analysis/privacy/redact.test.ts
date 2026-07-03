@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { stripMetadata, type ImageCodec } from "./redact";
+import { stripMetadata, RedactError, type ImageCodec } from "./redact";
 
 const fakeCodec: ImageCodec = {
   async decode(blob) {
@@ -25,6 +25,26 @@ describe("stripMetadata", () => {
     const bad = new Blob(["not-an-image"], { type: "application/pdf" });
     await expect(stripMetadata(bad, "image/jpeg", fakeCodec)).rejects.toThrow(
       /not an image/i,
+    );
+  });
+});
+
+describe("stripMetadata — codec failures", () => {
+  it("wraps decode failures in RedactError with a clear message", async () => {
+    const failingCodec: ImageCodec = {
+      async decode() {
+        throw new DOMException("The source image could not be decoded.");
+      },
+      async encode() {
+        throw new Error("unreachable");
+      },
+    };
+    const blob = new Blob(["corrupt"], { type: "image/jpeg" });
+    await expect(stripMetadata(blob, "image/jpeg", failingCodec)).rejects.toThrow(
+      RedactError,
+    );
+    await expect(stripMetadata(blob, "image/jpeg", failingCodec)).rejects.toThrow(
+      /could not process this photo/i,
     );
   });
 });
