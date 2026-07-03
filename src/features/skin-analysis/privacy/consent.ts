@@ -7,9 +7,9 @@ interface ConsentRecord {
 }
 
 export function hasValidConsent(): boolean {
-  const raw = localStorage.getItem(KEY);
-  if (!raw) return false;
   try {
+    const raw = localStorage.getItem(KEY);
+    if (!raw) return false;
     const rec = JSON.parse(raw) as ConsentRecord;
     return rec.version === CONSENT_VERSION;
   } catch {
@@ -18,10 +18,18 @@ export function hasValidConsent(): boolean {
 }
 
 export function recordConsent(): void {
-  const rec: ConsentRecord = { version: CONSENT_VERSION, at: Date.now() };
-  localStorage.setItem(KEY, JSON.stringify(rec));
+  try {
+    const rec: ConsentRecord = { version: CONSENT_VERSION, at: Date.now() };
+    localStorage.setItem(KEY, JSON.stringify(rec));
+  } catch {
+    // storage unavailable (private mode / quota) — consent stays session-less
+  }
 }
 
 export function revokeConsent(): void {
-  localStorage.removeItem(KEY);
+  try {
+    localStorage.removeItem(KEY);
+  } catch {
+    // storage unavailable — nothing to revoke
+  }
 }
