@@ -12,9 +12,25 @@ A public web tool that helps users decide whether to see a dermatologist. Users 
 
 ### Analysis scope
 
-- **Common conditions:** acne, rosacea, eczema, dryness, hyperpigmentation
-- **Lesion/mole screening:** red-flag escalation only ("worth a professional look"), never a cancer-risk verdict
-- **General metrics:** oiliness, texture, wrinkles, pores
+Scope is defined by what standard-camera photographs can and cannot support, grounded in teledermatology and consumer-photo dataset evidence (SCIN, DermNet) — not by an arbitrary shortlist. The tool attempts to characterize the full range of visually-presenting skin conditions rather than a fixed menu, but draws a hard line at findings that photographs structurally cannot resolve.
+
+**In scope — visually assessable from a standard photo.** The classifier and LLM cover the broad space of conditions that present visibly and dominate real user photos; the prompt/label taxonomy is open (SNOMED-CT / DermNet-class breadth) rather than a closed list. Representative families:
+
+- **Inflammatory / allergic:** eczema (atopic dermatitis), contact dermatitis, psoriasis, rosacea, urticaria/hives, seborrheic dermatitis, general eruptions/rashes
+- **Infectious:** tinea/ringworm and other fungal, bacterial (e.g. impetigo, cellulitis appearance), viral (herpes, warts), infestations (scabies)
+- **Acne & follicular:** acne vulgaris, folliculitis
+- **Pigmentary:** hyperpigmentation, melasma, post-inflammatory pigmentation, vitiligo
+- **Hair & scalp:** pattern hair loss, alopecia areata (visible pattern only)
+- **Nail:** onychomycosis and other visible nail changes
+- **Cosmetic metrics:** oiliness, texture, pores, wrinkles, redness, hydration cues
+
+**Out of scope — photographs structurally cannot resolve these (never verdicted):**
+
+- **Malignancy determination.** The tool never outputs "benign", "cancer", or a malignancy probability. Distinguishing melanoma/BCC/SCC reliably needs **dermoscopy** (microscopic pigment-network/vascular patterns a standard photo cannot capture) and **palpation** (an actinic keratosis's sandpaper texture, a BCC's pearly raised border — flattened away in a photo). Lesions are handled by **red-flag escalation only**: visual ABCDE-style features (asymmetry, border, color variegation, diameter, apparent change) route the user to "features that warrant professional/dermoscopic evaluation — worth a look," never a risk score and never reassurance.
+- **Anything requiring touch, depth, bleeding-on-manipulation, or history/systemic context** the photo can't convey.
+- **Conditions on unsuitable images** — the quality gate (§3) refuses too-blurry, poorly-lit, or non-skin images rather than guessing; teledermatology evidence shows ~20% of user photos and ~⅓ of even dermoscopic images are unusable, so a hard quality floor is a scope boundary, not just UX.
+
+This "broad detection, hard safety line" framing is what lets the classifier grow toward a standalone model (§6) without ever crossing into device-grade diagnostic claims.
 
 ### Constraints
 
