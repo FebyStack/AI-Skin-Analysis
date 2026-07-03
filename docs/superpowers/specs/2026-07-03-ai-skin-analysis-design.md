@@ -111,6 +111,16 @@ supabase/functions/analyze/
 2. **Close-up mode** — free-form region guide for moles/lesions anywhere on the body
 3. **Upload** — dropzone accepting photos of either kind; also the accessible alternative to live camera. EXIF/GPS stripped before preview.
 
+### Device camera & cross-platform (phone + PC)
+
+The app must run and be fully usable on both mobile phones and desktop/laptop, using the device's own camera:
+
+- **Camera access** via `navigator.mediaDevices.getUserMedia` — works in any modern browser on iOS Safari, Android Chrome, and desktop Chrome/Edge/Firefox/Safari. No native app.
+- **Camera selection:** phones default to the **rear (environment) camera** for body/lesion close-ups and offer a **front/rear flip**; face mode prefers the **front (user) camera**. Desktops use the built-in/USB webcam with a device picker when multiple exist (`enumerateDevices`).
+- **Secure-context requirement:** `getUserMedia` needs HTTPS (or `localhost`) — deployment is HTTPS-only; the app detects insecure context and routes the user to the upload path.
+- **Permission & absence handling:** explicit states for permission denied, no camera present (common on desktops), and camera-in-use — each falls back to the upload path rather than dead-ending.
+- **Mobile capture affordances:** on phones, the upload dropzone also exposes `capture` input attributes so a tap can open the native camera directly as an alternative to the live-stream flow.
+
 ## 4. Dual-AI pipeline
 
 One scan fans out to two independent opinions plus a critique:
@@ -178,6 +188,13 @@ Provisional — visual design will be revised later; structure below is the stab
 - **Direction:** clinical-clean credibility (white surfaces, teal `#0f766e` for data/actions) with warm-wellness accents (cream/stone neutrals, rounded corners, reassuring precise language). Amber reserved for disagreement/attention flags.
 - Tokens as CSS variables consumed by Tailwind; matches Lovable's shadcn/ui theming so the module inherits the main site's theme with a small override file.
 - Results screen pattern: verdict summary card → per-finding cards with source badges ("✓ 2 analyses agree" / "⚑ analyses differ") and confidence bars → non-diagnosis disclaimer → save-to-history / new-scan actions.
+
+**Responsive (mobile-first).** Layouts are mobile-first and fluid, verified at phone (~375px), tablet (~768px), and desktop (~1280px) widths:
+
+- Single-column stack on phones; results cards and history expand to multi-column on wider screens.
+- Camera viewport scales to the viewport with the correct aspect ratio on both portrait (phone) and landscape (desktop); framing guides are computed relative to the video box, not fixed pixels.
+- Touch targets ≥44px, hit areas comfortable one-handed on phones; hover affordances are enhancements only (never required, since phones have no hover).
+- No horizontal scroll at any width; tested via the responsive breakpoints in the test plan.
 
 ## 8. Accessibility
 
