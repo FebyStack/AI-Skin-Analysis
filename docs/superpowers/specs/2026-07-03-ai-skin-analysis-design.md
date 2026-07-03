@@ -148,8 +148,10 @@ One scan fans out to two independent opinions plus a critique:
 The browser cannot retrain ONNX on-device, and photos are never kept — so disagreements alone are not trainable data. Three tiers:
 
 1. **Calibration (ships with prototype):** opt-in anonymized disagreement records (both AIs' findings + outcome, never the photo) accumulate in a Supabase table. Systematic classifier errors on a class are corrected by adjusting that class's confidence threshold and merge weight — learning without touching the model.
-2. **Image donation (future):** a separate explicit checkbox at the moment of disagreement — "donate this photo to improve the model." Donated images are labeled with Claude's verdict (knowledge distillation; disagreements are the highest-value samples — active learning).
-3. **Offline fine-tune (future):** periodic Python pipeline fine-tunes on donated images, re-exports ONNX, ships a versioned model file. New versions run in shadow mode (scored against Claude on live scans without affecting verdicts) and are promoted only if agreement improves.
+2. **Image donation (future):** a separate explicit checkbox at the moment of disagreement — "donate this photo to improve the model." **Strictly consent-gated: no donation consent → the photo and its scan data are never used for training, full stop.** Donation consent is independent of the session ConsentGate, versioned the same way, and revocable (revocation stops all future use). Donated images are labeled with Claude's verdict (knowledge distillation; disagreements are the highest-value samples — active learning).
+3. **Offline fine-tune (future):** periodic Python pipeline fine-tunes on donated images only, re-exports ONNX, ships a versioned model file. New versions run in shadow mode (scored against Claude on live scans without affecting verdicts) and are promoted only if agreement improves.
+
+**End goal:** through these tiers the classifier graduates into a standalone skin-analysis model of its own — eventually able to carry the primary analysis itself, with the LLM demoted to critique/fallback. The architecture already supports this: the merge in `verdict.ts` is symmetric, so promoting the classifier to primary is a weight change, not a redesign.
 
 Consent versioning and model-file versioning are built in the prototype so Tiers 2–3 need no re-architecture.
 
