@@ -23,3 +23,15 @@ if (typeof localStorage === "undefined" || typeof localStorage.clear !== "functi
   Object.defineProperty(globalThis, "localStorage", { value: storage, writable: true });
   Object.defineProperty(window, "localStorage", { value: storage, writable: true });
 }
+
+// Polyfill Blob.text() for jsdom
+if (!Blob.prototype.text) {
+  Blob.prototype.text = async function () {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsText(this);
+    });
+  };
+}
