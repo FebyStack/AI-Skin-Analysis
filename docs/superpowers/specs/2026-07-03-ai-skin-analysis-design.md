@@ -24,8 +24,32 @@ Scope is defined by what standard-camera photographs can and cannot support, gro
 - **Nail:** onychomycosis and other visible nail changes
 - **Cosmetic metrics:** oiliness, texture, pores, wrinkles, redness, hydration cues
 
+### Report dimensions (every face scan)
+
+Each face-mode scan produces a structured report across these dimensions, each scored/described with confidence:
+
+- **Pores** — visibility/congestion by zone
+- **Texture** — smoothness, roughness, fine lines/wrinkles
+- **Acne** — presence, type appearance (comedonal/inflammatory), affected zones
+- **Pigmentation** — hyperpigmentation, post-inflammatory marks, **melasma-pattern** detection
+- **Redness/sensitivity cues** — erythema, rosacea-pattern flushing
+- **Oiliness** — shine/sebum appearance by zone
+- **Hydration appearance** — flakiness, dullness, dehydration lines. **Labeled "visual proxy"**: true moisture content requires a corneometer; the report never claims measured moisture.
+- **Surface vs depth framing** — all detection is surface-level by physics; where visuals *suggest* deeper involvement (e.g. nodular acne appearance), the report says "surface features suggestive of…", never claims subsurface measurement.
+- **Trend outlook ("skin prediction")** — when local history exists, per-dimension trend (improving/stable/worsening) across scans, plus "consistent-with" outlooks. Never a prognosis or medical prediction.
+
+### Facial map & observations
+
+Face-mode results include a **facial map**: findings are tagged to zones (forehead, nose, left cheek, right cheek, chin, periorbital) using MediaPipe face-landmark regions on-device; the LLM prompt requests zone-tagged observations in the same vocabulary. The results screen renders a face diagram with per-zone markers and an observations list per zone. `Finding` gains an optional `region?: FaceZone` field. Close-up/body scans skip the map (single-region observations instead).
+
+### Downloadable report (PDF)
+
+The general report — verdict summary, facial map, per-dimension scores, observations, trend section, disclaimer, scan date — is downloadable as a PDF, **generated entirely on-device** (client-side PDF library; no server rendering), preserving the no-server-storage privacy model. The PDF carries the same non-diagnosis disclaimer and "visual proxy" labels as the screen.
+
 **Out of scope — photographs structurally cannot resolve these (never verdicted):**
 
+- **True subsurface ("deep") detection** — a standard photo cannot image below the skin surface; only dermoscopy/ultrasound/biopsy can. Surface-suggestive language only (see Report dimensions).
+- **Measured moisture content** — requires corneometry hardware; hydration is reported as visual appearance only.
 - **Malignancy determination.** The tool never outputs "benign", "cancer", or a malignancy probability. Distinguishing melanoma/BCC/SCC reliably needs **dermoscopy** (microscopic pigment-network/vascular patterns a standard photo cannot capture) and **palpation** (an actinic keratosis's sandpaper texture, a BCC's pearly raised border — flattened away in a photo). Lesions are handled by **red-flag escalation only**: visual ABCDE-style features (asymmetry, border, color variegation, diameter, apparent change) route the user to "features that warrant professional/dermoscopic evaluation — worth a look," never a risk score and never reassurance.
 - **Anything requiring touch, depth, bleeding-on-manipulation, or history/systemic context** the photo can't convey.
 - **Conditions on unsuitable images** — the quality gate (§3) refuses too-blurry, poorly-lit, or non-skin images rather than guessing; teledermatology evidence shows ~20% of user photos and ~⅓ of even dermoscopic images are unusable, so a hard quality floor is a scope boundary, not just UX.
@@ -187,7 +211,7 @@ Provisional — visual design will be revised later; structure below is the stab
 
 - **Direction:** clinical-clean credibility (white surfaces, teal `#0f766e` for data/actions) with warm-wellness accents (cream/stone neutrals, rounded corners, reassuring precise language). Amber reserved for disagreement/attention flags.
 - Tokens as CSS variables consumed by Tailwind; matches Lovable's shadcn/ui theming so the module inherits the main site's theme with a small override file.
-- Results screen pattern: verdict summary card → per-finding cards with source badges ("✓ 2 analyses agree" / "⚑ analyses differ") and confidence bars → non-diagnosis disclaimer → save-to-history / new-scan actions.
+- Results screen pattern: verdict summary card → **facial map with per-zone markers and observations** (face mode) → per-dimension report cards (pores, texture, acne, pigmentation, redness, oiliness, hydration appearance) → per-finding cards with source badges ("✓ 2 analyses agree" / "⚑ analyses differ") and confidence bars → trend section (when history exists) → non-diagnosis disclaimer → **Download PDF** / save-to-history / new-scan actions.
 
 **Responsive (mobile-first).** Layouts are mobile-first and fluid, verified at phone (~375px), tablet (~768px), and desktop (~1280px) widths:
 
