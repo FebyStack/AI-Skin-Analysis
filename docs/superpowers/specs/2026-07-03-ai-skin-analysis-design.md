@@ -131,7 +131,7 @@ One scan fans out to two independent opinions plus a critique:
 
 **Client:**
 
-- `ConsentGate` blocks camera start and upload reading until explicitly accepted. Consent is versioned — policy text changes force a re-prompt.
+- `ConsentGate` blocks camera start and upload reading until explicitly accepted. Accepting covers sending scans to the AI service for the session ("opt-in" throughout this spec means this gate, not a per-scan prompt). Consent is versioned — policy text changes force a re-prompt.
 - `PrivacyExplainer` in plain language: what runs on-device vs what is sent to the AI, nothing stored, how to delete history.
 - EXIF/GPS stripped from uploads before preview, classifier, or network.
 - History opt-in, with a visible "delete all history" wiping IndexedDB.
