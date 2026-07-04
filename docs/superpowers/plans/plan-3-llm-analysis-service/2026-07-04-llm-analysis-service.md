@@ -1,34 +1,38 @@
-# LLM Analysis Service Implementation Plan
+# LLM Analysis Engine Implementation Plan (v2 — local clinic)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build the Supabase Edge Function that performs the Claude vision analysis + critique pass behind guardrails and rate limits, plus the client that calls it — delivering the full structured report (findings, facial-map zones, report dimensions, skin type) the spec requires.
+> **v2 note:** v1 of this plan targeted a Supabase Edge Function (see git history). v2 targets the local clinic architecture: the same pure analysis modules now live in `server/analysis/` and will be mounted into the Node api container by Plan 4. Rate limiting/BYO-key tasks are dropped (clinic-local app); the dimension vocabulary is expanded to the clinic spec.
 
-**Architecture:** All server logic is written as pure, dependency-injected TypeScript modules under `supabase/functions/analyze/` (unit-tested with the existing Vitest setup — they use no Deno globals), wired together by a thin `index.ts` Deno entry that is not unit-tested. The wire format lives in a `contract.ts` validator; the client keeps a mirrored copy with a shared golden-fixture test as a drift canary. The provider adapter makes Claude swappable via env config; BYO keys bypass rate limits and are never logged. Photos are processed in memory only.
+**Goal:** Build the pure, fully-tested analysis engine — wire contract, dermatology prompts, guardrails, Anthropic provider adapter, critique pass, and pipeline orchestrator — that Plan 4's api container mounts behind an Express endpoint.
 
-**Tech Stack:** Supabase Edge Functions (Deno), Anthropic Messages API via raw `fetch` (no SDK), Vitest, existing Plan-1 foundation (`types.ts`, `CaptureResult`).
+**Architecture:** Every module is pure, dependency-injected TypeScript under `server/analysis/`, unit-tested with the repo's existing Vitest (no Node-specific APIs beyond `fetch`/`crypto`, no Express — the HTTP layer is Plan 4). The wire format lives in `contract.ts`; the client keeps a mirrored copy with a shared golden-fixture drift test. The provider adapter keeps Claude swappable via config. Photos are processed in memory only.
 
-**Import convention (IMPORTANT):** every import between files under `supabase/functions/analyze/` uses an explicit `.ts` extension (e.g. `from "./contract.ts"`) — Deno requires it at deploy time, and Vite/Vitest resolve it fine. Files under `src/` keep the repo's extensionless convention. Test files beside the server modules also use `.ts` extensions for consistency.
+**Tech Stack:** TypeScript, Anthropic Messages API via raw `fetch` (no SDK), Vitest, existing Plan-1/2 foundation (`types.ts`, `CaptureResult`).
 
-**Prerequisites:** Plan 1 merged (done). Plan 2 is NOT required — this service is independent of the on-device classifier; `verdict.ts` merging both opinions is Plan 4.
+**Prerequisites:** Plans 1–2 merged (done — 60 tests green on main).
+
+**Import convention:** extensionless imports throughout (plain TS transpiled by Vitest now, esbuild in Plan 4) — the v1 Deno `.ts`-extension rule no longer applies.
 
 ---
 
 ## File Structure
 
 - Modify: `src/features/skin-analysis/types.ts` (+ test) — FaceZone, `region?` on Finding, hardened `isFinding`
-- Create: `supabase/functions/analyze/contract.ts` (+ test) — wire types + `validateAnalysisReport`
-- Create: `supabase/functions/analyze/fixtures/golden-report.json` — shared fixture
-- Create: `src/features/skin-analysis/api/contract.ts` (+ drift test) — client mirror of the wire contract
-- Create: `supabase/functions/analyze/prompts.ts` (+ test) — versioned dermatology prompts
-- Create: `supabase/functions/analyze/guardrails.ts` (+ test) — input + output guardrails
-- Create: `supabase/functions/analyze/providers/anthropic.ts` (+ test) — provider adapter
-- Create: `supabase/functions/analyze/critique.ts` (+ test) — critique pass
-- Create: `supabase/functions/analyze/rate-limit.ts` (+ test) — hashed-IP limiter + daily cap
-- Create: `supabase/functions/analyze/pipeline.ts` (+ test) — pure request orchestrator
-- Create: `supabase/functions/analyze/index.ts` — Deno entry (thin, not unit-tested)
-- Create: `supabase/functions/analyze/README.md` — env vars + deploy/smoke instructions
-- Create: `src/features/skin-analysis/api/analyze-client.ts` (+ test) — browser client
+- Create: `server/analysis/contract.ts` (+ test) — wire types + `validateAnalysisReport` (12 clinic dimensions + skin type)
+- Create: `server/analysis/fixtures/golden-report.json` — shared fixture
+- Create: `src/features/skin-analysis/api/contract.ts` (+ drift test) — client mirror
+- Create: `server/analysis/prompts.ts` (+ test) — versioned dermatology prompts (clinic vocabulary)
+- Create: `server/analysis/guardrails.ts` (+ test) — input + output guardrails
+- Create: `server/analysis/providers/anthropic.ts` (+ test) — provider adapter
+- Create: `server/analysis/critique.ts` (+ test) — critique pass
+- Create: `server/analysis/pipeline.ts` (+ test) — pure request orchestrator
+- Modify: `src/features/skin-analysis/components/capture/CaptureFlow.tsx` (+ test) — analysis-error retry UI (carry-over)
+
+## The 12 clinic dimensions
+
+`hydration-appearance`* · `oiliness` · `pigmentation` · `spots` · `pores` · `blackheads` · `wrinkles-texture` · `acne` · `inflammation` · `redness`* · `sensitivity` · `elasticity-appearance`*
+(*visual proxies — the prompt and report must label them as visual inference, never device measurement.)
 
 ---
 
@@ -110,7 +114,7 @@ export function isFinding(x: unknown): x is Finding {
 - [ ] **Step 4: Run full suite**
 
 Run: `npx vitest run`
-Expected: PASS — 37 tests (33 + 4 new).
+Expected: PASS — 64 tests (60 + 4 new).
 
 - [ ] **Step 5: Commit**
 
@@ -121,20 +125,20 @@ git commit -m "feat: face zones, finding region, hardened isFinding guard"
 
 ---
 
-## Task 2: Wire contract + golden fixture (server side and client mirror)
+## Task 2: Wire contract + golden fixture (server + client mirror)
 
 **Files:**
-- Create: `supabase/functions/analyze/contract.ts`
-- Create: `supabase/functions/analyze/contract.test.ts`
-- Create: `supabase/functions/analyze/fixtures/golden-report.json`
+- Create: `server/analysis/contract.ts`
+- Create: `server/analysis/contract.test.ts`
+- Create: `server/analysis/fixtures/golden-report.json`
 - Create: `src/features/skin-analysis/api/contract.ts`
 - Create: `src/features/skin-analysis/api/contract.test.ts`
 
-- [ ] **Step 1: Create the golden fixture** `supabase/functions/analyze/fixtures/golden-report.json`:
+- [ ] **Step 1: Create the golden fixture** `server/analysis/fixtures/golden-report.json`:
 
 ```json
 {
-  "summary": "Your skin looks mostly healthy. One area is worth a professional look.",
+  "summary": "Skin looks mostly healthy overall. One area is worth a professional look.",
   "findings": [
     {
       "id": "acne",
@@ -156,13 +160,18 @@ git commit -m "feat: face zones, finding region, hardened isFinding guard"
     }
   ],
   "dimensions": {
-    "pores": { "score": 0.35, "note": "Mildly visible on the nose." },
-    "texture": { "score": 0.25, "note": "Generally smooth." },
-    "acne": { "score": 0.45, "note": "Localized to the left cheek." },
-    "pigmentation": { "score": 0.2, "note": "No significant pigmentation." },
-    "redness": { "score": 0.3, "note": "Slight redness around the nose." },
+    "hydration-appearance": { "score": 0.3, "note": "Visual proxy only: mild dullness suggests dehydration cues." },
     "oiliness": { "score": 0.5, "note": "T-zone shine visible." },
-    "hydration-appearance": { "score": 0.3, "note": "Visual proxy only: mild dullness." }
+    "pigmentation": { "score": 0.2, "note": "No significant pigmentation pattern." },
+    "spots": { "score": 0.25, "note": "A few small discrete dark spots on the cheeks." },
+    "pores": { "score": 0.35, "note": "Mildly visible on the nose." },
+    "blackheads": { "score": 0.3, "note": "Scattered comedone-like congestion on the nose." },
+    "wrinkles-texture": { "score": 0.25, "note": "Generally smooth; fine lines around the eyes." },
+    "acne": { "score": 0.45, "note": "Localized to the left cheek." },
+    "inflammation": { "score": 0.2, "note": "Mild irritation appearance near active acne." },
+    "redness": { "score": 0.3, "note": "Visual proxy: slight erythema around the nose." },
+    "sensitivity": { "score": 0.2, "note": "Few visible reactivity cues." },
+    "elasticity-appearance": { "score": 0.2, "note": "Visual proxy only: no notable sagging cues." }
   },
   "skinType": {
     "sebum": "combination",
@@ -174,16 +183,16 @@ git commit -m "feat: face zones, finding region, hardened isFinding guard"
     { "zone": "forehead", "observation": "Clear, even tone." },
     { "zone": "left-cheek", "observation": "Small cluster of inflammatory papules." }
   ],
-  "disclaimer": "This is not a diagnosis. It helps you decide whether to see a professional.",
-  "promptVersion": 1
+  "disclaimer": "This is not a diagnosis. It helps decide whether to see a professional.",
+  "promptVersion": 2
 }
 ```
 
-- [ ] **Step 2: Write the failing server-side test** `supabase/functions/analyze/contract.test.ts`:
+- [ ] **Step 2: Write the failing server-side test** `server/analysis/contract.test.ts`:
 
 ```ts
 import { describe, it, expect } from "vitest";
-import { validateAnalysisReport, DIMENSION_KEYS } from "./contract.ts";
+import { validateAnalysisReport, DIMENSION_KEYS } from "./contract";
 import golden from "./fixtures/golden-report.json";
 
 describe("validateAnalysisReport", () => {
@@ -195,10 +204,10 @@ describe("validateAnalysisReport", () => {
 
   it("rejects a missing dimension", () => {
     const bad = structuredClone(golden) as Record<string, unknown>;
-    delete (bad.dimensions as Record<string, unknown>)["pores"];
+    delete (bad.dimensions as Record<string, unknown>)["blackheads"];
     const r = validateAnalysisReport(bad);
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.errors.join()).toMatch(/pores/);
+    if (!r.ok) expect(r.errors.join()).toMatch(/blackheads/);
   });
 
   it("rejects an out-of-range dimension score", () => {
@@ -231,16 +240,17 @@ describe("validateAnalysisReport", () => {
     expect(validateAnalysisReport(bad).ok).toBe(false);
   });
 
-  it("exposes exactly the seven dimension keys", () => {
-    expect(DIMENSION_KEYS).toHaveLength(7);
-    expect(DIMENSION_KEYS).toContain("hydration-appearance");
+  it("exposes exactly the twelve clinic dimension keys", () => {
+    expect(DIMENSION_KEYS).toHaveLength(12);
+    expect(DIMENSION_KEYS).toContain("elasticity-appearance");
+    expect(DIMENSION_KEYS).toContain("blackheads");
   });
 });
 ```
 
 - [ ] **Step 3: Run to verify failure** — cannot resolve `./contract`.
 
-- [ ] **Step 4: Implement** `supabase/functions/analyze/contract.ts` (pure TS, no Deno globals — Vitest-testable):
+- [ ] **Step 4: Implement** `server/analysis/contract.ts`:
 
 ```ts
 export const FACE_ZONES = [
@@ -255,15 +265,28 @@ export const FACE_ZONES = [
 export type FaceZone = (typeof FACE_ZONES)[number];
 
 export const DIMENSION_KEYS = [
-  "pores",
-  "texture",
-  "acne",
-  "pigmentation",
-  "redness",
-  "oiliness",
   "hydration-appearance",
+  "oiliness",
+  "pigmentation",
+  "spots",
+  "pores",
+  "blackheads",
+  "wrinkles-texture",
+  "acne",
+  "inflammation",
+  "redness",
+  "sensitivity",
+  "elasticity-appearance",
 ] as const;
 export type DimensionKey = (typeof DIMENSION_KEYS)[number];
+
+// Dimensions that are visual inferences of hardware-style measurements —
+// UI and PDF must label them "visual proxy".
+export const PROXY_DIMENSIONS: readonly DimensionKey[] = [
+  "hydration-appearance",
+  "redness",
+  "elasticity-appearance",
+];
 
 export const SEBUM_TYPES = ["normal", "oily", "dry", "combination"] as const;
 export type SebumType = (typeof SEBUM_TYPES)[number];
@@ -400,11 +423,11 @@ export function validateAnalysisReport(x: unknown): ValidationResult {
 
 - [ ] **Step 5: Run the server contract test — PASS (8 tests).**
 
-- [ ] **Step 6: Create the client mirror.** `src/features/skin-analysis/api/contract.ts` — EXACT copy of the entire `supabase/functions/analyze/contract.ts` file content, with this header comment prepended:
+- [ ] **Step 6: Create the client mirror.** `src/features/skin-analysis/api/contract.ts` — EXACT copy of the entire `server/analysis/contract.ts` content, with this header prepended:
 
 ```ts
-// MIRROR of supabase/functions/analyze/contract.ts — keep in sync.
-// The drift canary is contract.test.ts on both sides validating the same golden fixture.
+// MIRROR of server/analysis/contract.ts — keep in sync.
+// Drift canary: contract.test.ts on both sides validates the same golden fixture.
 ```
 
 - [ ] **Step 7: Client drift test** `src/features/skin-analysis/api/contract.test.ts`:
@@ -412,45 +435,45 @@ export function validateAnalysisReport(x: unknown): ValidationResult {
 ```ts
 import { describe, it, expect } from "vitest";
 import { validateAnalysisReport, DIMENSION_KEYS, FACE_ZONES } from "./contract";
-import golden from "../../../../supabase/functions/analyze/fixtures/golden-report.json";
+import golden from "../../../../server/analysis/fixtures/golden-report.json";
 
 describe("client contract mirror", () => {
   it("accepts the same golden report the server accepts", () => {
     expect(validateAnalysisReport(golden).ok).toBe(true);
   });
 
-  it("agrees on vocabulary sizes with the feature types", () => {
-    expect(DIMENSION_KEYS).toHaveLength(7);
+  it("agrees on vocabulary sizes", () => {
+    expect(DIMENSION_KEYS).toHaveLength(12);
     expect(FACE_ZONES).toHaveLength(7);
   });
 });
 ```
 
-- [ ] **Step 8: Run full suite — expect 47 passing (37 + 8 server + 2 client). Then commit:**
+- [ ] **Step 8: Run full suite — 74 passing (64 + 8 + 2). Commit:**
 
 ```bash
-git add supabase/functions/analyze/contract.ts supabase/functions/analyze/contract.test.ts supabase/functions/analyze/fixtures/golden-report.json src/features/skin-analysis/api/contract.ts src/features/skin-analysis/api/contract.test.ts
-git commit -m "feat: analysis wire contract with golden-fixture drift canary"
+git add server/analysis/contract.ts server/analysis/contract.test.ts server/analysis/fixtures/golden-report.json src/features/skin-analysis/api/contract.ts src/features/skin-analysis/api/contract.test.ts
+git commit -m "feat: clinic analysis wire contract (12 dimensions) with drift canary"
 ```
 
 ---
 
-## Task 3: Versioned dermatology prompts
+## Task 3: Versioned dermatology prompts (clinic vocabulary)
 
 **Files:**
-- Create: `supabase/functions/analyze/prompts.ts`
-- Create: `supabase/functions/analyze/prompts.test.ts`
+- Create: `server/analysis/prompts.ts`
+- Create: `server/analysis/prompts.test.ts`
 
-- [ ] **Step 1: Failing test** `supabase/functions/analyze/prompts.test.ts`:
+- [ ] **Step 1: Failing test** `server/analysis/prompts.test.ts`:
 
 ```ts
 import { describe, it, expect } from "vitest";
-import { PROMPT_VERSION, systemPrompt, userPrompt } from "./prompts.ts";
-import { DIMENSION_KEYS, FACE_ZONES } from "./contract.ts";
+import { PROMPT_VERSION, systemPrompt, userPrompt } from "./prompts";
+import { DIMENSION_KEYS, FACE_ZONES, PROXY_DIMENSIONS } from "./contract";
 
 describe("prompts", () => {
-  it("has a version number", () => {
-    expect(PROMPT_VERSION).toBe(1);
+  it("has version 2 (clinic vocabulary)", () => {
+    expect(PROMPT_VERSION).toBe(2);
   });
 
   it("system prompt contains the safety guardrails", () => {
@@ -468,6 +491,14 @@ describe("prompts", () => {
     for (const z of FACE_ZONES) expect(s).toContain(z);
   });
 
+  it("system prompt marks proxy dimensions as visual inference", () => {
+    const s = systemPrompt();
+    for (const d of PROXY_DIMENSIONS) {
+      expect(s).toContain(d);
+    }
+    expect(s).toMatch(/visual (proxy|inference)/i);
+  });
+
   it("user prompt varies by capture mode", () => {
     expect(userPrompt("face")).toMatch(/facial/i);
     expect(userPrompt("closeup")).toMatch(/close-up/i);
@@ -477,15 +508,15 @@ describe("prompts", () => {
 
 - [ ] **Step 2: Run to verify failure** — cannot resolve `./prompts`.
 
-- [ ] **Step 3: Implement** `supabase/functions/analyze/prompts.ts`:
+- [ ] **Step 3: Implement** `server/analysis/prompts.ts`:
 
 ```ts
-import { DIMENSION_KEYS, FACE_ZONES } from "./contract.ts";
+import { DIMENSION_KEYS, FACE_ZONES, PROXY_DIMENSIONS } from "./contract";
 
-export const PROMPT_VERSION = 1;
+export const PROMPT_VERSION = 2;
 
 export function systemPrompt(): string {
-  return `You are a dermatology-informed skin analysis assistant. You examine a photo and produce a structured observation report. You are a clinical aid, not a doctor.
+  return `You are a dermatology-informed skin analysis assistant used inside a clinic. You examine a photo and produce a structured observation report a practitioner reviews with the patient. You are a clinical aid, not a doctor.
 
 HARD RULES — violating any of these makes the output invalid:
 - NEVER diagnose. Use "appearance consistent with X" language only.
@@ -493,7 +524,7 @@ HARD RULES — violating any of these makes the output invalid:
 - NEVER recommend medication, treatment, or products.
 - ALWAYS include the professional-care pathway for anything moderate or attention-level.
 - The disclaimer field must state this is not a diagnosis.
-- Hydration is a VISUAL PROXY only — never claim measured moisture. All detection is surface-level; where visuals suggest deeper involvement say "surface features suggestive of".
+- These dimensions are VISUAL PROXIES for device measurements and must be framed as visual inference, never measurement: ${PROXY_DIMENSIONS.join(", ")}. All detection is surface-level; where visuals suggest deeper involvement say "surface features suggestive of".
 - Estimate skin type honestly: sebum pattern (normal|oily|dry|combination), sensitivity cues (boolean), and approximate Fitzpatrick type (1-6, mark approximate — lighting-dependent). Calibrate pigmentation/redness interpretation to the estimated skin tone.
 
 OUTPUT: respond with ONLY a JSON object (no markdown fences, no prose) with this exact shape:
@@ -506,7 +537,7 @@ OUTPUT: respond with ONLY a JSON object (no markdown fences, no prose) with this
   "disclaimer": string,
   "promptVersion": ${PROMPT_VERSION}
 }
-Dimension scores: 0 = not present/ideal, 1 = severe. If the image is a body close-up rather than a face, use region "other" and leave zoneObservations focused on the photographed area.`;
+Dimension scores: 0 = not present/ideal, 1 = severe. If the image is a body close-up rather than a face, use region "other" and focus zoneObservations on the photographed area.`;
 }
 
 export function userPrompt(mode: "face" | "closeup"): string {
@@ -516,11 +547,11 @@ export function userPrompt(mode: "face" | "closeup"): string {
 }
 ```
 
-- [ ] **Step 4: Run — PASS (4 tests). Full suite 51. Commit:**
+- [ ] **Step 4: Run — PASS (5 tests). Full suite 79. Commit:**
 
 ```bash
-git add supabase/functions/analyze/prompts.ts supabase/functions/analyze/prompts.test.ts
-git commit -m "feat: versioned dermatology analysis prompts"
+git add server/analysis/prompts.ts server/analysis/prompts.test.ts
+git commit -m "feat: clinic dermatology prompts (v2 vocabulary, proxy labeling)"
 ```
 
 ---
@@ -528,21 +559,21 @@ git commit -m "feat: versioned dermatology analysis prompts"
 ## Task 4: Input and output guardrails
 
 **Files:**
-- Create: `supabase/functions/analyze/guardrails.ts`
-- Create: `supabase/functions/analyze/guardrails.test.ts`
+- Create: `server/analysis/guardrails.ts`
+- Create: `server/analysis/guardrails.test.ts`
 
-- [ ] **Step 1: Failing test** `supabase/functions/analyze/guardrails.test.ts`:
+- [ ] **Step 1: Failing test** `server/analysis/guardrails.test.ts`:
 
 ```ts
 import { describe, it, expect } from "vitest";
-import { validateInput, checkOutputGuardrails, MAX_IMAGE_BYTES } from "./guardrails.ts";
+import { validateInput, checkOutputGuardrails, MAX_IMAGE_BYTES } from "./guardrails";
 import golden from "./fixtures/golden-report.json";
-import type { AnalysisReport } from "./contract.ts";
+import type { AnalysisReport } from "./contract";
 
 const g = golden as unknown as AnalysisReport;
 
 describe("validateInput", () => {
-  const b64 = "aGVsbG8="; // valid base64
+  const b64 = "aGVsbG8=";
 
   it("accepts a jpeg under the size cap", () => {
     expect(validateInput({ image: b64, mime: "image/jpeg", mode: "face" }).ok).toBe(true);
@@ -594,7 +625,6 @@ describe("checkOutputGuardrails", () => {
   it("requires professional referral in summary when any finding is attention-level", () => {
     const bad = structuredClone(g);
     bad.summary = "All looks fine.";
-    // golden has an attention finding, so a summary without referral must fail
     expect(checkOutputGuardrails(bad).ok).toBe(false);
   });
 
@@ -608,10 +638,10 @@ describe("checkOutputGuardrails", () => {
 
 - [ ] **Step 2: Run to verify failure** — cannot resolve `./guardrails`.
 
-- [ ] **Step 3: Implement** `supabase/functions/analyze/guardrails.ts`:
+- [ ] **Step 3: Implement** `server/analysis/guardrails.ts`:
 
 ```ts
-import type { AnalysisReport } from "./contract.ts";
+import type { AnalysisReport } from "./contract";
 
 export const MAX_IMAGE_BYTES = 8 * 1024 * 1024; // 8MB decoded
 const ALLOWED_MIMES = ["image/jpeg", "image/png", "image/webp"] as const;
@@ -621,7 +651,6 @@ export interface AnalyzeInput {
   image: string; // base64, no data: prefix
   mime: string;
   mode: "face" | "closeup";
-  byoKey?: string;
 }
 
 export type InputCheck = { ok: true } | { ok: false; error: string };
@@ -643,10 +672,11 @@ export function validateInput(x: AnalyzeInput): InputCheck {
   return { ok: true };
 }
 
-// Phrases that must never appear in user-facing analysis text.
+// Phrases that must never appear in analysis text (disclaimer is exempt from
+// the diagnosis-word check — it legitimately contains "diagnosis").
 const FORBIDDEN = [
   /\byou have\b/i,
-  /\bdiagnos(is|ed|e)\b/i, // checked on analysis text, NOT the disclaimer
+  /\bdiagnos(is|ed|e)\b/i,
   /\bprescri(be|ption|bed)\b/i,
   /\btake (this|these|the) (medication|medicine|drug)/i,
   /\bbenign\b/i,
@@ -689,10 +719,10 @@ export function checkOutputGuardrails(report: AnalysisReport): OutputCheck {
 }
 ```
 
-- [ ] **Step 4: Run — PASS (11 tests). Full suite 62. Commit:**
+- [ ] **Step 4: Run — PASS (11 tests). Full suite 90. Commit:**
 
 ```bash
-git add supabase/functions/analyze/guardrails.ts supabase/functions/analyze/guardrails.test.ts
+git add server/analysis/guardrails.ts server/analysis/guardrails.test.ts
 git commit -m "feat: input validation and output safety guardrails"
 ```
 
@@ -701,14 +731,14 @@ git commit -m "feat: input validation and output safety guardrails"
 ## Task 5: Anthropic provider adapter
 
 **Files:**
-- Create: `supabase/functions/analyze/providers/anthropic.ts`
-- Create: `supabase/functions/analyze/providers/anthropic.test.ts`
+- Create: `server/analysis/providers/anthropic.ts`
+- Create: `server/analysis/providers/anthropic.test.ts`
 
-- [ ] **Step 1: Failing test** `supabase/functions/analyze/providers/anthropic.test.ts`:
+- [ ] **Step 1: Failing test** `server/analysis/providers/anthropic.test.ts`:
 
 ```ts
 import { describe, it, expect, vi } from "vitest";
-import { callClaude, ProviderAuthError, ProviderRateLimitError, ProviderError, extractJson } from "./anthropic.ts";
+import { callClaude, ProviderAuthError, ProviderRateLimitError, ProviderError, extractJson } from "./anthropic";
 
 const cfg = { apiKey: "sk-test", model: "claude-sonnet-5", maxTokens: 2048 };
 
@@ -776,7 +806,7 @@ describe("extractJson", () => {
 
 - [ ] **Step 2: Run to verify failure.**
 
-- [ ] **Step 3: Implement** `supabase/functions/analyze/providers/anthropic.ts`:
+- [ ] **Step 3: Implement** `server/analysis/providers/anthropic.ts`:
 
 ```ts
 export class ProviderError extends Error {
@@ -878,10 +908,10 @@ export function extractJson(text: string): unknown {
 }
 ```
 
-- [ ] **Step 4: Run — PASS (7 tests). Full suite 69. Commit:**
+- [ ] **Step 4: Run — PASS (7 tests). Full suite 97. Commit:**
 
 ```bash
-git add supabase/functions/analyze/providers/
+git add server/analysis/providers/
 git commit -m "feat: Anthropic provider adapter with typed errors"
 ```
 
@@ -890,16 +920,16 @@ git commit -m "feat: Anthropic provider adapter with typed errors"
 ## Task 6: Critique pass
 
 **Files:**
-- Create: `supabase/functions/analyze/critique.ts`
-- Create: `supabase/functions/analyze/critique.test.ts`
+- Create: `server/analysis/critique.ts`
+- Create: `server/analysis/critique.test.ts`
 
-- [ ] **Step 1: Failing test** `supabase/functions/analyze/critique.test.ts`:
+- [ ] **Step 1: Failing test** `server/analysis/critique.test.ts`:
 
 ```ts
 import { describe, it, expect, vi } from "vitest";
-import { runCritique, buildCritiquePrompt } from "./critique.ts";
+import { runCritique, buildCritiquePrompt } from "./critique";
 import golden from "./fixtures/golden-report.json";
-import type { AnalysisReport } from "./contract.ts";
+import type { AnalysisReport } from "./contract";
 
 const report = golden as unknown as AnalysisReport;
 
@@ -947,11 +977,11 @@ describe("runCritique", () => {
 
 - [ ] **Step 2: Run to verify failure.**
 
-- [ ] **Step 3: Implement** `supabase/functions/analyze/critique.ts`:
+- [ ] **Step 3: Implement** `server/analysis/critique.ts`:
 
 ```ts
-import { validateAnalysisReport, type AnalysisReport } from "./contract.ts";
-import { extractJson } from "./providers/anthropic.ts";
+import { validateAnalysisReport, type AnalysisReport } from "./contract";
+import { extractJson } from "./providers/anthropic";
 
 export type CritiqueOutcome =
   | { verdict: "approved" }
@@ -967,7 +997,7 @@ ${JSON.stringify(report)}
 CHECK:
 1. Does each conclusion follow from the stated observations?
 2. Is any confidence overconfident given the evidence described (overconfidence check)?
-3. Are the safety rules intact: "consistent with" language, no diagnosis, no treatment advice, lesions escalated to professional evaluation, disclaimer present?
+3. Are the safety rules intact: "consistent with" language, no diagnosis, no treatment advice, lesions escalated to professional evaluation, disclaimer present, visual-proxy dimensions framed as inference not measurement?
 
 Respond with ONLY JSON: {"verdict":"approved"} if fine; {"verdict":"amended","reasons":[...],"amendedReport":<full corrected report with the same schema>} for fixable wording/confidence issues; {"verdict":"rejected","reasons":[...]} if the report is unsalvageable.`;
 }
@@ -997,144 +1027,28 @@ export async function runCritique(
 }
 ```
 
-- [ ] **Step 4: Run — PASS (5 tests). Full suite 74. Commit:**
+- [ ] **Step 4: Run — PASS (5 tests). Full suite 102. Commit:**
 
 ```bash
-git add supabase/functions/analyze/critique.ts supabase/functions/analyze/critique.test.ts
+git add server/analysis/critique.ts server/analysis/critique.test.ts
 git commit -m "feat: critique pass with schema-validated amendments"
 ```
 
 ---
 
-## Task 7: Rate limiting and daily cap
+## Task 7: Pipeline orchestrator
 
 **Files:**
-- Create: `supabase/functions/analyze/rate-limit.ts`
-- Create: `supabase/functions/analyze/rate-limit.test.ts`
+- Create: `server/analysis/pipeline.ts`
+- Create: `server/analysis/pipeline.test.ts`
 
-- [ ] **Step 1: Failing test** `supabase/functions/analyze/rate-limit.test.ts`:
+No rate limiting / BYO keys in v2 — the clinic api adds auth in Plan 4; the pipeline is pure analysis.
 
-```ts
-import { describe, it, expect } from "vitest";
-import { MemoryCounterStore, checkRateLimit, checkDailyCap, hashIp } from "./rate-limit.ts";
-
-describe("hashIp", () => {
-  it("is deterministic and salt-sensitive", async () => {
-    const a = await hashIp("1.2.3.4", "salt");
-    const b = await hashIp("1.2.3.4", "salt");
-    const c = await hashIp("1.2.3.4", "other-salt");
-    expect(a).toBe(b);
-    expect(a).not.toBe(c);
-    expect(a).toMatch(/^[0-9a-f]{64}$/);
-  });
-});
-
-describe("checkRateLimit", () => {
-  it("allows up to the limit within a window and then blocks", async () => {
-    const store = new MemoryCounterStore();
-    const now = 1_700_000_000_000;
-    for (let i = 0; i < 3; i++) {
-      expect((await checkRateLimit("iphash", 3, store, now)).allowed).toBe(true);
-    }
-    expect((await checkRateLimit("iphash", 3, store, now)).allowed).toBe(false);
-  });
-
-  it("resets in the next hourly window", async () => {
-    const store = new MemoryCounterStore();
-    const now = 1_700_000_000_000;
-    await checkRateLimit("iphash", 1, store, now);
-    expect((await checkRateLimit("iphash", 1, store, now)).allowed).toBe(false);
-    const nextHour = now + 3_600_000;
-    expect((await checkRateLimit("iphash", 1, store, nextHour)).allowed).toBe(true);
-  });
-});
-
-describe("checkDailyCap", () => {
-  it("blocks once the global daily cap is reached", async () => {
-    const store = new MemoryCounterStore();
-    const now = 1_700_000_000_000;
-    expect((await checkDailyCap(2, store, now)).allowed).toBe(true);
-    expect((await checkDailyCap(2, store, now)).allowed).toBe(true);
-    expect((await checkDailyCap(2, store, now)).allowed).toBe(false);
-  });
-});
-```
-
-- [ ] **Step 2: Run to verify failure.**
-
-- [ ] **Step 3: Implement** `supabase/functions/analyze/rate-limit.ts`:
-
-```ts
-// Counter store seam: MemoryCounterStore is per-isolate (fine for prototype;
-// documented limitation — swap for a Supabase-table store for durable limits).
-export interface CounterStore {
-  incr(key: string): Promise<number>; // returns the new count
-}
-
-export class MemoryCounterStore implements CounterStore {
-  private counts = new Map<string, number>();
-  async incr(key: string): Promise<number> {
-    const next = (this.counts.get(key) ?? 0) + 1;
-    this.counts.set(key, next);
-    return next;
-  }
-}
-
-export async function hashIp(ip: string, salt: string): Promise<string> {
-  const data = new TextEncoder().encode(`${salt}:${ip}`);
-  const digest = await crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(digest))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-export interface LimitResult {
-  allowed: boolean;
-}
-
-export async function checkRateLimit(
-  ipHash: string,
-  perHour: number,
-  store: CounterStore,
-  nowMs: number,
-): Promise<LimitResult> {
-  const window = Math.floor(nowMs / 3_600_000);
-  const count = await store.incr(`rl:${ipHash}:${window}`);
-  return { allowed: count <= perHour };
-}
-
-export async function checkDailyCap(
-  maxPerDay: number,
-  store: CounterStore,
-  nowMs: number,
-): Promise<LimitResult> {
-  const day = Math.floor(nowMs / 86_400_000);
-  const count = await store.incr(`day:${day}`);
-  return { allowed: count <= maxPerDay };
-}
-```
-
-- [ ] **Step 4: Run — PASS (4 tests). Full suite 78. Commit:**
-
-```bash
-git add supabase/functions/analyze/rate-limit.ts supabase/functions/analyze/rate-limit.test.ts
-git commit -m "feat: hashed-IP rate limiting and global daily cap"
-```
-
----
-
-## Task 8: The pipeline orchestrator
-
-**Files:**
-- Create: `supabase/functions/analyze/pipeline.ts`
-- Create: `supabase/functions/analyze/pipeline.test.ts`
-
-- [ ] **Step 1: Failing test** `supabase/functions/analyze/pipeline.test.ts`:
+- [ ] **Step 1: Failing test** `server/analysis/pipeline.test.ts`:
 
 ```ts
 import { describe, it, expect, vi } from "vitest";
-import { handleAnalyze, type PipelineDeps } from "./pipeline.ts";
-import { MemoryCounterStore } from "./rate-limit.ts";
+import { handleAnalyze, type PipelineDeps } from "./pipeline";
 import golden from "./fixtures/golden-report.json";
 
 const goldenText = JSON.stringify(golden);
@@ -1143,17 +1057,11 @@ const approvedText = '{"verdict":"approved"}';
 function deps(overrides: Partial<PipelineDeps> = {}): PipelineDeps {
   return {
     config: {
-      apiKey: "sk-operator",
+      apiKey: "sk-clinic",
       primaryModel: "claude-sonnet-5",
       critiqueModel: "claude-haiku-4-5-20251001",
       maxTokens: 2048,
-      rateLimitPerHour: 10,
-      maxScansPerDay: 100,
-      ipHashSalt: "salt",
     },
-    counters: new MemoryCounterStore(),
-    now: () => 1_700_000_000_000,
-    // callProvider(model, apiKey) → text. Primary returns the report; critique approves.
     callProvider: vi.fn(async (_req, model: string) =>
       model === "claude-sonnet-5" ? goldenText : approvedText,
     ),
@@ -1164,86 +1072,79 @@ function deps(overrides: Partial<PipelineDeps> = {}): PipelineDeps {
 const goodInput = { image: "aGVsbG8=", mime: "image/jpeg", mode: "face" as const };
 
 describe("handleAnalyze", () => {
-  it("returns 200 with a validated report on the happy path", async () => {
-    const out = await handleAnalyze(goodInput, "1.2.3.4", deps());
-    expect(out.status).toBe(200);
-    expect((out.body as { report: { summary: string } }).report.summary).toBe(
-      (golden as { summary: string }).summary,
-    );
+  it("returns ok with a validated report on the happy path", async () => {
+    const out = await handleAnalyze(goodInput, deps());
+    expect(out.ok).toBe(true);
+    if (out.ok) expect(out.report.summary).toBe((golden as { summary: string }).summary);
   });
 
-  it("returns 400 for a bad mime type", async () => {
-    const out = await handleAnalyze({ ...goodInput, mime: "text/html" }, "1.2.3.4", deps());
-    expect(out.status).toBe(400);
-  });
-
-  it("returns 429 when the per-IP limit is exhausted", async () => {
-    const d = deps({ config: { ...deps().config, rateLimitPerHour: 1 } });
-    await handleAnalyze(goodInput, "1.2.3.4", d);
-    const out = await handleAnalyze(goodInput, "1.2.3.4", d);
-    expect(out.status).toBe(429);
-  });
-
-  it("bypasses rate limiting with a BYO key and uses it for the provider call", async () => {
-    const d = deps({ config: { ...deps().config, rateLimitPerHour: 0, maxScansPerDay: 0 } });
-    const out = await handleAnalyze({ ...goodInput, byoKey: "sk-user" }, "1.2.3.4", d);
-    expect(out.status).toBe(200);
-    const calls = (d.callProvider as ReturnType<typeof vi.fn>).mock.calls;
-    expect(calls.every(([, , key]) => key === "sk-user")).toBe(true);
+  it("returns invalid-input for a bad mime type", async () => {
+    const out = await handleAnalyze({ ...goodInput, mime: "text/html" }, deps());
+    expect(out.ok).toBe(false);
+    if (!out.ok) expect(out.reason).toBe("invalid-input");
   });
 
   it("retries once when the critique rejects, then fails honestly", async () => {
     const callProvider = vi.fn(async (_req, model: string) =>
       model === "claude-sonnet-5" ? goldenText : '{"verdict":"rejected","reasons":["bad"]}',
     );
-    const out = await handleAnalyze(goodInput, "1.2.3.4", deps({ callProvider }));
-    expect(out.status).toBe(502);
-    // 2 primary + 2 critique calls = one retry
+    const out = await handleAnalyze(goodInput, deps({ callProvider }));
+    expect(out.ok).toBe(false);
+    if (!out.ok) expect(out.reason).toBe("analysis-unreliable");
     expect(callProvider.mock.calls.filter(([, m]) => m === "claude-sonnet-5")).toHaveLength(2);
   });
 
-  it("returns 502 when the report fails schema validation", async () => {
+  it("fails when the report never passes schema validation", async () => {
     const callProvider = vi.fn(async (_req, model: string) =>
       model === "claude-sonnet-5" ? '{"summary":"hi"}' : approvedText,
     );
-    const out = await handleAnalyze(goodInput, "1.2.3.4", deps({ callProvider }));
-    expect(out.status).toBe(502);
+    const out = await handleAnalyze(goodInput, deps({ callProvider }));
+    expect(out.ok).toBe(false);
   });
 
   it("uses the amended report when the critique amends", async () => {
-    const amended = { ...(golden as Record<string, unknown>), summary: "Amended summary — see a professional if unsure." };
+    const amended = {
+      ...(golden as Record<string, unknown>),
+      summary: "Amended summary — see a professional if unsure.",
+    };
     const callProvider = vi.fn(async (_req, model: string) =>
       model === "claude-sonnet-5"
         ? goldenText
         : JSON.stringify({ verdict: "amended", reasons: [], amendedReport: amended }),
     );
-    const out = await handleAnalyze(goodInput, "1.2.3.4", deps({ callProvider }));
-    expect(out.status).toBe(200);
-    expect((out.body as { report: { summary: string } }).report.summary).toMatch(/^Amended/);
+    const out = await handleAnalyze(goodInput, deps({ callProvider }));
+    expect(out.ok).toBe(true);
+    if (out.ok) expect(out.report.summary).toMatch(/^Amended/);
+  });
+
+  it("surfaces provider auth failures distinctly", async () => {
+    const callProvider = vi.fn(async () => {
+      const { ProviderAuthError } = await import("./providers/anthropic");
+      throw new ProviderAuthError();
+    });
+    const out = await handleAnalyze(goodInput, deps({ callProvider }));
+    expect(out.ok).toBe(false);
+    if (!out.ok) expect(out.reason).toBe("provider-auth");
   });
 });
 ```
 
 - [ ] **Step 2: Run to verify failure.**
 
-- [ ] **Step 3: Implement** `supabase/functions/analyze/pipeline.ts`:
+- [ ] **Step 3: Implement** `server/analysis/pipeline.ts`:
 
 ```ts
-import { validateAnalysisReport, type AnalysisReport } from "./contract.ts";
-import { validateInput, checkOutputGuardrails, type AnalyzeInput } from "./guardrails.ts";
-import { systemPrompt, userPrompt, PROMPT_VERSION } from "./prompts.ts";
-import { extractJson } from "./providers/anthropic.ts";
-import { runCritique } from "./critique.ts";
-import { checkRateLimit, checkDailyCap, hashIp, type CounterStore } from "./rate-limit.ts";
+import { validateAnalysisReport, type AnalysisReport } from "./contract";
+import { validateInput, checkOutputGuardrails, type AnalyzeInput } from "./guardrails";
+import { systemPrompt, userPrompt, PROMPT_VERSION } from "./prompts";
+import { extractJson, ProviderAuthError } from "./providers/anthropic";
+import { runCritique } from "./critique";
 
 export interface PipelineConfig {
   apiKey: string;
   primaryModel: string;
   critiqueModel: string;
   maxTokens: number;
-  rateLimitPerHour: number;
-  maxScansPerDay: number;
-  ipHashSalt: string;
 }
 
 export interface VisionCall {
@@ -1255,26 +1156,18 @@ export interface VisionCall {
 
 export interface PipelineDeps {
   config: PipelineConfig;
-  counters: CounterStore;
-  now: () => number;
-  // Seam over the provider: (request, model, apiKey) → raw text.
-  callProvider: (req: VisionCall, model: string, apiKey: string) => Promise<string>;
+  // Seam over the provider: (request, model) → raw text. The api key is in config.
+  callProvider: (req: VisionCall, model: string) => Promise<string>;
 }
 
-export interface PipelineResult {
-  status: number;
-  body: unknown;
-}
+export type PipelineOutcome =
+  | { ok: true; report: AnalysisReport; promptVersion: number }
+  | { ok: false; reason: "invalid-input" | "provider-auth" | "analysis-unreliable"; detail?: string };
 
-async function analyzeOnce(
-  input: AnalyzeInput,
-  apiKey: string,
-  deps: PipelineDeps,
-): Promise<AnalysisReport | null> {
+async function analyzeOnce(input: AnalyzeInput, deps: PipelineDeps): Promise<AnalysisReport | null> {
   const raw = await deps.callProvider(
     { imageB64: input.image, mime: input.mime, system: systemPrompt(), user: userPrompt(input.mode) },
     deps.config.primaryModel,
-    apiKey,
   );
   const parsed = extractJson(raw);
   const validated = validateAnalysisReport(parsed);
@@ -1284,7 +1177,6 @@ async function analyzeOnce(
     deps.callProvider(
       { imageB64: input.image, mime: input.mime, system: "You are a careful reviewer.", user: prompt },
       deps.config.critiqueModel,
-      apiKey,
     ),
   );
 
@@ -1295,375 +1187,46 @@ async function analyzeOnce(
 
 export async function handleAnalyze(
   input: AnalyzeInput,
-  ip: string,
   deps: PipelineDeps,
-): Promise<PipelineResult> {
+): Promise<PipelineOutcome> {
   const inputCheck = validateInput(input);
-  if (!inputCheck.ok) return { status: 400, body: { error: inputCheck.error } };
+  if (!inputCheck.ok) return { ok: false, reason: "invalid-input", detail: inputCheck.error };
 
-  const usingByoKey = typeof input.byoKey === "string" && input.byoKey.length > 0;
-  if (!usingByoKey) {
-    const ipHash = await hashIp(ip, deps.config.ipHashSalt);
-    const rl = await checkRateLimit(ipHash, deps.config.rateLimitPerHour, deps.counters, deps.now());
-    if (!rl.allowed) return { status: 429, body: { error: "rate limit exceeded — try later" } };
-    const cap = await checkDailyCap(deps.config.maxScansPerDay, deps.counters, deps.now());
-    if (!cap.allowed) return { status: 429, body: { error: "daily capacity reached — try tomorrow" } };
-  }
-
-  const apiKey = usingByoKey ? (input.byoKey as string) : deps.config.apiKey;
-
-  // One honest retry: a rejected critique or invalid schema gets a second attempt, then 502.
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const report = await analyzeOnce(input, apiKey, deps);
-    if (report) {
-      const guard = checkOutputGuardrails(report);
-      if (!guard.ok) continue; // guardrail violation → retry, never show
-      return { status: 200, body: { report, promptVersion: PROMPT_VERSION } };
-    }
-  }
-  return { status: 502, body: { error: "analysis could not be completed reliably" } };
-}
-```
-
-- [ ] **Step 4: Run — PASS (7 tests). Full suite 85. Commit:**
-
-```bash
-git add supabase/functions/analyze/pipeline.ts supabase/functions/analyze/pipeline.test.ts
-git commit -m "feat: analyze pipeline orchestrator with retry and honest failure"
-```
-
----
-
-## Task 9: Deno entry, env config, and function README
-
-**Files:**
-- Create: `supabase/functions/analyze/index.ts`
-- Create: `supabase/functions/analyze/README.md`
-
-No unit tests — `index.ts` is the thin Deno shell (uses `Deno.serve`/`Deno.env`, unavailable in Vitest). Its logic lives in the tested `pipeline.ts`.
-
-- [ ] **Step 1: Create `supabase/functions/analyze/index.ts`:**
-
-```ts
-// Deno entry — thin shell over the tested pipeline. Not unit-tested by design.
-import { handleAnalyze, type PipelineDeps } from "./pipeline.ts";
-import { callClaude } from "./providers/anthropic.ts";
-import { MemoryCounterStore } from "./rate-limit.ts";
-import type { AnalyzeInput } from "./guardrails.ts";
-
-const config = {
-  apiKey: Deno.env.get("ANTHROPIC_API_KEY") ?? "",
-  primaryModel: Deno.env.get("PRIMARY_MODEL") ?? "claude-sonnet-5",
-  critiqueModel: Deno.env.get("CRITIQUE_MODEL") ?? "claude-haiku-4-5-20251001",
-  maxTokens: Number(Deno.env.get("MAX_TOKENS") ?? "2048"),
-  rateLimitPerHour: Number(Deno.env.get("RATE_LIMIT_PER_HOUR") ?? "10"),
-  maxScansPerDay: Number(Deno.env.get("MAX_SCANS_PER_DAY") ?? "200"),
-  ipHashSalt: Deno.env.get("IP_HASH_SALT") ?? "dev-salt",
-};
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": Deno.env.get("ALLOWED_ORIGIN") ?? "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
-// Per-isolate store: fine for prototype rate limiting; swap for a durable
-// Supabase-table CounterStore before scaling (documented in README).
-const counters = new MemoryCounterStore();
-
-const deps: PipelineDeps = {
-  config,
-  counters,
-  now: () => Date.now(),
-  callProvider: async (req, model, apiKey) => {
-    const result = await callClaude(req, { apiKey, model, maxTokens: config.maxTokens });
-    return result.text;
-  },
-};
-
-Deno.serve(async (request: Request): Promise<Response> => {
-  if (request.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: corsHeaders });
-  }
-  if (request.method !== "POST") {
-    return new Response(JSON.stringify({ error: "method not allowed" }), {
-      status: 405,
-      headers: { ...corsHeaders, "content-type": "application/json" },
-    });
-  }
-  if (!config.apiKey) {
-    return new Response(JSON.stringify({ error: "server not configured" }), {
-      status: 500,
-      headers: { ...corsHeaders, "content-type": "application/json" },
-    });
-  }
-
-  let input: AnalyzeInput;
   try {
-    input = (await request.json()) as AnalyzeInput;
-  } catch {
-    return new Response(JSON.stringify({ error: "invalid JSON body" }), {
-      status: 400,
-      headers: { ...corsHeaders, "content-type": "application/json" },
-    });
+    // One honest retry: rejected critique / invalid schema / guardrail violation
+    // gets a second attempt, then an honest failure — never a degraded guess.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const report = await analyzeOnce(input, deps);
+      if (report) {
+        const guard = checkOutputGuardrails(report);
+        if (!guard.ok) continue;
+        return { ok: true, report, promptVersion: PROMPT_VERSION };
+      }
+    }
+    return { ok: false, reason: "analysis-unreliable" };
+  } catch (err) {
+    if (err instanceof ProviderAuthError) return { ok: false, reason: "provider-auth" };
+    throw err;
   }
-
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-  const result = await handleAnalyze(input, ip, deps);
-  // NOTE: image data and BYO keys are never logged anywhere in this function.
-  return new Response(JSON.stringify(result.body), {
-    status: result.status,
-    headers: { ...corsHeaders, "content-type": "application/json" },
-  });
-});
+}
 ```
 
-- [ ] **Step 2: Create `supabase/functions/analyze/README.md`:**
-
-```markdown
-# analyze — LLM analysis Edge Function
-
-The only server piece of the app. Receives a base64 photo, runs Claude vision
-analysis + a critique pass behind guardrails and rate limits, returns a
-validated `AnalysisReport`. Photos are processed in memory only — never stored,
-never logged. BYO keys are used for the provider call and never logged.
-
-## Env vars (Supabase dashboard → Edge Functions → secrets)
-
-| Var | Default | Purpose |
-|-----|---------|---------|
-| `ANTHROPIC_API_KEY` | (required) | Operator's Claude key |
-| `PRIMARY_MODEL` | `claude-sonnet-5` | Vision analysis model |
-| `CRITIQUE_MODEL` | `claude-haiku-4-5-20251001` | Critique pass model |
-| `MAX_TOKENS` | `2048` | Response cap |
-| `RATE_LIMIT_PER_HOUR` | `10` | Per-IP scans/hour (skipped for BYO keys) |
-| `MAX_SCANS_PER_DAY` | `200` | Global daily kill-switch |
-| `IP_HASH_SALT` | `dev-salt` | Salt for hashed-IP counters (set a real one) |
-| `ALLOWED_ORIGIN` | `*` | CORS origin (set to the site origin in prod) |
-
-## Known limitation
-
-Rate-limit counters are per-isolate (in-memory). Good enough to blunt abuse in
-the prototype; swap `MemoryCounterStore` for a Supabase-table `CounterStore`
-implementation before real launch. The seam exists in `rate-limit.ts`.
-
-## Local dev
+- [ ] **Step 4: Run — PASS (6 tests). Full suite 108. Commit:**
 
 ```bash
-supabase functions serve analyze --env-file supabase/.env.local
-curl -i http://localhost:54321/functions/v1/analyze \
-  -H "content-type: application/json" \
-  -d '{"image":"<base64>","mime":"image/jpeg","mode":"face"}'
-```
-
-## Deploy
-
-```bash
-supabase functions deploy analyze
-```
-
-Unit tests live beside the source (`*.test.ts`, run by the repo's Vitest — the
-modules are Deno-free; only `index.ts` touches Deno APIs).
-```
-
-- [ ] **Step 3: Verify the repo still passes** — `npm run verify` (85 tests; `index.ts` is outside tsconfig's `include: ["src"]` so `tsc` ignores its Deno globals; vite build unaffected).
-
-- [ ] **Step 4: Commit:**
-
-```bash
-git add supabase/functions/analyze/index.ts supabase/functions/analyze/README.md
-git commit -m "feat: analyze Edge Function entry, env config, and docs"
+git add server/analysis/pipeline.ts server/analysis/pipeline.test.ts
+git commit -m "feat: analysis pipeline orchestrator with retry and honest failure"
 ```
 
 ---
 
-## Task 10: Browser analyze client
-
-**Files:**
-- Create: `src/features/skin-analysis/api/analyze-client.ts`
-- Create: `src/features/skin-analysis/api/analyze-client.test.ts`
-
-- [ ] **Step 1: Failing test** `src/features/skin-analysis/api/analyze-client.test.ts`:
-
-```ts
-import { describe, it, expect, vi } from "vitest";
-import { analyzeCapture, AnalyzeRateLimitedError, AnalyzeFailedError } from "./analyze-client";
-import golden from "../../../../supabase/functions/analyze/fixtures/golden-report.json";
-import type { CaptureResult } from "../types";
-
-const capture: CaptureResult = {
-  blob: new Blob(["fake-jpeg-bytes"], { type: "image/jpeg" }),
-  mimeType: "image/jpeg",
-  mode: "face",
-  source: "camera",
-  width: 640,
-  height: 480,
-};
-
-const endpoint = "https://example.supabase.co/functions/v1/analyze";
-
-describe("analyzeCapture", () => {
-  it("posts base64 JSON and returns the validated report", async () => {
-    const fetchFn = vi.fn(async () =>
-      new Response(JSON.stringify({ report: golden, promptVersion: 1 }), { status: 200 }),
-    );
-    const report = await analyzeCapture(capture, { endpoint, anonKey: "anon" }, fetchFn);
-    expect(report.summary).toBe((golden as { summary: string }).summary);
-    const [url, init] = fetchFn.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe(endpoint);
-    const body = JSON.parse(init.body as string);
-    expect(body.mime).toBe("image/jpeg");
-    expect(body.mode).toBe("face");
-    expect(typeof body.image).toBe("string");
-    expect(body.image.length).toBeGreaterThan(0);
-    expect((init.headers as Record<string, string>).Authorization).toBe("Bearer anon");
-  });
-
-  it("includes a BYO key when provided", async () => {
-    const fetchFn = vi.fn(async () =>
-      new Response(JSON.stringify({ report: golden, promptVersion: 1 }), { status: 200 }),
-    );
-    await analyzeCapture(capture, { endpoint, anonKey: "anon", byoKey: "sk-user" }, fetchFn);
-    const body = JSON.parse((fetchFn.mock.calls[0][1] as RequestInit).body as string);
-    expect(body.byoKey).toBe("sk-user");
-  });
-
-  it("throws AnalyzeRateLimitedError on 429", async () => {
-    const fetchFn = vi.fn(async () => new Response("{}", { status: 429 }));
-    await expect(analyzeCapture(capture, { endpoint, anonKey: "anon" }, fetchFn)).rejects.toThrow(
-      AnalyzeRateLimitedError,
-    );
-  });
-
-  it("throws AnalyzeFailedError on 502", async () => {
-    const fetchFn = vi.fn(async () => new Response("{}", { status: 502 }));
-    await expect(analyzeCapture(capture, { endpoint, anonKey: "anon" }, fetchFn)).rejects.toThrow(
-      AnalyzeFailedError,
-    );
-  });
-
-  it("throws AnalyzeFailedError when the response fails contract validation", async () => {
-    const fetchFn = vi.fn(async () =>
-      new Response(JSON.stringify({ report: { summary: "only this" } }), { status: 200 }),
-    );
-    await expect(analyzeCapture(capture, { endpoint, anonKey: "anon" }, fetchFn)).rejects.toThrow(
-      AnalyzeFailedError,
-    );
-  });
-});
-```
-
-- [ ] **Step 2: Run to verify failure.**
-
-- [ ] **Step 3: Implement** `src/features/skin-analysis/api/analyze-client.ts`:
-
-```ts
-import { validateAnalysisReport, type AnalysisReport } from "./contract";
-import type { CaptureResult } from "../types";
-
-export class AnalyzeRateLimitedError extends Error {
-  constructor() {
-    super("Too many scans right now — please try again later.");
-    this.name = "AnalyzeRateLimitedError";
-  }
-}
-export class AnalyzeFailedError extends Error {
-  constructor(message = "The analysis could not be completed. Please try again.") {
-    super(message);
-    this.name = "AnalyzeFailedError";
-  }
-}
-
-export interface AnalyzeOptions {
-  endpoint: string; // `${SUPABASE_URL}/functions/v1/analyze`
-  anonKey: string;
-  byoKey?: string;
-}
-
-type FetchFn = (url: string, init: RequestInit) => Promise<Response>;
-
-async function blobToBase64(blob: Blob): Promise<string> {
-  const dataUrl: string = await new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(blob);
-  });
-  return dataUrl.slice(dataUrl.indexOf(",") + 1);
-}
-
-export async function analyzeCapture(
-  capture: CaptureResult,
-  opts: AnalyzeOptions,
-  fetchFn: FetchFn = fetch,
-): Promise<AnalysisReport> {
-  const image = await blobToBase64(capture.blob);
-  const res = await fetchFn(opts.endpoint, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      Authorization: `Bearer ${opts.anonKey}`,
-      apikey: opts.anonKey,
-    },
-    body: JSON.stringify({
-      image,
-      mime: capture.mimeType,
-      mode: capture.mode,
-      ...(opts.byoKey ? { byoKey: opts.byoKey } : {}),
-    }),
-  });
-
-  if (res.status === 429) throw new AnalyzeRateLimitedError();
-  if (!res.ok) throw new AnalyzeFailedError();
-
-  const data = (await res.json()) as { report?: unknown };
-  const validated = validateAnalysisReport(data.report);
-  if (!validated.ok) throw new AnalyzeFailedError("The analysis response was malformed.");
-  return validated.report;
-}
-
-export function defaultAnalyzeOptions(): AnalyzeOptions {
-  return {
-    endpoint: `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze`,
-    anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY as string,
-  };
-}
-```
-
-NOTE: jsdom lacks `FileReader.readAsDataURL` support for Blob in some versions — if the first test fails on `blobToBase64`, add a guarded polyfill to `src/test/setup.ts` following the existing pattern there (localStorage, Blob.text), converting via `Blob.text()`+`btoa`. Report it as a deviation if needed.
-
-- [ ] **Step 4: Add env typing.** Create `src/vite-env.d.ts` if absent:
-
-```ts
-/// <reference types="vite/client" />
-
-interface ImportMetaEnv {
-  readonly VITE_SUPABASE_URL: string;
-  readonly VITE_SUPABASE_ANON_KEY: string;
-  readonly VITE_CLASSIFIER_MODEL_URL?: string;
-}
-
-interface ImportMeta {
-  readonly env: ImportMetaEnv;
-}
-```
-
-- [ ] **Step 5: Run — PASS (5 tests). Then `npm run verify` (90 tests, clean typecheck, build). Commit:**
-
-```bash
-git add src/features/skin-analysis/api/analyze-client.ts src/features/skin-analysis/api/analyze-client.test.ts src/vite-env.d.ts
-git commit -m "feat: browser analyze client with typed errors"
-```
-
----
-
-## Task 11: Narrow CaptureFlow error routing (final-review carry-over)
+## Task 8: Narrow CaptureFlow error routing (final-review carry-over)
 
 **Files:**
 - Modify: `src/features/skin-analysis/components/capture/CaptureFlow.tsx`
 - Modify: `src/features/skin-analysis/components/capture/CaptureFlow.test.tsx`
 
-Plan 1's final review flagged: `useUpload = captureSource === "upload" || state === "error"` routes ALL errors to the upload dropzone; when analysis errors become reachable they'd silently dump users into upload. Narrow it now.
+Plan 1's final review flagged: `state === "error"` routes ALL errors to the upload dropzone. Quality-gate errors (blur/low-light) correctly show upload as a fallback, but `analysis-failed` (now reachable — the classifier fires it when the model is missing) silently shows a dropzone. Give analysis errors their own retry UI.
 
 - [ ] **Step 1: Failing test.** Append to `CaptureFlow.test.tsx`:
 
@@ -1685,10 +1248,10 @@ describe("CaptureFlow — analysis error routing", () => {
 
 - [ ] **Step 2: Run to verify failure.**
 
-- [ ] **Step 3: Fix `CaptureFlow.tsx`.** Replace the `useUpload` line and the surrounding render with:
+- [ ] **Step 3: Fix `CaptureFlow.tsx`.** Replace the `useUpload` line with:
 
 ```tsx
-  const captureErrors = ["denied", "no-camera", "upload-failed"] as const;
+  const captureErrors = ["denied", "no-camera", "upload-failed", "blur", "low-light"] as const;
   const isCaptureError =
     machine.state === "error" &&
     captureErrors.includes(machine.error as (typeof captureErrors)[number]);
@@ -1696,12 +1259,14 @@ describe("CaptureFlow — analysis error routing", () => {
   const useUpload = machine.captureSource === "upload" || isCaptureError;
 ```
 
-And add an analysis-error branch before the `useUpload` block in the JSX:
+Add an analysis-error branch immediately after the existing error-message block (before the `useUpload` ternary), and wrap the `useUpload ? ... : <CameraFeed .../>` render in `{!isAnalysisError && (...)}`:
 
 ```tsx
       {isAnalysisError && (
         <div className="flex flex-col items-center gap-3" role="alert">
-          <p className="text-sm text-stone-600">Analysis failed — nothing was saved. You can try again.</p>
+          <p className="text-sm text-stone-600">
+            Analysis failed — nothing was saved. You can try again.
+          </p>
           <button
             onClick={machine.reset}
             className="rounded-lg bg-clinical px-6 py-3 text-sm font-semibold text-white"
@@ -1712,9 +1277,7 @@ And add an analysis-error branch before the `useUpload` block in the JSX:
       )}
 ```
 
-Wrap the existing `useUpload ? ... : <CameraFeed .../>` render so it only renders when `!isAnalysisError`.
-
-- [ ] **Step 4: Run full suite — all passing (91). `npm run verify` green. Commit:**
+- [ ] **Step 4: Run full suite — 109 passing. `npm run verify` green. Commit:**
 
 ```bash
 git add src/features/skin-analysis/components/capture/CaptureFlow.tsx src/features/skin-analysis/components/capture/CaptureFlow.test.tsx
@@ -1725,18 +1288,16 @@ git commit -m "fix: give analysis errors their own retry UI instead of upload fa
 
 ## Definition of Done
 
-- `npm run verify` green: clean typecheck, all ~91 tests, production build.
-- Every server module (`contract`, `prompts`, `guardrails`, `providers/anthropic`, `critique`, `rate-limit`, `pipeline`) is pure, Deno-free, and unit-tested; `index.ts` is the only Deno-touching file.
-- Pipeline behavior proven by tests: happy path, bad input 400, rate-limit 429, BYO-key bypass + key used for provider calls, critique-rejection retry then 502, schema-invalid 502, amended-report passthrough.
-- Golden fixture accepted by BOTH server and client validators (drift canary).
+- `npm run verify` green: clean typecheck, ~109 tests, production build. (`server/` is outside tsconfig's `include: ["src"]` — its type-safety is exercised by Vitest now and by the api build in Plan 4.)
+- Every analysis module (`contract`, `prompts`, `guardrails`, `providers/anthropic`, `critique`, `pipeline`) is pure, HTTP-free, and unit-tested.
+- Pipeline behavior proven: happy path, invalid input, critique-rejection retry then honest failure, schema-invalid failure, amended-report passthrough, provider-auth surfaced distinctly.
+- Golden fixture accepted by BOTH server and client validators (drift canary), with all 12 clinic dimensions.
 - Guardrails enforce: no diagnosis/benign/malignant/prescription language, non-diagnosis disclaimer, professional referral on attention findings.
-- No image data or BYO keys logged anywhere.
-- Manual smoke (needs Supabase project + real key): `supabase functions serve analyze` + curl per the function README returns a valid report.
+- Analysis errors get retry UI; capture errors keep the upload fallback.
 
-## What this plan intentionally defers
+## What this plan intentionally defers (Plan 4+)
 
-- Durable (cross-isolate) rate-limit store — seam exists; swap before public launch.
-- Wiring `analyzeCapture` into the UI + loading screen + results — Plan 4.
-- Verdict merge with the on-device classifier — Plan 4 (needs Plan 2).
-- Facial-map rendering, PDF export, trend analysis — Plan 4/5.
-- Tier-1 learning-loop telemetry (opt-in disagreement records) — after Plans 2+4.
+- Express endpoint, auth, Postgres storage, image compression — Plan 4 mounts `handleAnalyze` behind `/api/analyze`.
+- QR capture sessions — Plan 4 (endpoints) + Plan 6 (UI).
+- Verdict merge with the on-device classifier, results UI, facial map, PDF — Plan 5.
+- Patients & history UI — Plan 6.
