@@ -55,4 +55,15 @@ describe("scan machine", () => {
     expect(useScanMachine.getState().state).toBe("idle");
     expect(useScanMachine.getState().capture).toBeNull();
   });
+
+  it("uploadFailed → error(upload-failed), recoverable via chooseUpload", () => {
+    useScanMachine.getState().grantConsent();
+    useScanMachine.getState().chooseUpload();
+    useScanMachine.getState().uploadFailed();
+    expect(useScanMachine.getState().state).toBe("error");
+    expect(useScanMachine.getState().error).toBe("upload-failed");
+    useScanMachine.getState().chooseUpload();
+    expect(useScanMachine.getState().state).toBe("framing");
+    expect(useScanMachine.getState().error).toBeNull();
+  });
 });

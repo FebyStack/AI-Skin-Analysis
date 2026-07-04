@@ -10,7 +10,7 @@ export type ScanState =
   | "results"
   | "error";
 
-export type ScanError = "denied" | "no-camera" | "low-light" | "blur" | "analysis-failed";
+export type ScanError = "denied" | "no-camera" | "low-light" | "blur" | "analysis-failed" | "upload-failed";
 
 interface ScanStore {
   state: ScanState;
@@ -24,6 +24,7 @@ interface ScanStore {
   chooseUpload(): void;
   captured(result: CaptureResult): void;
   analysisFailed(): void;
+  uploadFailed(): void;
   reset(): void;
 }
 
@@ -39,6 +40,7 @@ export const useScanMachine = create<ScanStore>((set) => ({
   chooseUpload: () => set({ state: "framing", captureSource: "upload", error: null }),
   captured: (result) => set({ state: "analyzing", capture: result }),
   analysisFailed: () => set({ state: "error", error: "analysis-failed" }),
+  uploadFailed: () => set({ state: "error", error: "upload-failed" }),
   reset: () =>
     set({ state: "idle", error: null, capture: null, captureSource: "camera" }),
 }));

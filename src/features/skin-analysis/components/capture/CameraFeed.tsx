@@ -7,10 +7,12 @@ export function CameraFeed({
   mode,
   onCapture,
   onUnavailable,
+  onLive,
 }: {
   mode: CaptureMode;
   onCapture: (r: CaptureResult) => void;
   onUnavailable: (reason: "denied" | "no-camera") => void;
+  onLive?: () => void;
 }) {
   const { videoRef, status, start } = useCamera(mode);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -23,6 +25,10 @@ export function CameraFeed({
     if (status === "denied") onUnavailable("denied");
     if (status === "no-camera") onUnavailable("no-camera");
   }, [status, onUnavailable]);
+
+  useEffect(() => {
+    if (status === "live") onLive?.();
+  }, [status, onLive]);
 
   const snap = async () => {
     const video = videoRef.current;

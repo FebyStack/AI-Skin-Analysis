@@ -1,0 +1,31 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { CaptureFlow } from "./CaptureFlow";
+import { useScanMachine } from "../../store/scan-machine";
+
+vi.mock("../../privacy/redact", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../privacy/redact")>();
+  return {
+    ...actual,
+    stripMetadata: vi.fn(async () => {
+      throw new actual.RedactError("Could not process this photo — it may be corrupt or unsupported.");
+    }),
+  };
+});
+
+describe("CaptureFlow — corrupt upload", () => {
+  beforeEach(() => useScanMachine.getState().reset());
+
+  it("shows an error message instead of failing silently", async () => {
+    useScanMachine.getState().grantConsent();
+    useScanMachine.getState().chooseUpload();
+    render(<CaptureFlow mode="face" />);
+    const file = new File(["bad"], "corrupt.jpg", { type: "image/jpeg" });
+    const input = screen.getByLabelText(/upload a photo/i);
+    await userEvent.upload(input, file);
+    expect(await screen.findByText(/couldn.t process that photo/i)).toBeInTheDocument();
+    // Dropzone still present — user can retry.
+    expect(screen.getByLabelText(/upload a photo/i)).toBeInTheDocument();
+  });
+});

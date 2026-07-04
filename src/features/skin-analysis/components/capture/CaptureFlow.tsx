@@ -15,8 +15,12 @@ export function CaptureFlow({ mode }: { mode: CaptureMode }) {
 
   const onUpload = useCallback(
     async (file: File) => {
-      const clean = await stripMetadata(file, "image/jpeg", canvasCodec);
-      machine.captured(toCaptureResult(clean, mode, "upload"));
+      try {
+        const clean = await stripMetadata(file, "image/jpeg", canvasCodec);
+        machine.captured(toCaptureResult(clean, mode, "upload"));
+      } catch {
+        machine.uploadFailed();
+      }
     },
     [machine, mode],
   );
@@ -49,12 +53,23 @@ export function CaptureFlow({ mode }: { mode: CaptureMode }) {
               Camera unavailable — upload a photo instead.
             </p>
           )}
+          {machine.error === "upload-failed" && (
+            <p className="text-sm text-stone-600" role="status">
+              Couldn't process that photo — it may be corrupt or unsupported. Try another.
+            </p>
+          )}
           <UploadDropzone onFile={onUpload} />
         </>
       ) : (
-        <CameraFeed mode={mode} onCapture={onCapture} onUnavailable={onUnavailable} />
+        <CameraFeed
+          mode={mode}
+          onCapture={onCapture}
+          onUnavailable={onUnavailable}
+          onLive={machine.cameraReady}
+        />
       )}
       {machine.state === "analyzing" && (
+        // TODO(plan-2): real pipeline + results; add a "New scan" reset affordance
         <p className="text-sm text-clinical">Analyzing… (pipeline lands in a later plan)</p>
       )}
     </div>
