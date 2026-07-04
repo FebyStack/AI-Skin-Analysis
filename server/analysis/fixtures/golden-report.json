@@ -1,0 +1,49 @@
+{
+  "summary": "Skin looks mostly healthy overall. One area is worth a professional look.",
+  "findings": [
+    {
+      "id": "acne",
+      "label": "Mild acne",
+      "source": "llm",
+      "confidence": 0.72,
+      "severity": "mild",
+      "region": "left-cheek",
+      "note": "Appearance consistent with mild inflammatory acne."
+    },
+    {
+      "id": "suspicious-lesion",
+      "label": "Lesion needing evaluation",
+      "source": "llm",
+      "confidence": 0.4,
+      "severity": "attention",
+      "region": "chin",
+      "note": "Surface features suggestive of a lesion; a dermatologist can evaluate properly."
+    }
+  ],
+  "dimensions": {
+    "hydration-appearance": { "score": 0.3, "note": "Visual proxy only: mild dullness suggests dehydration cues." },
+    "oiliness": { "score": 0.5, "note": "T-zone shine visible." },
+    "pigmentation": { "score": 0.2, "note": "No significant pigmentation pattern." },
+    "spots": { "score": 0.25, "note": "A few small discrete dark spots on the cheeks." },
+    "pores": { "score": 0.35, "note": "Mildly visible on the nose." },
+    "blackheads": { "score": 0.3, "note": "Scattered comedone-like congestion on the nose." },
+    "wrinkles-texture": { "score": 0.25, "note": "Generally smooth; fine lines around the eyes." },
+    "acne": { "score": 0.45, "note": "Localized to the left cheek." },
+    "inflammation": { "score": 0.2, "note": "Mild irritation appearance near active acne." },
+    "redness": { "score": 0.3, "note": "Visual proxy: slight erythema around the nose." },
+    "sensitivity": { "score": 0.2, "note": "Few visible reactivity cues." },
+    "elasticity-appearance": { "score": 0.2, "note": "Visual proxy only: no notable sagging cues." }
+  },
+  "skinType": {
+    "sebum": "combination",
+    "sensitivityCues": false,
+    "fitzpatrickApprox": 4,
+    "approximate": true
+  },
+  "zoneObservations": [
+    { "zone": "forehead", "observation": "Clear, even tone." },
+    { "zone": "left-cheek", "observation": "Small cluster of inflammatory papules." }
+  ],
+  "disclaimer": "This is not a diagnosis. It helps decide whether to see a professional.",
+  "promptVersion": 2
+}
