@@ -7,4 +7,9 @@ export default defineConfig({
   resolve: {
     alias: { "@": resolve(__dirname, "src") },
   },
+  worker: {
+    // onnxruntime-web forces code-splitting in the classify worker; the default
+    // iife worker format can't split — es can.
+    format: "es",
+  },
 });
