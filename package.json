@@ -11,7 +11,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "typecheck:server": "tsc -p server/tsconfig.json",
-    "build:server": "esbuild server/api/index.ts --bundle --platform=node --format=esm --target=node20 --outfile=dist-server/index.js --external:sharp --external:pg",
+    "build:server": "esbuild server/api/index.ts --bundle --platform=node --target=node20 --outfile=dist-server/index.cjs --external:sharp --external:pg",
     "lint": "eslint .",
     "verify": "npm run typecheck && npm run typecheck:server && npm run test && npm run build"
   },

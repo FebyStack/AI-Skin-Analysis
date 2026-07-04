@@ -17,6 +17,6 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 COPY --from=build /app/dist-server ./dist-server
-COPY server/db ./server/db
+COPY server/db ./db
 EXPOSE 3001
-CMD ["node", "dist-server/index.js"]
+CMD ["node", "dist-server/index.cjs"]
