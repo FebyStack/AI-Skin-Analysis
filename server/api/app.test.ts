@@ -192,3 +192,39 @@ describe("analyze", () => {
     expect(img.headers["content-type"]).toBe("image/jpeg");
   });
 });
+
+describe("capture sessions (QR)", () => {
+  it("desktop creates a session; phone submits by token without auth; desktop polls it", async () => {
+    const { app, cookie } = await loggedInAgent();
+    const created = await request(app).post("/api/capture-sessions").set("Cookie", cookie);
+    expect(created.status).toBe(201);
+    const { token, path } = created.body;
+    expect(path).toBe(`/capture/${token}`);
+
+    // Phone: NO cookie.
+    const submit = await request(app)
+      .post(`/api/capture-sessions/${token}/image`)
+      .send({ image: await tinyJpegB64(), mime: "image/jpeg", mode: "face" });
+    expect(submit.status).toBe(200);
+
+    // Desktop polls (auth required) and consumes the capture.
+    const poll = await request(app)
+      .get(`/api/capture-sessions/${token}`)
+      .set("Cookie", cookie);
+    expect(poll.status).toBe(200);
+    expect(poll.body.capture.mime).toBe("image/jpeg");
+
+    const again = await request(app)
+      .get(`/api/capture-sessions/${token}`)
+      .set("Cookie", cookie);
+    expect(again.status).toBe(404);
+  });
+
+  it("rejects submissions with an expired/unknown token", async () => {
+    const { app } = await loggedInAgent();
+    const res = await request(app)
+      .post("/api/capture-sessions/bogus/image")
+      .send({ image: "aGVsbG8=", mime: "image/jpeg", mode: "face" });
+    expect(res.status).toBe(410);
+  });
+});

@@ -3,6 +3,7 @@ import type { AppDeps } from "./repos";
 import { verifyOrBootstrapPassword, makeSessionToken, requireSession } from "./auth";
 import { handleAnalyze } from "../analysis/pipeline";
 import { compressToJpeg } from "./image";
+import { CaptureSessionStore } from "./capture-sessions";
 
 export function createApp(deps: AppDeps): Express {
   const app = express();
@@ -27,6 +28,7 @@ export function createApp(deps: AppDeps): Express {
   });
 
   const auth = requireSession(deps.sessionSecret, deps.now);
+  const captures = new CaptureSessionStore(deps.now);
 
   // Protected routes are added below in later tasks; placeholder list route
   // proves the middleware works end-to-end.
@@ -150,6 +152,31 @@ export function createApp(deps: AppDeps): Express {
   app.delete("/api/scans/:id", auth, async (req, res) => {
     const ok = await deps.scans.remove(req.params.id);
     res.status(ok ? 204 : 404).end();
+  });
+
+  app.post("/api/capture-sessions", auth, (_req, res) => {
+    const { token } = captures.create();
+    res.status(201).json({ token, path: `/capture/${token}` });
+  });
+
+  // Phone-side: token IS the authorization (single-use, 5-min TTL, upload-only).
+  app.post("/api/capture-sessions/:token/image", (req, res) => {
+    const { image, mime, mode } = req.body ?? {};
+    if (typeof image !== "string" || typeof mime !== "string" || (mode !== "face" && mode !== "closeup")) {
+      res.status(400).json({ error: "invalid capture" });
+      return;
+    }
+    const ok = captures.submit(req.params.token, { image, mime, mode });
+    res.status(ok ? 200 : 410).json(ok ? { ok: true } : { error: "session expired or used" });
+  });
+
+  app.get("/api/capture-sessions/:token", auth, (req, res) => {
+    const capture = captures.take(req.params.token);
+    if (!capture) {
+      res.status(404).json({ error: "no capture yet" });
+      return;
+    }
+    res.json({ capture });
   });
 
   return app;
