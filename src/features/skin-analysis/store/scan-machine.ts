@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { CaptureResult, CaptureSource } from "../types";
+import type { CaptureResult, CaptureSource, QualityIssue } from "../types";
 
 export type ScanState =
   | "idle"
@@ -25,6 +25,7 @@ interface ScanStore {
   captured(result: CaptureResult): void;
   analysisFailed(): void;
   uploadFailed(): void;
+  qualityRejected(issue: QualityIssue): void;
   reset(): void;
 }
 
@@ -41,6 +42,16 @@ export const useScanMachine = create<ScanStore>((set) => ({
   captured: (result) => set({ state: "analyzing", capture: result }),
   analysisFailed: () => set({ state: "error", error: "analysis-failed" }),
   uploadFailed: () => set({ state: "error", error: "upload-failed" }),
+  qualityRejected: (issue) =>
+    set({
+      state: "error",
+      error:
+        issue === "too-dark" || issue === "overexposed"
+          ? "low-light"
+          : issue === "no-region"
+            ? "no-camera"
+            : "blur",
+    }),
   reset: () =>
     set({ state: "idle", error: null, capture: null, captureSource: "camera" }),
 }));

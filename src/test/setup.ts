@@ -24,6 +24,19 @@ if (typeof localStorage === "undefined" || typeof localStorage.clear !== "functi
   Object.defineProperty(window, "localStorage", { value: storage, writable: true });
 }
 
+// Vitest jsdom has no Web Worker; provide an inert stub. Component tests never
+// exercise real classification — the worker path is manual/integration-only.
+if (typeof globalThis.Worker === "undefined") {
+  class InertWorker {
+    onmessage: unknown = null;
+    postMessage() {}
+    addEventListener() {}
+    removeEventListener() {}
+    terminate() {}
+  }
+  globalThis.Worker = InertWorker as unknown as typeof Worker;
+}
+
 // Polyfill Blob.text() for jsdom
 if (!Blob.prototype.text) {
   Blob.prototype.text = async function () {

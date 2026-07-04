@@ -2,27 +2,41 @@ import { useCallback } from "react";
 import { useScanMachine } from "../../store/scan-machine";
 import { CameraFeed } from "./CameraFeed";
 import { UploadDropzone } from "./UploadDropzone";
+import { useQualityGate } from "../../hooks/use-quality-gate";
+import { useClassifier } from "../../hooks/use-classifier";
 import { stripMetadata, canvasCodec, toCaptureResult } from "../../privacy/redact";
 import type { CaptureMode, CaptureResult } from "../../types";
 
 export function CaptureFlow({ mode }: { mode: CaptureMode }) {
   const machine = useScanMachine();
+  const runQualityGate = useQualityGate();
+  const classify = useClassifier();
 
-  const onCapture = useCallback(
-    (r: CaptureResult) => machine.captured(r),
-    [machine],
+  const process = useCallback(
+    async (result: CaptureResult) => {
+      const report = await runQualityGate(result.blob);
+      if (!report.ok) {
+        machine.qualityRejected(report.issues[0]);
+        return;
+      }
+      machine.captured(result);
+      // Independent second opinion runs off the main thread. The verdict merge
+      // that consumes these findings alongside the LLM output lands in Plan 4.
+      classify(result.blob).catch(() => machine.analysisFailed());
+    },
+    [machine, runQualityGate, classify],
   );
 
   const onUpload = useCallback(
     async (file: File) => {
       try {
         const clean = await stripMetadata(file, "image/jpeg", canvasCodec);
-        machine.captured(toCaptureResult(clean, mode, "upload"));
+        await process(toCaptureResult(clean, mode, "upload"));
       } catch {
         machine.uploadFailed();
       }
     },
-    [machine, mode],
+    [machine, mode, process],
   );
 
   const onUnavailable = useCallback(
@@ -46,8 +60,18 @@ export function CaptureFlow({ mode }: { mode: CaptureMode }) {
 
   return (
     <div className="flex flex-col items-center gap-4">
-      {useUpload ? (
+      {machine.state === "error" && (
         <>
+          {machine.error === "blur" && (
+            <p className="text-sm text-stone-600" role="status">
+              That photo looked blurry — hold steady and try again, or upload a clearer one.
+            </p>
+          )}
+          {machine.error === "low-light" && (
+            <p className="text-sm text-stone-600" role="status">
+              Lighting was too dark or bright — find even light, or upload a photo.
+            </p>
+          )}
           {machine.error === "denied" && (
             <p className="text-sm text-stone-600">
               Camera unavailable — upload a photo instead.
@@ -58,19 +82,21 @@ export function CaptureFlow({ mode }: { mode: CaptureMode }) {
               Couldn't process that photo — it may be corrupt or unsupported. Try another.
             </p>
           )}
-          <UploadDropzone onFile={onUpload} />
         </>
+      )}
+      {useUpload ? (
+        <UploadDropzone onFile={onUpload} />
       ) : (
         <CameraFeed
           mode={mode}
-          onCapture={onCapture}
+          onCapture={process}
           onUnavailable={onUnavailable}
           onLive={machine.cameraReady}
         />
       )}
       {machine.state === "analyzing" && (
-        // TODO(plan-2): real pipeline + results; add a "New scan" reset affordance
-        <p className="text-sm text-clinical">Analyzing… (pipeline lands in a later plan)</p>
+        // TODO(plan-4): verdict merge + results; add a "New scan" reset affordance
+        <p className="text-sm text-clinical">Analyzing… (verdict merge lands in Plan 4)</p>
       )}
     </div>
   );
