@@ -67,3 +67,23 @@ describe("scan machine", () => {
     expect(useScanMachine.getState().error).toBeNull();
   });
 });
+
+describe("scan machine — camera retry", () => {
+  beforeEach(() => useScanMachine.getState().reset());
+
+  it("chooseCamera returns to the camera path from an error", () => {
+    useScanMachine.getState().grantConsent();
+    useScanMachine.getState().cameraDenied();
+    useScanMachine.getState().chooseCamera();
+    expect(useScanMachine.getState().state).toBe("permission");
+    expect(useScanMachine.getState().captureSource).toBe("camera");
+    expect(useScanMachine.getState().error).toBeNull();
+  });
+
+  it("chooseCamera switches back after choosing upload", () => {
+    useScanMachine.getState().grantConsent();
+    useScanMachine.getState().chooseUpload();
+    useScanMachine.getState().chooseCamera();
+    expect(useScanMachine.getState().captureSource).toBe("camera");
+  });
+});

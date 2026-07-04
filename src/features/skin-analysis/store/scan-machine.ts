@@ -22,6 +22,7 @@ interface ScanStore {
   cameraDenied(): void;
   noCamera(): void;
   chooseUpload(): void;
+  chooseCamera(): void;
   captured(result: CaptureResult): void;
   analysisFailed(): void;
   uploadFailed(): void;
@@ -39,6 +40,7 @@ export const useScanMachine = create<ScanStore>((set) => ({
   cameraDenied: () => set({ state: "error", error: "denied" }),
   noCamera: () => set({ state: "error", error: "no-camera" }),
   chooseUpload: () => set({ state: "framing", captureSource: "upload", error: null }),
+  chooseCamera: () => set({ state: "permission", captureSource: "camera", error: null }),
   captured: (result) => set({ state: "analyzing", capture: result }),
   analysisFailed: () => set({ state: "error", error: "analysis-failed" }),
   uploadFailed: () => set({ state: "error", error: "upload-failed" }),

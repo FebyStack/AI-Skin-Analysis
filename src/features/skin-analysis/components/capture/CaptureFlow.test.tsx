@@ -43,3 +43,21 @@ describe("CaptureFlow — analysis error routing", () => {
     expect(screen.queryByLabelText(/upload a photo/i)).not.toBeInTheDocument();
   });
 });
+
+describe("CaptureFlow — camera retry from upload fallback", () => {
+  beforeEach(() => useScanMachine.getState().reset());
+
+  it("offers a way back to the camera after camera denial", async () => {
+    useScanMachine.getState().grantConsent();
+    useScanMachine.getState().cameraDenied();
+    render(<CaptureFlow mode="face" />);
+    const back = screen.getByRole("button", { name: /use camera instead/i });
+    await userEvent.click(back);
+    // The retry switches back to the camera source; jsdom has no camera, so the
+    // remounted CameraFeed immediately reports no-camera and the fallback
+    // (with the retry affordance) returns instead of crashing or looping.
+    expect(useScanMachine.getState().captureSource).toBe("camera");
+    expect(useScanMachine.getState().error).toBe("no-camera");
+    expect(screen.getByRole("button", { name: /use camera instead/i })).toBeInTheDocument();
+  });
+});

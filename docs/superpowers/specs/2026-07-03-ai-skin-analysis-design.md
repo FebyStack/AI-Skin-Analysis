@@ -14,9 +14,28 @@ A clinic-local web tool that helps practitioners assess skin and decide whether/
 
 Unchanged from v1: broad, open taxonomy of visually-presenting conditions (inflammatory/allergic, infectious, acne/follicular, pigmentary, hair/scalp, nail) with the hard photographic line — no malignancy verdicts (red-flag escalation only), no claims requiring dermoscopy/palpation/systemic context, quality-gated images only.
 
+### Primary focus: facial skin analysis
+
+**Face-mode analysis is the product's core.** The capture flow defaults to face mode, the report dimensions/facial map/skin-type features are designed around the face, and UI priority follows. Body close-up mode exists for lesion/mole checks but is secondary (single-region observations, no facial map, dimensions where applicable).
+
+### Reference device (feature benchmark)
+
+Benchmark: the GZ Beauty 14.2" Intelligent Skin Analyzer (MLB-E02) — https://gzbeautydevice.com/skin-analyzer/ — a professional clinic device whose feature set defines our target vocabulary:
+
+- **Nine analysis items across three light spectra:** green light/surface (hydration, oil, pigmentation, pores, wrinkles); red light/deep layer (pigmentation, spots, blood circulation, collagen, sensitivity); blue light/pore level (enlarged pores, blackheads, acne, inflammation).
+- **AI image recognition with automatic report generation**, problem-area highlighting on the face image ("professional skin condition mapping"), 3D-style reports.
+- **Client records, before/after comparison**, membership-style history.
+- Hardware: 15 MP handheld lens, 200x magnification, real multi-spectral illumination.
+
+**What we match:** the full analysis-item vocabulary (as the 12 report dimensions below), facial problem-area mapping (our zone-tagged facial map), automatic AI report generation, patient records, history, and before/after comparison.
+
+**What we deliberately do NOT match:**
+- *Spectral/hardware measurement claims* — a standard camera cannot do green/red/blue spectral imaging or 200x magnification. Our equivalents are AI visual inferences and are labeled so ("visual proxy") — permanently.
+- *AI-matched product recommendations* — the device upsells products; our guardrails **forbid** product/treatment recommendations. This is a safety feature, not a gap.
+
 ### Report dimensions (every face scan)
 
-Modeled on professional analyzer devices (reference: 9-item three-spectrum analyzers) but **honestly framed**: those devices use real multi-spectral hardware (green/red/blue light, 200x lenses); a standard camera cannot do spectral imaging. We report the same vocabulary via AI visual inference, labeled as such.
+Modeled on the reference device's nine items but **honestly framed** via AI visual inference:
 
 - **Hydration appearance** — flakiness, dullness, dehydration lines. *Visual proxy — never claims measured moisture.*
 - **Oiliness** — shine/sebum appearance by zone

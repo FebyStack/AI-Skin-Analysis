@@ -104,14 +104,30 @@ export function CaptureFlow({ mode }: { mode: CaptureMode }) {
       )}
       {!isAnalysisError &&
         (useUpload ? (
-          <UploadDropzone onFile={onUpload} />
+          <>
+            <UploadDropzone onFile={onUpload} />
+            <button
+              onClick={machine.chooseCamera}
+              className="text-sm font-medium text-clinical underline-offset-2 hover:underline"
+            >
+              Use camera instead
+            </button>
+          </>
         ) : (
-          <CameraFeed
-            mode={mode}
-            onCapture={process}
-            onUnavailable={onUnavailable}
-            onLive={machine.cameraReady}
-          />
+          <>
+            <CameraFeed
+              mode={mode}
+              onCapture={process}
+              onUnavailable={onUnavailable}
+              onLive={machine.cameraReady}
+            />
+            <button
+              onClick={machine.chooseUpload}
+              className="text-sm font-medium text-clinical underline-offset-2 hover:underline"
+            >
+              Upload a photo instead
+            </button>
+          </>
         ))}
       {machine.state === "analyzing" && (
         // TODO(plan-4): verdict merge + results; add a "New scan" reset affordance
