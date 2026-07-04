@@ -7,3 +7,6 @@ vite.config.d.ts
 vite.config.js
 vitest.config.d.ts
 vitest.config.js
+
+# ML model assets (provided out-of-band, not versioned)
+public/models/*.onnx
