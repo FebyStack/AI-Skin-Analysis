@@ -10,3 +10,4 @@ vitest.config.js
 
 # ML model assets (provided out-of-band, not versioned)
 public/models/*.onnx
+.worktrees/
