@@ -3,3 +3,7 @@ node_modules/
 dist/
 .env
 *.tsbuildinfo
+vite.config.d.ts
+vite.config.js
+vitest.config.d.ts
+vitest.config.js
