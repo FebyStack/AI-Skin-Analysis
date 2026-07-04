@@ -19,7 +19,7 @@ describe("callClaude", () => {
       fetchFn,
     );
     expect(out.text).toBe('{"hello":1}');
-    const [url, init] = fetchFn.mock.calls[0] as [string, RequestInit];
+    const [url, init] = fetchFn.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("https://api.anthropic.com/v1/messages");
     const body = JSON.parse(init.body as string);
     expect(body.model).toBe("claude-sonnet-5");
