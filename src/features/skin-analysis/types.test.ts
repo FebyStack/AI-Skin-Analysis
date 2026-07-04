@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isFinding, type Finding, type CaptureResult } from "./types";
+import { isFinding, FACE_ZONES, type Finding, type CaptureResult } from "./types";
 
 describe("type guards", () => {
   it("accepts a well-formed Finding", () => {
@@ -33,5 +33,27 @@ describe("type guards", () => {
       height: 480,
     };
     expect(c.mode).toBe("face");
+  });
+});
+
+describe("isFinding — hardened validation", () => {
+  const base = { id: "acne", label: "Acne", source: "llm", confidence: 0.5, severity: "mild" };
+
+  it("rejects a non-string note", () => {
+    expect(isFinding({ ...base, note: 123 })).toBe(false);
+  });
+
+  it("accepts a valid region and rejects an unknown one", () => {
+    expect(isFinding({ ...base, region: "forehead" })).toBe(true);
+    expect(isFinding({ ...base, region: "elbow" })).toBe(false);
+  });
+
+  it("rejects NaN confidence", () => {
+    expect(isFinding({ ...base, confidence: NaN })).toBe(false);
+  });
+
+  it("exposes the face zone vocabulary", () => {
+    expect(FACE_ZONES).toContain("left-cheek");
+    expect(FACE_ZONES.length).toBe(7);
   });
 });

@@ -3,6 +3,17 @@ export type Severity = "info" | "mild" | "moderate" | "attention";
 export type CaptureMode = "face" | "closeup";
 export type CaptureSource = "camera" | "upload";
 
+export const FACE_ZONES = [
+  "forehead",
+  "nose",
+  "left-cheek",
+  "right-cheek",
+  "chin",
+  "periorbital",
+  "other",
+] as const;
+export type FaceZone = (typeof FACE_ZONES)[number];
+
 export interface Finding {
   id: string;
   label: string;
@@ -10,6 +21,7 @@ export interface Finding {
   confidence: number; // 0..1
   severity: Severity;
   note?: string;
+  region?: FaceZone;
 }
 
 export type Agreement = "agree" | "llm-only" | "classifier-only" | "conflict";
@@ -54,7 +66,9 @@ export function isFinding(x: unknown): x is Finding {
     (f.severity === "info" ||
       f.severity === "mild" ||
       f.severity === "moderate" ||
-      f.severity === "attention")
+      f.severity === "attention") &&
+    (f.note === undefined || typeof f.note === "string") &&
+    (f.region === undefined || (FACE_ZONES as readonly string[]).includes(f.region as string))
   );
 }
 
