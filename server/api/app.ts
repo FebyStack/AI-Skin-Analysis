@@ -32,5 +32,53 @@ export function createApp(deps: AppDeps): Express {
     res.json({ patients: await deps.patients.list(req.query.q as string | undefined) });
   });
 
+  app.post("/api/patients", auth, async (req, res) => {
+    const { name, externalRef, notes } = req.body ?? {};
+    if (typeof name !== "string" || name.trim().length === 0) {
+      res.status(400).json({ error: "name is required" });
+      return;
+    }
+    const patient = await deps.patients.create({
+      name: name.trim(),
+      externalRef: typeof externalRef === "string" ? externalRef : null,
+      notes: typeof notes === "string" ? notes : "",
+      consentVersion: null,
+    });
+    res.status(201).json({ patient });
+  });
+
+  app.patch("/api/patients/:id", auth, async (req, res) => {
+    const { name, externalRef, notes } = req.body ?? {};
+    const patient = await deps.patients.update(req.params.id, {
+      ...(typeof name === "string" ? { name } : {}),
+      ...(typeof externalRef === "string" ? { externalRef } : {}),
+      ...(typeof notes === "string" ? { notes } : {}),
+    });
+    if (!patient) {
+      res.status(404).json({ error: "not found" });
+      return;
+    }
+    res.json({ patient });
+  });
+
+  app.delete("/api/patients/:id", auth, async (req, res) => {
+    const ok = await deps.patients.remove(req.params.id);
+    res.status(ok ? 204 : 404).end();
+  });
+
+  app.post("/api/patients/:id/consent", auth, async (req, res) => {
+    const version = Number(req.body?.version);
+    if (!Number.isInteger(version) || version < 1) {
+      res.status(400).json({ error: "version required" });
+      return;
+    }
+    const patient = await deps.patients.update(req.params.id, { consentVersion: version });
+    if (!patient) {
+      res.status(404).json({ error: "not found" });
+      return;
+    }
+    res.json({ patient });
+  });
+
   return app;
 }
