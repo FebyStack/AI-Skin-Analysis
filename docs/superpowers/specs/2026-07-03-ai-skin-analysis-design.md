@@ -66,6 +66,8 @@ Browser (on the laptop, or phones on the clinic LAN) → web → api → db
 
 **On-device ML stays in the browser** (unchanged from Plan 2): MediaPipe quality gate + ONNX classifier run client-side before anything is sent — the independent second opinion and the quality floor.
 
+**Camera sources & QR remote capture:** capture works with the laptop's built-in webcam, an external USB camera (device picker via `enumerateDevices`), or **any phone/external device via QR pairing**: the desktop scan flow shows a QR code encoding `http://<lan-ip>:<port>/capture/<token>`; the phone scans it, opens a capture-only page (no login — the short-lived token *is* the authorization), runs the same camera + quality-gate flow, and uploads the photo to the api. The waiting desktop session receives the image (polling the capture-session endpoint) and continues into analysis as if captured locally. Tokens are single-use, expire in ~5 minutes, and grant upload-only access to that one capture session.
+
 **Portability:** move to another laptop via `docker compose down` → copy the `skin_data` volume (or `pg_dump` file) → `docker compose up` on the new machine. A `make backup` / `make restore` script pair wraps this.
 
 **Offline behavior (hybrid):** no internet → new scans run classifier-only and are stored labeled **"partial analysis — AI review pending"**; a stored partial scan can be re-analyzed when back online. History/patients/reports always work offline.
@@ -99,7 +101,7 @@ The clinic is now the data custodian — photos and results ARE stored, locally.
 
 - **Patient consent is a workflow step**: before a patient's first scan, the app shows a consent screen the practitioner reviews with the patient (what is analyzed, what is stored locally, that the photo is sent to the AI service transiently for analysis, that this is not a diagnosis). Consent recorded per patient (versioned; text changes re-prompt).
 - **Storage is local-only**: nothing is stored outside the clinic laptop's database. The Anthropic call remains transient (image analyzed, not retained by the app's server; no image logging in the api container).
-- **Access control**: single shared clinic password (bcrypt hash in `settings`), session cookie; the app is unusable without login. LAN exposure is opt-in (bind to localhost by default; a compose override exposes to the LAN for phone capture).
+- **Access control**: single shared clinic password (bcrypt hash in `settings`), session cookie; the app is unusable without login. LAN exposure is opt-in (bind to localhost by default; a compose override exposes to the LAN for phone capture). **QR capture tokens** are the one passwordless path: single-use, ~5-minute expiry, scoped to uploading one image into one capture session — they can't read any patient data.
 - **Deletion**: per-patient and per-scan delete, immediate and real (no soft-delete retention).
 - **EXIF/GPS stripping** stays (uploads may come from patient phones).
 - **LLM guardrails** unchanged: schema-validated output, forbidden diagnosis/prescription language, disclaimer enforcement, escalation wording on red flags.
@@ -111,7 +113,7 @@ Tier 1 calibration data (dual-AI agreement outcomes) now accumulates naturally i
 ## 7. UX
 
 - **Design system**: unchanged (clinical-clean + warm accents; provisional visuals).
-- **App shell**: Login → Patients list (search/add) → Patient page (profile, scan history timeline with thumbnails, "New scan", "Compare") → Scan flow (consent check → capture → quality gate → loading screen → report) → Report page (dimensions, facial map, findings, PDF download).
+- **App shell**: Login → Patients list (search/add) → Patient page (profile, scan history timeline with thumbnails, "New scan", "Compare") → Scan flow (consent check → capture → quality gate → loading screen → report) → Report page (dimensions, facial map, findings, PDF download). The capture step offers **three sources**: this device's camera (with device picker for external/USB cameras), photo upload, or **"Use another device"** (QR code; the paired phone captures and the desktop flow continues automatically).
 - **Analysis loading screen** and **quality guidance dialog**: unchanged from v1 spec (staged real-pipeline progress; per-issue fix instructions in an `alertdialog`; upload fallback after repeated failures).
 - **History with pictures**: patient timeline shows compressed JPEG thumbnails; tapping opens the stored report exactly as originally rendered; before/after picks any two scans.
 - **Responsive**: unchanged (phone + desktop; phones on the clinic LAN can run the capture flow).
