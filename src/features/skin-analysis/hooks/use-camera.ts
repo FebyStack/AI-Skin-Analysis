@@ -22,9 +22,11 @@ export type CameraStatus = "idle" | "starting" | "live" | "denied" | "no-camera"
 export function useCamera(mode: CaptureMode) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const generationRef = useRef(0);
   const [status, setStatus] = useState<CameraStatus>("idle");
 
   const stop = useCallback(() => {
+    generationRef.current++;
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
   }, []);
@@ -38,9 +40,15 @@ export function useCamera(mode: CaptureMode) {
       setStatus("no-camera");
       return;
     }
+    stop(); // release any previous stream before acquiring a new one
+    const generation = generationRef.current;
     setStatus("starting");
     try {
       const stream = await navigator.mediaDevices.getUserMedia(cameraConstraints(mode));
+      if (generation !== generationRef.current) {
+        stream.getTracks().forEach((t) => t.stop()); // stale start() lost the race
+        return;
+      }
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -51,7 +59,7 @@ export function useCamera(mode: CaptureMode) {
       const name = (err as DOMException)?.name;
       setStatus(name === "NotAllowedError" ? "denied" : "no-camera");
     }
-  }, [mode]);
+  }, [mode, stop]);
 
   useEffect(() => stop, [stop]);
 
