@@ -57,3 +57,21 @@ export function isFinding(x: unknown): x is Finding {
       f.severity === "attention")
   );
 }
+
+export type QualityIssue =
+  | "too-dark"
+  | "overexposed"
+  | "blur"
+  | "no-region";
+
+export interface QualityReport {
+  ok: boolean;
+  issues: QualityIssue[];
+  brightness: number; // 0..1 mean luma
+  sharpness: number; // 0..1 relative
+  regionFound: boolean;
+}
+
+export interface ClassifierOutput {
+  findings: Finding[];
+}
