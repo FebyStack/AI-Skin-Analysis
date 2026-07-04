@@ -37,6 +37,7 @@ Each face-mode scan produces a structured report across these dimensions, each s
 - **Hydration appearance** — flakiness, dullness, dehydration lines. **Labeled "visual proxy"**: true moisture content requires a corneometer; the report never claims measured moisture.
 - **Surface vs depth framing** — all detection is surface-level by physics; where visuals *suggest* deeper involvement (e.g. nodular acne appearance), the report says "surface features suggestive of…", never claims subsurface measurement.
 - **Trend outlook ("skin prediction")** — when local history exists, per-dimension trend (improving/stable/worsening) across scans, plus "consistent-with" outlooks. Never a prognosis or medical prediction.
+- **Skin type** — sebum-pattern classification (normal / oily / dry / combination, plus a sensitivity-cues flag) and approximate skin-tone context (Fitzpatrick I–VI / Monk scale, labeled "approximate — lighting-dependent"). Tone context is also fed back into analysis calibration, since pigmentation and redness cues present differently across skin tones.
 
 ### Facial map & observations
 
@@ -52,7 +53,7 @@ The general report — verdict summary, facial map, per-dimension scores, observ
 - **Measured moisture content** — requires corneometry hardware; hydration is reported as visual appearance only.
 - **Malignancy determination.** The tool never outputs "benign", "cancer", or a malignancy probability. Distinguishing melanoma/BCC/SCC reliably needs **dermoscopy** (microscopic pigment-network/vascular patterns a standard photo cannot capture) and **palpation** (an actinic keratosis's sandpaper texture, a BCC's pearly raised border — flattened away in a photo). Lesions are handled by **red-flag escalation only**: visual ABCDE-style features (asymmetry, border, color variegation, diameter, apparent change) route the user to "features that warrant professional/dermoscopic evaluation — worth a look," never a risk score and never reassurance.
 - **Anything requiring touch, depth, bleeding-on-manipulation, or history/systemic context** the photo can't convey.
-- **Conditions on unsuitable images** — the quality gate (§3) refuses too-blurry, poorly-lit, or non-skin images rather than guessing; teledermatology evidence shows ~20% of user photos and ~⅓ of even dermoscopic images are unusable, so a hard quality floor is a scope boundary, not just UX.
+- **Conditions on unsuitable images** — the quality gate (§3) refuses too-blurry, poorly-lit, or non-skin images rather than guessing; teledermatology evidence shows ~20% of user photos and ~⅓ of even dermoscopic images are unusable, so a hard quality floor is a scope boundary, not just UX. Rejections surface as a **guidance dialog** (see §7), never a silent failure.
 
 This "broad detection, hard safety line" framing is what lets the classifier grow toward a standalone model (§6) without ever crossing into device-grade diagnostic claims.
 
@@ -212,6 +213,17 @@ Provisional — visual design will be revised later; structure below is the stab
 - **Direction:** clinical-clean credibility (white surfaces, teal `#0f766e` for data/actions) with warm-wellness accents (cream/stone neutrals, rounded corners, reassuring precise language). Amber reserved for disagreement/attention flags.
 - Tokens as CSS variables consumed by Tailwind; matches Lovable's shadcn/ui theming so the module inherits the main site's theme with a small override file.
 - Results screen pattern: verdict summary card → **facial map with per-zone markers and observations** (face mode) → per-dimension report cards (pores, texture, acne, pigmentation, redness, oiliness, hydration appearance) → per-finding cards with source badges ("✓ 2 analyses agree" / "⚑ analyses differ") and confidence bars → trend section (when history exists) → non-diagnosis disclaimer → **Download PDF** / save-to-history / new-scan actions.
+
+**Analysis loading screen.** While a scan runs, a full loading screen replaces the capture view, showing staged progress that mirrors the real pipeline: "Checking image quality → Mapping skin surface → Running deep analysis → Cross-checking with second AI → Preparing your report." Stages advance with actual pipeline events (not a fake timer); if a stage stalls, the screen says so and offers cancel. Motion is subtle (progress ring + stage list), respects `prefers-reduced-motion`.
+
+**Quality guidance dialog.** When the camera feed or a captured/uploaded photo fails the quality gate (lighting, blur, framing, no skin region), a modal dialog pops up explaining exactly what to fix, with per-issue instructions:
+
+- *Too dark / overexposed* → "Face a window or lamp; avoid strong backlight."
+- *Blurry* → "Hold the phone steady and wait for focus before capturing; clean the lens."
+- *No face/region found* → "Center your face in the guide" / "Move closer to the area."
+- *Persistent failure (3+ tries)* → offer the upload path and tips for a better photo.
+
+The dialog is dismissible ("Try again" / "Upload instead"), keyboard-accessible, screen-reader announced (`role="alertdialog"`), and never blocks the user in a dead end.
 
 **Responsive (mobile-first).** Layouts are mobile-first and fluid, verified at phone (~375px), tablet (~768px), and desktop (~1280px) widths:
 
