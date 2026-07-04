@@ -56,7 +56,12 @@ export function CaptureFlow({ mode }: { mode: CaptureMode }) {
     );
   }
 
-  const useUpload = machine.captureSource === "upload" || machine.state === "error";
+  const captureErrors = ["denied", "no-camera", "upload-failed", "blur", "low-light"] as const;
+  const isCaptureError =
+    machine.state === "error" &&
+    captureErrors.includes(machine.error as (typeof captureErrors)[number]);
+  const isAnalysisError = machine.state === "error" && !isCaptureError;
+  const useUpload = machine.captureSource === "upload" || isCaptureError;
 
   return (
     <div className="flex flex-col items-center gap-4">
@@ -84,16 +89,30 @@ export function CaptureFlow({ mode }: { mode: CaptureMode }) {
           )}
         </>
       )}
-      {useUpload ? (
-        <UploadDropzone onFile={onUpload} />
-      ) : (
-        <CameraFeed
-          mode={mode}
-          onCapture={process}
-          onUnavailable={onUnavailable}
-          onLive={machine.cameraReady}
-        />
+      {isAnalysisError && (
+        <div className="flex flex-col items-center gap-3" role="alert">
+          <p className="text-sm text-stone-600">
+            Analysis failed — nothing was saved. You can try again.
+          </p>
+          <button
+            onClick={machine.reset}
+            className="rounded-lg bg-clinical px-6 py-3 text-sm font-semibold text-white"
+          >
+            Try again
+          </button>
+        </div>
       )}
+      {!isAnalysisError &&
+        (useUpload ? (
+          <UploadDropzone onFile={onUpload} />
+        ) : (
+          <CameraFeed
+            mode={mode}
+            onCapture={process}
+            onUnavailable={onUnavailable}
+            onLive={machine.cameraReady}
+          />
+        ))}
       {machine.state === "analyzing" && (
         // TODO(plan-4): verdict merge + results; add a "New scan" reset affordance
         <p className="text-sm text-clinical">Analyzing… (verdict merge lands in Plan 4)</p>

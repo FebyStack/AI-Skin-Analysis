@@ -29,3 +29,17 @@ describe("CaptureFlow — corrupt upload", () => {
     expect(screen.getByLabelText(/upload a photo/i)).toBeInTheDocument();
   });
 });
+
+describe("CaptureFlow — analysis error routing", () => {
+  beforeEach(() => useScanMachine.getState().reset());
+
+  it("shows an analysis error with retry, not the upload dropzone", () => {
+    useScanMachine.getState().grantConsent();
+    useScanMachine.getState().cameraReady();
+    useScanMachine.getState().analysisFailed();
+    render(<CaptureFlow mode="face" />);
+    expect(screen.getByText(/analysis failed/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /try again/i })).toBeInTheDocument();
+    expect(screen.queryByLabelText(/upload a photo/i)).not.toBeInTheDocument();
+  });
+});
