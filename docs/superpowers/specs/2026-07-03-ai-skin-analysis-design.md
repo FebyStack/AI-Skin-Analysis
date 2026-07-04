@@ -1,262 +1,152 @@
-# AI Skin Analysis — Design Spec
+# AI Skin Analysis — Design Spec (v2 — Clinic Edition)
 
-**Date:** 2026-07-03
-**Status:** Approved pending user review
-**Target:** Prototype, later integrated into the existing Lovable website (GitHub: FebyStack/AI-Skin-Analysis)
+**Date:** 2026-07-03 · **Revised:** 2026-07-04 (architecture pivot: local clinic deployment)
+**Status:** v2 approved direction — supersedes the public-web architecture of v1 (see git history)
+**Target:** A local clinic tool. Runs on one clinic laptop via Docker, portable to another laptop by moving the Docker volume / a database dump. Not deployed publicly.
 
 ## 1. Purpose
 
-A public web tool that helps users decide whether to see a dermatologist. Users scan their skin with a live camera (face or any body area) or upload a photo; two independent AI analyses produce findings with honest confidence and "see a professional" guidance.
+A clinic-local web tool that helps practitioners assess skin and decide whether/what to refer to a dermatologist. Staff scan a patient's skin with the laptop/phone camera (face or any body area) or upload a photo; two independent AI analyses produce a detailed, structured report; results and compressed photos are stored per patient in a local database with full history and before/after comparison.
 
 **It is a clinical aid, not a diagnostic device.** Every output uses "consistent with" language, never diagnoses, never prescribes treatment, and always includes the professional-care pathway.
 
 ### Analysis scope
 
-Scope is defined by what standard-camera photographs can and cannot support, grounded in teledermatology and consumer-photo dataset evidence (SCIN, DermNet) — not by an arbitrary shortlist. The tool attempts to characterize the full range of visually-presenting skin conditions rather than a fixed menu, but draws a hard line at findings that photographs structurally cannot resolve.
-
-**In scope — visually assessable from a standard photo.** The classifier and LLM cover the broad space of conditions that present visibly and dominate real user photos; the prompt/label taxonomy is open (SNOMED-CT / DermNet-class breadth) rather than a closed list. Representative families:
-
-- **Inflammatory / allergic:** eczema (atopic dermatitis), contact dermatitis, psoriasis, rosacea, urticaria/hives, seborrheic dermatitis, general eruptions/rashes
-- **Infectious:** tinea/ringworm and other fungal, bacterial (e.g. impetigo, cellulitis appearance), viral (herpes, warts), infestations (scabies)
-- **Acne & follicular:** acne vulgaris, folliculitis
-- **Pigmentary:** hyperpigmentation, melasma, post-inflammatory pigmentation, vitiligo
-- **Hair & scalp:** pattern hair loss, alopecia areata (visible pattern only)
-- **Nail:** onychomycosis and other visible nail changes
-- **Cosmetic metrics:** oiliness, texture, pores, wrinkles, redness, hydration cues
+Unchanged from v1: broad, open taxonomy of visually-presenting conditions (inflammatory/allergic, infectious, acne/follicular, pigmentary, hair/scalp, nail) with the hard photographic line — no malignancy verdicts (red-flag escalation only), no claims requiring dermoscopy/palpation/systemic context, quality-gated images only.
 
 ### Report dimensions (every face scan)
 
-Each face-mode scan produces a structured report across these dimensions, each scored/described with confidence:
+Modeled on professional analyzer devices (reference: 9-item three-spectrum analyzers) but **honestly framed**: those devices use real multi-spectral hardware (green/red/blue light, 200x lenses); a standard camera cannot do spectral imaging. We report the same vocabulary via AI visual inference, labeled as such.
 
-- **Pores** — visibility/congestion by zone
-- **Texture** — smoothness, roughness, fine lines/wrinkles
-- **Acne** — presence, type appearance (comedonal/inflammatory), affected zones
-- **Pigmentation** — hyperpigmentation, post-inflammatory marks, **melasma-pattern** detection
-- **Redness/sensitivity cues** — erythema, rosacea-pattern flushing
+- **Hydration appearance** — flakiness, dullness, dehydration lines. *Visual proxy — never claims measured moisture.*
 - **Oiliness** — shine/sebum appearance by zone
-- **Hydration appearance** — flakiness, dullness, dehydration lines. **Labeled "visual proxy"**: true moisture content requires a corneometer; the report never claims measured moisture.
-- **Surface vs depth framing** — all detection is surface-level by physics; where visuals *suggest* deeper involvement (e.g. nodular acne appearance), the report says "surface features suggestive of…", never claims subsurface measurement.
-- **Trend outlook ("skin prediction")** — when local history exists, per-dimension trend (improving/stable/worsening) across scans, plus "consistent-with" outlooks. Never a prognosis or medical prediction.
-- **Skin type** — sebum-pattern classification (normal / oily / dry / combination, plus a sensitivity-cues flag) and approximate skin-tone context (Fitzpatrick I–VI / Monk scale, labeled "approximate — lighting-dependent"). Tone context is also fed back into analysis calibration, since pigmentation and redness cues present differently across skin tones.
+- **Pigmentation** — hyperpigmentation, PIH, **melasma-pattern**
+- **Spots** — discrete lentigines/dark-spot count & prominence
+- **Pores** — visibility/congestion by zone
+- **Blackheads/comedones** — pore-level congestion appearance
+- **Wrinkles & texture** — fine lines, roughness, smoothness
+- **Acne** — presence, type appearance, affected zones
+- **Inflammation** — active irritation appearance
+- **Redness / circulation cues** — erythema, rosacea-pattern flushing. *Visual proxy for "blood circulation."*
+- **Sensitivity cues** — visible reactivity indicators
+- **Elasticity/collagen appearance** — sag/plumpness visual cues. *Visual proxy — no device measurement.*
+- **Skin type** — sebum pattern (normal/oily/dry/combination), sensitivity flag, approximate Fitzpatrick I–VI (labeled approximate; also calibrates interpretation across skin tones)
+- **Surface vs depth framing** — all detection is surface-level; "surface features suggestive of…" only.
+- **Trend outlook** — per-dimension improving/stable/worsening across the patient's scan history; never a prognosis.
 
 ### Facial map & observations
 
-Face-mode results include a **facial map**: findings are tagged to zones (forehead, nose, left cheek, right cheek, chin, periorbital) using MediaPipe face-landmark regions on-device; the LLM prompt requests zone-tagged observations in the same vocabulary. The results screen renders a face diagram with per-zone markers and an observations list per zone. `Finding` gains an optional `region?: FaceZone` field. Close-up/body scans skip the map (single-region observations instead).
+Unchanged: zone-tagged findings (forehead, nose, cheeks, chin, periorbital) rendered on a face diagram with per-zone observations; close-ups get single-region observations.
 
-### Downloadable report (PDF)
+### Reports
 
-The general report — verdict summary, facial map, per-dimension scores, observations, trend section, disclaimer, scan date — is downloadable as a PDF, **generated entirely on-device** (client-side PDF library; no server rendering), preserving the no-server-storage privacy model. The PDF carries the same non-diagnosis disclaimer and "visual proxy" labels as the screen.
+- On-screen structured report per scan (summary → facial map → dimension scores → findings with dual-AI badges → trends → disclaimer).
+- **Downloadable PDF** generated on-device, same content + disclaimer.
+- **Before/after comparison**: any two scans of the same patient side-by-side with per-dimension deltas.
 
-**Out of scope — photographs structurally cannot resolve these (never verdicted):**
+## 2. Architecture (v2 — local Docker stack)
 
-- **True subsurface ("deep") detection** — a standard photo cannot image below the skin surface; only dermoscopy/ultrasound/biopsy can. Surface-suggestive language only (see Report dimensions).
-- **Measured moisture content** — requires corneometry hardware; hydration is reported as visual appearance only.
-- **Malignancy determination.** The tool never outputs "benign", "cancer", or a malignancy probability. Distinguishing melanoma/BCC/SCC reliably needs **dermoscopy** (microscopic pigment-network/vascular patterns a standard photo cannot capture) and **palpation** (an actinic keratosis's sandpaper texture, a BCC's pearly raised border — flattened away in a photo). Lesions are handled by **red-flag escalation only**: visual ABCDE-style features (asymmetry, border, color variegation, diameter, apparent change) route the user to "features that warrant professional/dermoscopic evaluation — worth a look," never a risk score and never reassurance.
-- **Anything requiring touch, depth, bleeding-on-manipulation, or history/systemic context** the photo can't convey.
-- **Conditions on unsuitable images** — the quality gate (§3) refuses too-blurry, poorly-lit, or non-skin images rather than guessing; teledermatology evidence shows ~20% of user photos and ~⅓ of even dermoscopic images are unusable, so a hard quality floor is a scope boundary, not just UX. Rejections surface as a **guidance dialog** (see §7), never a silent failure.
-
-This "broad detection, hard safety line" framing is what lets the classifier grow toward a standalone model (§6) without ever crossing into device-grade diagnostic claims.
-
-### Constraints
-
-- Small public launch: real strangers, operator-funded LLM calls → rate limiting, abuse protection, spend kill-switch
-- Photos never persist anywhere (no server storage, no logging of image data)
-- History is local-only (IndexedDB), opt-in, user-deletable
-- Must integrate cleanly into an existing Lovable site (React + Vite + Tailwind + shadcn/ui + Supabase)
-- UI/UX visual design is provisional and will be revised later; the component structure and flow are the stable part
-
-## 2. Architecture (Approach 3 — client-heavy)
-
-Everything heavy runs on the user's device. The only server piece is one Supabase Edge Function.
+Everything runs on the clinic laptop. Internet is needed **only** for the Claude analysis call; browsing patients, history, reports, and images is fully offline.
 
 ```
-USER'S DEVICE (browser)                      SUPABASE EDGE FUNCTION
-1. Capture (live camera or upload)           holds Claude key
-2. Quality gate (MediaPipe):                 rate limits (hashed IP)
-   face/region found, lighting, sharpness    daily spend kill-switch
-3a. ONNX classifier (WebGPU, web worker) ──┐
-3b. photo (opt-in, TLS) ────────────────►  │  Claude vision analysis (primary)
-                                           │  Claude critique pass (cheap model)
-    analysis + critique JSON ◄─────────────┘
-4. Verdict merge (on-device, pure function)
-5. Results + guidance → IndexedDB (local only)
+CLINIC LAPTOP (Docker Compose)
+├── web  — nginx serving the built React app (same feature module as v1/v2 frontend)
+├── api  — Node service:
+│     • auth (single shared clinic password → session cookie)
+│     • analysis pipeline (reuses the Plan-3 pure modules: prompts,
+│       guardrails, provider adapter, critique, contract validation)
+│     • image post-processing: re-encode to JPEG, downscale + compress
+│     • Postgres access (patients, scans, reports)
+│     • holds ANTHROPIC_API_KEY (env/.env file, never in the image)
+└── db   — Postgres 16, named volume `skin_data`
+
+Browser (on the laptop, or phones on the clinic LAN) → web → api → db
+                                            api → Anthropic API (internet, analysis only)
 ```
 
-**Why Approach 3:** prototype phase before public stability; near-zero server cost; strongest privacy claim (photos leave the device only for the opt-in LLM call, transiently). Trade-offs accepted: ~8–15MB lazy-loaded WASM/model download on entering the scan flow; low-end devices fall back to LLM-only mode. If the future learning loop demands Python, only the classifier extracts to a service later — the frontend contract doesn't change.
+**On-device ML stays in the browser** (unchanged from Plan 2): MediaPipe quality gate + ONNX classifier run client-side before anything is sent — the independent second opinion and the quality floor.
 
-## 3. Feature module structure
+**Portability:** move to another laptop via `docker compose down` → copy the `skin_data` volume (or `pg_dump` file) → `docker compose up` on the new machine. A `make backup` / `make restore` script pair wraps this.
 
-All code lives in one portable folder; integration into Lovable = copy folder + copy Edge Function + add one route.
+**Offline behavior (hybrid):** no internet → new scans run classifier-only and are stored labeled **"partial analysis — AI review pending"**; a stored partial scan can be re-analyzed when back online. History/patients/reports always work offline.
 
-```
-src/features/skin-analysis/
-├── components/
-│   ├── consent/        # ConsentGate, PrivacyExplainer
-│   ├── capture/        # CameraFeed, FaceFrameGuide, CloseUpGuide,
-│   │                   # QualityIndicator, UploadDropzone, ModeSwitch
-│   ├── results/        # VerdictCard, FindingsList, ConfidenceBadge,
-│   │                   # DisagreementFlag, GuidanceBanner, DisclaimerGate
-│   └── history/        # HistoryTimeline, ScanCompare
-├── hooks/
-│   ├── use-camera.ts           # getUserMedia lifecycle, device switching
-│   ├── use-quality-gate.ts     # MediaPipe checks
-│   └── use-analysis.ts         # orchestrates the scan pipeline
-├── ml/                 # pure functions + web worker, no React
-│   ├── classifier.ts           # ONNX session load + inference
-│   ├── quality.ts              # MediaPipe wrappers
-│   └── verdict.ts              # merge logic (classifier × LLM × critique)
-├── api/
-│   └── analyze-client.ts       # Edge Function client; BYO-key override
-├── store/
-│   └── scan-machine.ts         # capture state machine (Zustand)
-├── db/
-│   └── history.ts              # IndexedDB via idb-keyval
-├── privacy/
-│   ├── consent.ts              # versioned consent state
-│   └── redact.ts               # strips EXIF/GPS before anything sees uploads
-└── types.ts                    # ScanResult, Finding, Verdict — the contract
+**What v1 public-web machinery is dropped:** Supabase Edge Function, Vercel hosting, per-IP rate limiting, global spend kill-switch, BYO keys. (A simple daily-scan counter remains as a cost sanity check, configurable.)
 
-supabase/functions/analyze/
-├── index.ts                    # validate → rate-limit → pipeline
-├── providers/anthropic.ts      # provider adapter (swappable)
-├── critique.ts                 # second LLM pass
-└── prompts.ts                  # dermatology system prompts, versioned
+## 3. Data model (Postgres)
+
+```sql
+patients:  id (uuid pk), name, external_ref (clinic's own patient no., nullable),
+           notes, created_at, updated_at
+scans:     id (uuid pk), patient_id (fk), mode (face|closeup), created_at,
+           image_jpeg (bytea, compressed), image_width, image_height,
+           report (jsonb, the AnalysisReport contract), partial (bool),
+           classifier_findings (jsonb), prompt_version (int)
+settings:  key (pk), value — includes password_hash (bcrypt), consent_text_version,
+           daily counter state
 ```
 
-**Boundary rules:**
-
-- Nothing outside the folder imports from inside it except the exported `<SkinAnalysisPage />` and route registration.
-- `ml/` never touches React — testable without a browser, runs in a web worker so inference can't jank the camera UI.
-- `types.ts` is the single contract: the Edge Function returns exactly these shapes; classifier and critique both produce `Finding[]` so the merge is symmetric.
-- Capture flow is an explicit state machine: `idle → permission → framing → quality-check → ready → capturing → analyzing → results`, with `denied`, `no-face`, `low-light`, `blur`, `offline`, `analysis-failed` as first-class error states.
-
-### Capture modes
-
-1. **Face mode** — framing guide + face detection, for conditions/metrics
-2. **Close-up mode** — free-form region guide for moles/lesions anywhere on the body
-3. **Upload** — dropzone accepting photos of either kind; also the accessible alternative to live camera. EXIF/GPS stripped before preview.
-
-### Device camera & cross-platform (phone + PC)
-
-The app must run and be fully usable on both mobile phones and desktop/laptop, using the device's own camera:
-
-- **Camera access** via `navigator.mediaDevices.getUserMedia` — works in any modern browser on iOS Safari, Android Chrome, and desktop Chrome/Edge/Firefox/Safari. No native app.
-- **Camera selection:** phones default to the **rear (environment) camera** for body/lesion close-ups and offer a **front/rear flip**; face mode prefers the **front (user) camera**. Desktops use the built-in/USB webcam with a device picker when multiple exist (`enumerateDevices`).
-- **Secure-context requirement:** `getUserMedia` needs HTTPS (or `localhost`) — deployment is HTTPS-only; the app detects insecure context and routes the user to the upload path.
-- **Permission & absence handling:** explicit states for permission denied, no camera present (common on desktops), and camera-in-use — each falls back to the upload path rather than dead-ending.
-- **Mobile capture affordances:** on phones, the upload dropzone also exposes `capture` input attributes so a tap can open the native camera directly as an alternative to the live-stream flow.
+- **Images:** after analysis completes, the captured image is re-encoded to **JPEG**, downscaled to max 1280px on the long edge, quality ~0.8 → typically 100–300 KB, stored as `bytea` with the scan. One volume/dump therefore carries *everything* (photos included) between laptops.
+- **Deletion:** deleting a patient cascades to their scans/images; single scans deletable too.
+- The `report` JSONB is exactly the wire `AnalysisReport` contract, so history rendering reuses the same validators/components.
 
 ## 4. Dual-AI pipeline
 
-One scan fans out to two independent opinions plus a critique:
+Unchanged from v1 in substance: on-device ONNX classifier (independent, never sees the LLM's answer) + Claude vision analysis + Claude critique pass (approved/amended/rejected, one retry, honest failure); merge rules with agreement badges, disagreement flags, and the safety override (lesion red-flags always escalate). Provider adapter keeps the LLM swappable via env config. Degraded modes: offline → classifier-only "partial"; classifier unavailable → LLM-only single-source.
 
-- **ONNX classifier (on-device, ~1s):** dermatology model (HAM10000/ISIC-class, ONNX-exported) → `Finding[]` with per-class confidence. Never sees the LLM's answer — true independence.
-- **Claude vision analysis (primary, ~3–6s):** structured dermatology prompt → `Finding[]` + observations + reasoning.
-- **Claude critique pass (cheap model, e.g. Haiku):** reviews the primary's reasoning against the image: conclusion follows from observations? overconfident? guardrail language intact? → `approved | amended | rejected`.
+## 5. Privacy, consent, and guardrails (clinic reframe)
 
-### Merge rules (`verdict.ts`, pure, exhaustively unit-tested)
+The clinic is now the data custodian — photos and results ARE stored, locally.
 
-| Classifier vs LLM | Result |
-|---|---|
-| Agree on a finding | Confidence raised; shown as "two independent analyses agree" |
-| Only LLM finds it | Shown at LLM confidence, labeled single-source |
-| Only classifier finds it | Shown as "flagged for attention" |
-| Direct conflict | DisagreementFlag: both shown, wording escalates to "worth a professional look"; never resolved silently |
-| Critique = rejected | Primary discarded, one automatic retry; second failure → honest error, never a degraded guess |
+- **Patient consent is a workflow step**: before a patient's first scan, the app shows a consent screen the practitioner reviews with the patient (what is analyzed, what is stored locally, that the photo is sent to the AI service transiently for analysis, that this is not a diagnosis). Consent recorded per patient (versioned; text changes re-prompt).
+- **Storage is local-only**: nothing is stored outside the clinic laptop's database. The Anthropic call remains transient (image analyzed, not retained by the app's server; no image logging in the api container).
+- **Access control**: single shared clinic password (bcrypt hash in `settings`), session cookie; the app is unusable without login. LAN exposure is opt-in (bind to localhost by default; a compose override exposes to the LAN for phone capture).
+- **Deletion**: per-patient and per-scan delete, immediate and real (no soft-delete retention).
+- **EXIF/GPS stripping** stays (uploads may come from patient phones).
+- **LLM guardrails** unchanged: schema-validated output, forbidden diagnosis/prescription language, disclaimer enforcement, escalation wording on red flags.
 
-**Safety override:** a lesion red-flag from either source always escalates regardless of the other — safety findings don't average down.
+## 6. Learning loop (future; unchanged shape, easier locally)
 
-### Degraded modes (honest, never silent)
+Tier 1 calibration data (dual-AI agreement outcomes) now accumulates naturally in the local `scans` rows — no telemetry service needed. Tiers 2–3 (training-image use, offline fine-tune, classifier graduating toward a standalone model with the LLM as critic) remain future work and remain **strictly consent-gated per patient**: no consent, no training use, revocable.
 
-- Edge Function unreachable → classifier-only result, labeled "partial analysis"
-- Device can't run ONNX → LLM-only, labeled single-source
-- Both fail → error with retry, never a fake result
+## 7. UX
 
-### Provider adapter / swappable LLM
-
-`providers/anthropic.ts` implements `analyze(image, prompt) → RawAnalysis`. Model IDs, API version, and key come from env config — switching Claude account/model is a config change; another provider is a new adapter file, zero pipeline changes.
-
-**BYO key:** user-supplied Anthropic key stored only in their browser, sent per-request over TLS, never logged; overrides the operator key and bypasses the rate limiter. Default path uses the operator key with limits.
-
-## 5. Privacy, consent, and guardrails
-
-**Client:**
-
-- `ConsentGate` blocks camera start and upload reading until explicitly accepted. Accepting covers sending scans to the AI service for the session ("opt-in" throughout this spec means this gate, not a per-scan prompt). Consent is versioned — policy text changes force a re-prompt.
-- `PrivacyExplainer` in plain language: what runs on-device vs what is sent to the AI, nothing stored, how to delete history.
-- EXIF/GPS stripped from uploads before preview, classifier, or network.
-- History opt-in, with a visible "delete all history" wiping IndexedDB.
-
-**Edge Function:**
-
-- Accepts only image mime-types under a size cap; rejects everything else before the LLM sees it.
-- Output schema validation: LLM must return strict `ScanResult` JSON; malformed or out-of-vocabulary output is rejected, never shown.
-- Prompt guardrails enforced by the critique pass: no diagnosis ("consistent with" only), no treatment/medication advice, professional-care pathway always present, urgent-looking findings escalate rather than reassure.
-- No image logging; rate-limit counters keyed on hashed IP only.
-
-## 6. Learning loop (future; designed-for, only Tier 1 ships)
-
-The browser cannot retrain ONNX on-device, and photos are never kept — so disagreements alone are not trainable data. Three tiers:
-
-1. **Calibration (ships with prototype):** opt-in anonymized disagreement records (both AIs' findings + outcome, never the photo) accumulate in a Supabase table. Systematic classifier errors on a class are corrected by adjusting that class's confidence threshold and merge weight — learning without touching the model.
-2. **Image donation (future):** a separate explicit checkbox at the moment of disagreement — "donate this photo to improve the model." **Strictly consent-gated: no donation consent → the photo and its scan data are never used for training, full stop.** Donation consent is independent of the session ConsentGate, versioned the same way, and revocable (revocation stops all future use). Donated images are labeled with Claude's verdict (knowledge distillation; disagreements are the highest-value samples — active learning).
-3. **Offline fine-tune (future):** periodic Python pipeline fine-tunes on donated images only, re-exports ONNX, ships a versioned model file. New versions run in shadow mode (scored against Claude on live scans without affecting verdicts) and are promoted only if agreement improves.
-
-**End goal:** through these tiers the classifier graduates into a standalone skin-analysis model of its own — eventually able to carry the primary analysis itself, with the LLM demoted to critique/fallback. The architecture already supports this: the merge in `verdict.ts` is symmetric, so promoting the classifier to primary is a weight change, not a redesign.
-
-Consent versioning and model-file versioning are built in the prototype so Tiers 2–3 need no re-architecture.
-
-## 7. Design system & UX
-
-Provisional — visual design will be revised later; structure below is the stable part.
-
-- **Direction:** clinical-clean credibility (white surfaces, teal `#0f766e` for data/actions) with warm-wellness accents (cream/stone neutrals, rounded corners, reassuring precise language). Amber reserved for disagreement/attention flags.
-- Tokens as CSS variables consumed by Tailwind; matches Lovable's shadcn/ui theming so the module inherits the main site's theme with a small override file.
-- Results screen pattern: verdict summary card → **facial map with per-zone markers and observations** (face mode) → per-dimension report cards (pores, texture, acne, pigmentation, redness, oiliness, hydration appearance) → per-finding cards with source badges ("✓ 2 analyses agree" / "⚑ analyses differ") and confidence bars → trend section (when history exists) → non-diagnosis disclaimer → **Download PDF** / save-to-history / new-scan actions.
-
-**Analysis loading screen.** While a scan runs, a full loading screen replaces the capture view, showing staged progress that mirrors the real pipeline: "Checking image quality → Mapping skin surface → Running deep analysis → Cross-checking with second AI → Preparing your report." Stages advance with actual pipeline events (not a fake timer); if a stage stalls, the screen says so and offers cancel. Motion is subtle (progress ring + stage list), respects `prefers-reduced-motion`.
-
-**Quality guidance dialog.** When the camera feed or a captured/uploaded photo fails the quality gate (lighting, blur, framing, no skin region), a modal dialog pops up explaining exactly what to fix, with per-issue instructions:
-
-- *Too dark / overexposed* → "Face a window or lamp; avoid strong backlight."
-- *Blurry* → "Hold the phone steady and wait for focus before capturing; clean the lens."
-- *No face/region found* → "Center your face in the guide" / "Move closer to the area."
-- *Persistent failure (3+ tries)* → offer the upload path and tips for a better photo.
-
-The dialog is dismissible ("Try again" / "Upload instead"), keyboard-accessible, screen-reader announced (`role="alertdialog"`), and never blocks the user in a dead end.
-
-**Responsive (mobile-first).** Layouts are mobile-first and fluid, verified at phone (~375px), tablet (~768px), and desktop (~1280px) widths:
-
-- Single-column stack on phones; results cards and history expand to multi-column on wider screens.
-- Camera viewport scales to the viewport with the correct aspect ratio on both portrait (phone) and landscape (desktop); framing guides are computed relative to the video box, not fixed pixels.
-- Touch targets ≥44px, hit areas comfortable one-handed on phones; hover affordances are enhancements only (never required, since phones have no hover).
-- No horizontal scroll at any width; tested via the responsive breakpoints in the test plan.
+- **Design system**: unchanged (clinical-clean + warm accents; provisional visuals).
+- **App shell**: Login → Patients list (search/add) → Patient page (profile, scan history timeline with thumbnails, "New scan", "Compare") → Scan flow (consent check → capture → quality gate → loading screen → report) → Report page (dimensions, facial map, findings, PDF download).
+- **Analysis loading screen** and **quality guidance dialog**: unchanged from v1 spec (staged real-pipeline progress; per-issue fix instructions in an `alertdialog`; upload fallback after repeated failures).
+- **History with pictures**: patient timeline shows compressed JPEG thumbnails; tapping opens the stored report exactly as originally rendered; before/after picks any two scans.
+- **Responsive**: unchanged (phone + desktop; phones on the clinic LAN can run the capture flow).
 
 ## 8. Accessibility
 
-- Every visual capture guide (framing, lighting warnings) has a live-region text equivalent.
-- Capture operable by keyboard and button; never gesture-only.
-- Results readable by screen reader in severity order.
-- WCAG 2.1 AA contrast (warm palette verified against this).
-- Upload path is the fully accessible alternative to live camera.
+Unchanged from v1 (live-region equivalents for capture guides, keyboard operability, AA contrast, screen-reader-ordered results).
 
 ## 9. Testing
 
-- `verdict.ts` merge rules and consent versioning: exhaustive unit tests (pure functions, highest-stakes logic).
-- Edge Function: contract tests with mocked Claude responses — schema validation, guardrail rejection, rate limiting.
-- Capture state machine: headless transition tests, no real camera.
-- One Playwright smoke test with a fake camera stream through the full flow.
-- CI: typecheck, lint, tests on every push.
+- All existing unit tests carry over (60 passing at pivot time).
+- API container: contract tests with mocked Claude (schema/guardrails/critique), auth tests, image-compression tests (dimension + size bounds), patient/scan CRUD tests against a throwaway Postgres (docker compose test profile or testcontainers).
+- Frontend: history/compare components tested against golden report fixtures.
+- One end-to-end smoke: compose up → login → create patient → upload scan (mock LLM) → report stored → visible in history with thumbnail.
 
-## 10. Deployment & integration
+## 10. Deployment & operations
 
-- **Prototype:** static app on Vercel/Netlify free tier; Edge Function in the existing Supabase project.
-- **Integration into Lovable site:** copy `src/features/skin-analysis/` and `supabase/functions/analyze/` into the Lovable repo via its GitHub sync; add one route rendering `<SkinAnalysisPage />`. ML assets (~8–15MB) lazy-load only inside the scan flow — the main site's performance is untouched.
+- `docker compose up -d` on the clinic laptop; app at `http://localhost:8080` (compose override for LAN).
+- `.env` holds `ANTHROPIC_API_KEY`, models, port, daily-cap; never committed.
+- `make backup` → timestamped `pg_dump` (photos included); `make restore <file>` on the new laptop. Volume copy also documented.
+- Frontend and api built into images by a multi-stage Dockerfile; `docker compose build` is the whole release process.
 
-## 11. Out of scope (prototype)
+## 11. Out of scope
 
-- Server-side accounts or server-stored history
-- Tier 2–3 learning loop (image donation, fine-tuning, shadow evaluation)
-- Payments/quotas beyond rate limiting + kill-switch
-- Native apps
-- Final visual design polish (explicitly deferred)
+- Public deployment, rate limiting/abuse machinery, BYO keys (dropped with v1 architecture)
+- Multi-clinic sync, cloud backup
+- Per-staff accounts and audit logs (single shared password chosen)
+- Tier 2–3 learning loop
+- Real spectral imaging claims — never; visual-proxy labeling is permanent
+- Final visual polish (deferred as before)
+
+## Plan impact (v1 → v2)
+
+- **Plans 1–2 (merged):** unchanged and fully reusable — capture, consent components (text will be reworded for clinic context), quality gate, classifier.
+- **Plan 3 (drafted, not executed):** superseded in *transport*, preserved in *substance* — contract, prompts, guardrails, provider adapter, critique, and pipeline modules move from a Supabase Edge Function to the local Node api container almost unchanged; rate-limit/BYO tasks are dropped, image compression + storage added.
+- **New Plan 4:** Docker stack — compose, Postgres schema/migrations, api service (auth, CRUD, pipeline, compression), backup/restore.
+- **Plan 5:** Results & report UI (facial map, dimensions, PDF) — mostly as previously envisioned.
+- **Plan 6:** Patients & history UI (profiles, timeline with thumbnails, before/after compare, consent workflow).
