@@ -1,13 +1,30 @@
-.superpowers/
+# deps / build
 node_modules/
 dist/
-.env
+dist-server/
 *.tsbuildinfo
 vite.config.d.ts
 vite.config.js
 vitest.config.d.ts
 vitest.config.js
 
+# secrets & env — never commit
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# patient data / DB dumps — never commit
+backup-*.sql
+*.dump
+data/
+*.sqlite
+
 # ML model assets (provided out-of-band, not versioned)
 public/models/*.onnx
+
+# tooling scratch
+.superpowers/
 .worktrees/

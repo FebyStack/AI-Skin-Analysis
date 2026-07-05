@@ -48,7 +48,7 @@ Each derived view is labeled **"derived from the visible-light photo — not spe
 
 **Symptom annotation & measurement** — the practitioner can mark and measure a region on the still (pixel-space; distances are relative unless a calibration reference is later added).
 
-**Refused — needs hardware, never simulated:** UV/UVA fluorescence, balanced/cross-polarized, near-IR/subsurface, true melanin-depth, and 3D reconstruction from a single 2D frame. The report never presents a fabricated UV/IR/3D image.
+**This is the camera edition.** It delivers the device's *analysis* — the same skin-issue vocabulary, mapped and reported — using a normal camera instead of a multi-spectral rig. The hardware-only modes (UV/UVA fluorescence, balanced/cross-polarized, near-IR/subsurface, 3D reconstruction) aren't part of the camera edition; the derived views above are the camera's equivalent. One integrity rule stays: we never render a *fake* UV/IR/3D image and pass it off as real — a hardware upgrade path can add true spectra later.
 
 ### Report dimensions (every face scan)
 
