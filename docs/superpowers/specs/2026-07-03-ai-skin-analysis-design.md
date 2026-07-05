@@ -33,6 +33,23 @@ Benchmark: the GZ Beauty 14.2" Intelligent Skin Analyzer (MLB-E02) — https://g
 - *Spectral/hardware measurement claims* — a standard camera cannot do green/red/blue spectral imaging or 200x magnification. Our equivalents are AI visual inferences and are labeled so ("visual proxy") — permanently.
 - *AI-matched product recommendations* — the device upsells products; our guardrails **forbid** product/treatment recommendations. This is a safety feature, not a gap.
 
+### Deep-analysis reference (ISEMECO 2D S7) and our camera analog
+
+Second benchmark: the ISEMECO 2D S7 (https://www.meicet.com/) — a multi-spectral clinic analyzer offering **9 imaging modes**: RGB, balanced-polarized (epidermis), cross-polarized (dermis), near-infrared (subsurface), brown/pigment zone, UVA, UV-pigment, red zone (vascular/inflammation), mixed-UV — plus symptom annotation/measurement and mirror/dual/quad/3D comparison.
+
+This device defines "deep analysis." Because we are a **camera version** (no polarizing filters, UV/IR emitters, or optics), we implement the analyses a single visible-light frame can *honestly* support and refuse the rest:
+
+**Derived imaging views — computed from the captured RGB frame (real pixel processing, not AI guesses, not hardware spectra):**
+- **Pigmentation map** — melanin/brown-cue emphasis via color-channel separation. Analog of the device's brown/pigment zone.
+- **Redness (vascular) map** — erythema emphasis via red/`a*`-channel isolation. Analog of the red zone.
+- **Texture/relief map** — high-pass surface detail. Analog of polarized surface texture.
+
+Each derived view is labeled **"derived from the visible-light photo — not spectral/UV/IR imaging."** They are deterministic image transforms of the same photo (offline, on-device), shown alongside the original as a multi-view panel (our honest analog of the 9-image display) and feed the AI's per-dimension reasoning.
+
+**Symptom annotation & measurement** — the practitioner can mark and measure a region on the still (pixel-space; distances are relative unless a calibration reference is later added).
+
+**Refused — needs hardware, never simulated:** UV/UVA fluorescence, balanced/cross-polarized, near-IR/subsurface, true melanin-depth, and 3D reconstruction from a single 2D frame. The report never presents a fabricated UV/IR/3D image.
+
 ### Report dimensions (every face scan)
 
 Modeled on the reference device's nine items but **honestly framed** via AI visual inference:

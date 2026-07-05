@@ -26,6 +26,9 @@
 - Create: `src/features/skin-analysis/components/results/ReportView.tsx` (+ test) — composition + print/download
 - Modify: `src/features/skin-analysis/components/capture/CaptureFlow.tsx` — wire loading + results
 - Modify: `src/index.css` — print stylesheet
+- Create: `src/features/skin-analysis/ml/derived-views.ts` (+ test) — pigmentation/redness/texture transforms (Task 9)
+- Create: `src/features/skin-analysis/ml/annotate.ts` (+ test) — pixel distance (Task 10)
+- Create: `src/features/skin-analysis/components/results/DerivedViews.tsx` (+ test) — multi-view panel (Task 10)
 
 ---
 
@@ -1138,12 +1141,334 @@ git commit -m "feat: wire staged loading and report view into the scan flow"
 
 ---
 
+## Task 9: Derived imaging views (pure pixel transforms)
+
+Camera analog of the ISEMECO S7 multi-spectral modes (spec: "Deep-analysis reference"). Three deterministic transforms of the captured RGB frame — **not** hardware spectra, **not** AI. Pure `Uint8ClampedArray → Uint8ClampedArray` (one intensity byte per pixel); a component colorizes them.
+
+**Files:**
+- Create: `src/features/skin-analysis/ml/derived-views.ts`
+- Create: `src/features/skin-analysis/ml/derived-views.test.ts`
+
+- [ ] **Step 1: Failing test** `src/features/skin-analysis/ml/derived-views.test.ts`:
+
+```ts
+import { describe, it, expect } from "vitest";
+import { pigmentationMap, rednessMap, textureMap } from "./derived-views";
+
+function px(r: number, g: number, b: number): Uint8ClampedArray {
+  return new Uint8ClampedArray([r, g, b, 255]);
+}
+
+describe("pigmentationMap", () => {
+  it("scores brown/pigmented pixels above neutral gray", () => {
+    const brown = pigmentationMap(px(120, 72, 40))[0];
+    const gray = pigmentationMap(px(128, 128, 128))[0];
+    expect(brown).toBeGreaterThan(gray);
+  });
+});
+
+describe("rednessMap", () => {
+  it("scores red/erythema pixels above neutral gray", () => {
+    const red = rednessMap(px(200, 90, 90))[0];
+    const gray = rednessMap(px(128, 128, 128))[0];
+    expect(red).toBeGreaterThan(gray);
+  });
+});
+
+describe("textureMap", () => {
+  it("is ~0 on a flat field and higher on an edge", () => {
+    const flat = new Uint8ClampedArray(2 * 2 * 4).fill(128);
+    for (let i = 3; i < flat.length; i += 4) flat[i] = 255;
+    const edgy = new Uint8ClampedArray([0, 0, 0, 255, 255, 255, 255, 255, 0, 0, 0, 255, 255, 255, 255, 255]);
+    const flatMax = Math.max(...textureMap(flat, 2, 2));
+    const edgyMax = Math.max(...textureMap(edgy, 2, 2));
+    expect(flatMax).toBe(0);
+    expect(edgyMax).toBeGreaterThan(flatMax);
+  });
+});
+```
+
+- [ ] **Step 2: Run to verify failure.**
+
+- [ ] **Step 3: Implement** `src/features/skin-analysis/ml/derived-views.ts`:
+
+```ts
+// Deterministic transforms of a captured RGB frame — the honest camera analog
+// of multi-spectral device modes. NOT spectral/UV/IR imaging, NOT AI.
+// Each returns one intensity byte (0..255) per pixel.
+
+function intensityBuffer(rgba: Uint8ClampedArray): Uint8ClampedArray {
+  return new Uint8ClampedArray(rgba.length / 4);
+}
+
+const clamp = (n: number) => (n < 0 ? 0 : n > 255 ? 255 : n);
+
+// Brown/melanin cue: warmth (R over B) where the pixel is skin-toned.
+export function pigmentationMap(rgba: Uint8ClampedArray): Uint8ClampedArray {
+  const out = intensityBuffer(rgba);
+  for (let i = 0, p = 0; i < rgba.length; i += 4, p++) {
+    out[p] = clamp((rgba[i] - rgba[i + 2]) * 1.5);
+  }
+  return out;
+}
+
+// Erythema/vascular cue: red over the green/blue average.
+export function rednessMap(rgba: Uint8ClampedArray): Uint8ClampedArray {
+  const out = intensityBuffer(rgba);
+  for (let i = 0, p = 0; i < rgba.length; i += 4, p++) {
+    out[p] = clamp((rgba[i] - (rgba[i + 1] + rgba[i + 2]) / 2) * 1.5);
+  }
+  return out;
+}
+
+// Surface relief: local luma contrast (|luma - 4-neighbour mean|).
+export function textureMap(rgba: Uint8ClampedArray, width: number, height: number): Uint8ClampedArray {
+  const luma = new Float32Array(width * height);
+  for (let i = 0, p = 0; i < rgba.length; i += 4, p++) {
+    luma[p] = 0.299 * rgba[i] + 0.587 * rgba[i + 1] + 0.114 * rgba[i + 2];
+  }
+  const out = new Uint8ClampedArray(width * height);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const p = y * width + x;
+      let sum = 0;
+      let n = 0;
+      if (x > 0) (sum += luma[p - 1]), n++;
+      if (x < width - 1) (sum += luma[p + 1]), n++;
+      if (y > 0) (sum += luma[p - width]), n++;
+      if (y < height - 1) (sum += luma[p + width]), n++;
+      out[p] = n === 0 ? 0 : clamp(Math.abs(luma[p] - sum / n));
+    }
+  }
+  return out;
+}
+```
+
+- [ ] **Step 4: Run — PASS (3 tests). Full suite green. Commit:**
+
+```bash
+git add src/features/skin-analysis/ml/derived-views.ts src/features/skin-analysis/ml/derived-views.test.ts
+git commit -m "feat: derived imaging views (pigmentation, redness, texture) from RGB"
+```
+
+---
+
+## Task 10: Multi-view panel + annotation, wired into the report
+
+Renders the original photo plus the three derived maps as a labeled multi-view panel (honest analog of the device's 9-image display), with a click-to-annotate/measure overlay on the original.
+
+**Files:**
+- Create: `src/features/skin-analysis/ml/annotate.ts` (+ test) — pure pixel distance
+- Create: `src/features/skin-analysis/components/results/DerivedViews.tsx` (+ test)
+- Modify: `src/features/skin-analysis/components/results/ReportView.tsx` (+ test) — accept an optional captured `blob`, show the panel
+- Modify: `src/features/skin-analysis/components/capture/CaptureFlow.tsx` — pass the captured blob to ReportView (from `machine.capture`)
+
+- [ ] **Step 1: Failing annotate test** `src/features/skin-analysis/ml/annotate.test.ts`:
+
+```ts
+import { describe, it, expect } from "vitest";
+import { pixelDistance } from "./annotate";
+
+describe("pixelDistance", () => {
+  it("is the euclidean distance between two points", () => {
+    expect(pixelDistance({ x: 0, y: 0 }, { x: 3, y: 4 })).toBe(5);
+  });
+});
+```
+
+Implement `src/features/skin-analysis/ml/annotate.ts`:
+
+```ts
+export interface Point {
+  x: number;
+  y: number;
+}
+
+// Relative pixel distance. Absolute mm requires a calibration reference (future).
+export function pixelDistance(a: Point, b: Point): number {
+  return Math.hypot(b.x - a.x, b.y - a.y);
+}
+```
+
+- [ ] **Step 2: Failing DerivedViews test** `src/features/skin-analysis/components/results/DerivedViews.test.tsx`:
+
+```tsx
+import { describe, it, expect } from "vitest";
+import { render, screen } from "@testing-library/react";
+import { DerivedViews, DERIVED_LABELS } from "./DerivedViews";
+
+describe("DerivedViews", () => {
+  it("labels every view and states they are derived, not spectral", () => {
+    render(<DerivedViews blob={new Blob(["x"], { type: "image/jpeg" })} />);
+    for (const label of Object.values(DERIVED_LABELS)) {
+      expect(screen.getByText(label)).toBeInTheDocument();
+    }
+    expect(screen.getByText(/derived from the visible-light photo/i)).toBeInTheDocument();
+  });
+});
+```
+
+- [ ] **Step 3: Run to verify failure; implement** `src/features/skin-analysis/components/results/DerivedViews.tsx`:
+
+```tsx
+import { useEffect, useRef } from "react";
+import { pigmentationMap, rednessMap, textureMap } from "../../ml/derived-views";
+
+export const DERIVED_LABELS = {
+  original: "Original",
+  pigmentation: "Pigmentation",
+  redness: "Redness",
+  texture: "Texture",
+} as const;
+
+type MapFn = (rgba: Uint8ClampedArray, w: number, h: number) => Uint8ClampedArray;
+
+// Colorize an intensity buffer onto a canvas: intensity → alpha over one hue.
+function paintIntensity(canvas: HTMLCanvasElement, intensity: Uint8ClampedArray, w: number, h: number, hue: [number, number, number]) {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  const img = ctx.createImageData(w, h);
+  for (let p = 0; p < intensity.length; p++) {
+    img.data[p * 4] = hue[0];
+    img.data[p * 4 + 1] = hue[1];
+    img.data[p * 4 + 2] = hue[2];
+    img.data[p * 4 + 3] = intensity[p];
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
+export function DerivedViews({ blob }: { blob: Blob }) {
+  const refs = {
+    original: useRef<HTMLCanvasElement | null>(null),
+    pigmentation: useRef<HTMLCanvasElement | null>(null),
+    redness: useRef<HTMLCanvasElement | null>(null),
+    texture: useRef<HTMLCanvasElement | null>(null),
+  };
+
+  useEffect(() => {
+    let revoked = false;
+    void (async () => {
+      const bitmap = await createImageBitmap(blob);
+      if (revoked) return;
+      const w = bitmap.width;
+      const h = bitmap.height;
+      const base = refs.original.current;
+      if (base) {
+        base.width = w;
+        base.height = h;
+        base.getContext("2d")?.drawImage(bitmap, 0, 0);
+      }
+      const src = document.createElement("canvas");
+      src.width = w;
+      src.height = h;
+      const sctx = src.getContext("2d");
+      if (!sctx) return;
+      sctx.drawImage(bitmap, 0, 0);
+      const rgba = sctx.getImageData(0, 0, w, h).data;
+
+      const views: [keyof typeof refs, MapFn, [number, number, number]][] = [
+        ["pigmentation", (d) => pigmentationMap(d), [146, 64, 14]],
+        ["redness", (d) => rednessMap(d), [220, 38, 38]],
+        ["texture", (d, ww, hh) => textureMap(d, ww, hh), [15, 118, 110]],
+      ];
+      for (const [key, fn, hue] of views) {
+        const c = refs[key].current;
+        if (!c) continue;
+        c.width = w;
+        c.height = h;
+        paintIntensity(c, fn(rgba, w, h), w, h, hue);
+      }
+    })();
+    return () => {
+      revoked = true;
+    };
+  }, [blob]);
+
+  return (
+    <div>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {(Object.keys(DERIVED_LABELS) as (keyof typeof DERIVED_LABELS)[]).map((key) => (
+          <figure key={key}>
+            <canvas
+              ref={refs[key]}
+              className="w-full rounded-lg border border-stone-200 bg-stone-900"
+              aria-label={DERIVED_LABELS[key]}
+            />
+            <figcaption className="mt-1 text-center text-xs text-stone-600">
+              {DERIVED_LABELS[key]}
+            </figcaption>
+          </figure>
+        ))}
+      </div>
+      <p className="mt-2 text-xs text-stone-500">
+        Pigmentation, redness, and texture are <strong>derived from the visible-light photo</strong> —
+        not spectral, UV, or infrared imaging.
+      </p>
+    </div>
+  );
+}
+```
+
+- [ ] **Step 4: Failing ReportView test.** Append to `ReportView.test.tsx`:
+
+```tsx
+it("shows the derived multi-view panel when a captured photo is provided", () => {
+  render(
+    <ReportView
+      report={report}
+      verdict={buildVerdict(report, [])}
+      onNewScan={() => {}}
+      capturedBlob={new Blob(["x"], { type: "image/jpeg" })}
+    />,
+  );
+  expect(screen.getByText(/derived from the visible-light photo/i)).toBeInTheDocument();
+});
+```
+
+- [ ] **Step 5: Modify `ReportView.tsx`:** add optional prop `capturedBlob?: Blob` to the signature; import `DerivedViews`; render a section after the facial map:
+
+```tsx
+      {capturedBlob && (
+        <section>
+          <h3 className="mb-2 text-sm font-bold text-stone-900">Imaging views</h3>
+          <DerivedViews blob={capturedBlob} />
+        </section>
+      )}
+```
+
+- [ ] **Step 6: Modify `CaptureFlow.tsx` results branch** to pass the blob:
+
+```tsx
+  if (machine.state === "results" && machine.verdict) {
+    return (
+      <ReportView
+        report={null}
+        verdict={machine.verdict}
+        onNewScan={machine.reset}
+        capturedBlob={machine.capture?.blob}
+      />
+    );
+  }
+```
+
+- [ ] **Step 7: Run full suite + `npm run verify` — green. Commit:**
+
+```bash
+git add src/features/skin-analysis/ml/annotate.ts src/features/skin-analysis/ml/annotate.test.ts src/features/skin-analysis/components/results/DerivedViews.tsx src/features/skin-analysis/components/results/DerivedViews.test.tsx src/features/skin-analysis/components/results/ReportView.tsx src/features/skin-analysis/components/results/ReportView.test.tsx src/features/skin-analysis/components/capture/CaptureFlow.tsx
+git commit -m "feat: derived multi-view panel + annotation in the report"
+```
+
+> **Annotation UI note:** Task 10 ships the `pixelDistance` primitive and the multi-view panel. The interactive click-to-mark overlay on the original canvas (drawing points, showing the measured relative distance) is a thin addition on top of `DerivedViews` + `pixelDistance` — implement it here if time allows, else it carries to Plan 6's report-from-history view where the same panel renders. Do not fake absolute mm without a calibration reference.
+
+---
+
 ## Definition of Done
 
 - `npm run verify` fully green.
 - `verdict.ts` merge rules exhaustively tested: agree/llm-only/classifier-only, combined confidence, severity max, attention escalation from either source, escalated-first ordering, partial (classifier-only) and llm-only degraded verdicts.
 - Loading screen shows the five real pipeline stages, advances on actual events, `role="status"`, reduced-motion respected.
 - Report view renders summary, skin type, facial map with zone markers (escalated = amber), 12-dimension grid with visual-proxy labels, findings with agreement badges, non-diagnosis disclaimer; partial scans show the pending banner.
+- **Derived views:** pigmentation/redness/texture maps computed from the captured frame (pure, tested), shown as a labeled multi-view panel explicitly marked "derived from the visible-light photo — not spectral/UV/IR."
 - Download PDF triggers print with a print stylesheet isolating the report; New scan resets.
 
 ## What this plan intentionally defers
@@ -1151,3 +1476,5 @@ git commit -m "feat: wire staged loading and report view into the scan flow"
 - Real patient selection + fetching stored scans/reports by id (full report from history) — Plan 6.
 - Before/after comparison and trends — Plan 6.
 - QR capture UI — Plan 6.
+- Interactive annotation overlay (draw/measure) beyond the `pixelDistance` primitive — finish in Task 10 or Plan 6.
+- Absolute (mm) measurement — needs a calibration reference in-frame; out of scope.
