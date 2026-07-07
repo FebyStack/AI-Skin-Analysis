@@ -70,7 +70,7 @@ describe("handleAnalyze", () => {
 
   it("surfaces provider auth failures distinctly", async () => {
     const callProvider = vi.fn(async () => {
-      const { ProviderAuthError } = await import("./providers/anthropic");
+      const { ProviderAuthError } = await import("./providers/common");
       throw new ProviderAuthError();
     });
     const out = await handleAnalyze(goodInput, deps({ callProvider }));

@@ -1,5 +1,5 @@
 import { validateAnalysisReport, type AnalysisReport } from "./contract";
-import { extractJson } from "./providers/anthropic";
+import { extractJson } from "./providers/common";
 
 export type CritiqueOutcome =
   | { verdict: "approved" }

@@ -3,3 +3,18 @@ dist
 dist-server
 .git
 .worktrees
+.superpowers
+
+# ML model assets (large binary files, served out-of-band)
+public/models/*.onnx
+
+# Test, docs and tooling — not needed in the image
+**/*.test.ts
+**/*.test.js
+docs/
+*.md
+.env
+.env.*
+.dockerignore
+.gitignore
+Makefile

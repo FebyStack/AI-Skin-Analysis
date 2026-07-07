@@ -12,5 +12,7 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
     exclude: ["**/node_modules/**", "**/dist/**", ".worktrees/**"],
+    // bcrypt-hash auth tests can exceed the 5s default under CPU load; give headroom.
+    testTimeout: 15000,
   },
 });

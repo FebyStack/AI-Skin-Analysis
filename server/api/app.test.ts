@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest";
 import request from "supertest";
 import sharp from "sharp";

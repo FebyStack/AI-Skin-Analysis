@@ -14,9 +14,9 @@ services:
       target: api
     environment:
       DATABASE_URL: postgres://skin:${POSTGRES_PASSWORD:-skin}@db:5432/skin
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
-      PRIMARY_MODEL: ${PRIMARY_MODEL:-claude-sonnet-5}
-      CRITIQUE_MODEL: ${CRITIQUE_MODEL:-claude-haiku-4-5-20251001}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      PRIMARY_MODEL: ${PRIMARY_MODEL:-gemini-2.5-flash}
+      CRITIQUE_MODEL: ${CRITIQUE_MODEL:-gemini-2.5-flash}
     depends_on:
       db:
         condition: service_healthy

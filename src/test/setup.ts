@@ -21,7 +21,11 @@ if (typeof localStorage === "undefined" || typeof localStorage.clear !== "functi
     },
   };
   Object.defineProperty(globalThis, "localStorage", { value: storage, writable: true });
-  Object.defineProperty(window, "localStorage", { value: storage, writable: true });
+  // `window` is absent in the node test environment (e.g. server/api/app.test.ts,
+  // which sets `@vitest-environment node`); only mirror onto it when present.
+  if (typeof window !== "undefined") {
+    Object.defineProperty(window, "localStorage", { value: storage, writable: true });
+  }
 }
 
 // Vitest jsdom has no Web Worker; provide an inert stub. Component tests never

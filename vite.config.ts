@@ -12,4 +12,10 @@ export default defineConfig({
     // iife worker format can't split — es can.
     format: "es",
   },
+  server: {
+    proxy: {
+      "/api": "http://localhost:3001",
+      "/capture": "http://localhost:3001",
+    },
+  },
 });

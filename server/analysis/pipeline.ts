@@ -1,7 +1,7 @@
 import { validateAnalysisReport, type AnalysisReport } from "./contract";
 import { validateInput, checkOutputGuardrails, type AnalyzeInput } from "./guardrails";
 import { systemPrompt, userPrompt, PROMPT_VERSION } from "./prompts";
-import { extractJson, ProviderAuthError } from "./providers/anthropic";
+import { extractJson, ProviderAuthError } from "./providers/common";
 import { runCritique } from "./critique";
 
 export interface PipelineConfig {

@@ -58,3 +58,5 @@ Camera/browser-observable changes were verified live via the preview tool, not j
 - Next work: `docs/superpowers/plans/plan-5-results-report-ui/` then `plan-6-patients-history-qr/`
 - Run tests: `npm run verify` (or `npx vitest run` for just tests)
 - Local stack: `docker compose up` / `make up`, `.env` from `.env.example` (needs `ANTHROPIC_API_KEY` for real analyses; blank key still runs but produces partial-only scans)
+
+last Claude session: 2026-07-05 22:03
