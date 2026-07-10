@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { validateAnalysisReport, DIMENSION_KEYS } from "./contract";
-import golden from "./fixtures/golden-report.json";
+import golden from "../../ai/evaluation/fixtures/golden-report.json";
 
 describe("validateAnalysisReport", () => {
   it("accepts the golden report", () => {

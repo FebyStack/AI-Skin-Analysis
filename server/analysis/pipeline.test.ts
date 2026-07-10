@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { handleAnalyze, type PipelineDeps } from "./pipeline";
-import golden from "./fixtures/golden-report.json";
+import golden from "../../ai/evaluation/fixtures/golden-report.json";
 
 const goldenText = JSON.stringify(golden);
 const approvedText = '{"verdict":"approved"}';

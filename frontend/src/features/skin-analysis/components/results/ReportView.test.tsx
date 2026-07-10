@@ -3,7 +3,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ReportView } from "./ReportView";
 import { buildVerdict } from "../../ml/verdict";
-import golden from "../../../../../server/analysis/fixtures/golden-report.json";
+import golden from "@ai/evaluation/fixtures/golden-report.json";
 import type { AnalysisReport } from "../../api/contract";
 
 const report = golden as unknown as AnalysisReport;

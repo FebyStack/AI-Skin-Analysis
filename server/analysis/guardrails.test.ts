@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { validateInput, checkOutputGuardrails, MAX_IMAGE_BYTES } from "./guardrails";
-import golden from "./fixtures/golden-report.json";
+import golden from "../../ai/evaluation/fixtures/golden-report.json";
 import type { AnalysisReport } from "./contract";
 
 const g = golden as unknown as AnalysisReport;

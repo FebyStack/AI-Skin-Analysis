@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { runCritique, buildCritiquePrompt } from "./critique";
-import golden from "./fixtures/golden-report.json";
+import golden from "../../ai/evaluation/fixtures/golden-report.json";
 import type { AnalysisReport } from "./contract";
 
 const report = golden as unknown as AnalysisReport;

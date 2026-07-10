@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { DimensionGrid } from "./DimensionGrid";
-import golden from "../../../../../server/analysis/fixtures/golden-report.json";
+import golden from "@ai/evaluation/fixtures/golden-report.json";
 import type { AnalysisReport } from "../../api/contract";
 
 const report = golden as unknown as AnalysisReport;

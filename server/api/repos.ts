@@ -128,7 +128,7 @@ export class MemorySettingsRepo implements SettingsRepo {
   }
 }
 
-import goldenReport from "../analysis/fixtures/golden-report.json";
+import goldenReport from "../../ai/evaluation/fixtures/golden-report.json";
 
 export function makeTestDeps(overrides: Partial<AppDeps> = {}): AppDeps {
   return {

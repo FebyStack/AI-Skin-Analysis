@@ -1,18 +1,17 @@
 import { defineConfig } from "vitest/config";
-import react from "@vitejs/plugin-react";
 import { resolve } from "node:path";
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [],
   resolve: {
-    alias: { "@": resolve(__dirname, "src") },
+    alias: {
+      "@": resolve(__dirname, "frontend/src"),
+      "@ai": resolve(__dirname, "ai"),
+    },
   },
   test: {
     environment: "jsdom",
     globals: true,
-    setupFiles: ["./src/test/setup.ts"],
-    exclude: ["**/node_modules/**", "**/dist/**", ".worktrees/**"],
-    // bcrypt-hash auth tests can exceed the 5s default under CPU load; give headroom.
-    testTimeout: 15000,
+    setupFiles: ["./frontend/src/test/setup.ts"],
   },
 });

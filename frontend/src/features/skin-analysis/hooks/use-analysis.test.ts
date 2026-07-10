@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { runAnalysisPipeline, type AnalysisStage } from "./use-analysis";
 import type { CaptureResult, Finding } from "../types";
 import type { ScanWire } from "../api/analyze-client";
-import golden from "../../../../server/analysis/fixtures/golden-report.json";
+import golden from "@ai/evaluation/fixtures/golden-report.json";
 import type { AnalysisReport } from "../api/contract";
 
 const capture: CaptureResult = {

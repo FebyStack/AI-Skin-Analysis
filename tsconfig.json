@@ -15,8 +15,11 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "baseUrl": ".",
-    "paths": { "@/*": ["src/*"] }
+    "paths": {
+      "@/*": ["frontend/src/*"],
+      "@ai/*": ["ai/*"]
+    }
   },
-  "include": ["src"],
+  "include": ["frontend/src", "ai"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

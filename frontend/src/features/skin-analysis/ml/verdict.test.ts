@@ -8,7 +8,7 @@ import {
 } from "./verdict";
 import type { Finding } from "../types";
 import type { AnalysisReport } from "../api/contract";
-import golden from "../../../../server/analysis/fixtures/golden-report.json";
+import golden from "@ai/evaluation/fixtures/golden-report.json";
 
 const report = golden as unknown as AnalysisReport;
 
