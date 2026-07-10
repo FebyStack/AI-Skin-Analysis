@@ -3,7 +3,7 @@ import { describe, it, expect } from "vitest";
 import request from "supertest";
 import sharp from "sharp";
 import { createApp } from "./app";
-import { makeTestDeps } from "./repos";
+import { makeTestDeps } from "../shared/testing";
 
 describe("health", () => {
   it("responds ok without auth", async () => {

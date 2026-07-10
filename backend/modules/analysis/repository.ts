@@ -1,64 +1,66 @@
+import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
-import type { AnalysisReport } from "../../shared/contract";
-import type { Patient, PatientRepo, ScanRecord, ScanRepo, SettingsRepo } from "./repos";
+import type { AnalysisReport } from "../../../shared/contract";
+import { isValidUuid } from "../../shared/pg";
 
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-function isValidUuid(id: string): boolean {
-  return UUID_REGEX.test(id);
+export interface ScanRecord {
+  id: string;
+  patientId: string;
+  mode: "face" | "closeup";
+  createdAt: number;
+  imageJpeg: Uint8Array;
+  imageWidth: number;
+  imageHeight: number;
+  report: AnalysisReport | null;
+  partial: boolean;
+  classifierFindings: unknown[];
+  promptVersion: number | null;
 }
 
-function rowToPatient(r: Record<string, unknown>): Patient {
-  return {
-    id: String(r.id),
-    name: String(r.name),
-    externalRef: (r.external_ref as string | null) ?? null,
-    notes: String(r.notes ?? ""),
-    consentVersion: (r.consent_version as number | null) ?? null,
-    createdAt: new Date(r.created_at as string).getTime(),
-  };
+export interface ScanRepo {
+  create(s: Omit<ScanRecord, "id" | "createdAt">): Promise<ScanRecord>;
+  get(id: string): Promise<ScanRecord | null>;
+  listByPatient(patientId: string): Promise<Omit<ScanRecord, "imageJpeg">[]>;
+  getImage(id: string): Promise<{ jpeg: Uint8Array } | null>;
+  updateReport(id: string, report: AnalysisReport, promptVersion: number): Promise<boolean>;
+  remove(id: string): Promise<boolean>;
 }
 
-export class PgPatientRepo implements PatientRepo {
-  constructor(private pool: Pool) {}
-  async create(p: Omit<Patient, "id" | "createdAt">): Promise<Patient> {
-    const { rows } = await this.pool.query(
-      `INSERT INTO patients (name, external_ref, notes, consent_version)
-       VALUES ($1, $2, $3, $4) RETURNING *`,
-      [p.name, p.externalRef, p.notes, p.consentVersion],
-    );
-    return rowToPatient(rows[0]);
+// ---------- In-memory (tests + lite mode) ----------
+
+export class MemoryScanRepo implements ScanRepo {
+  private rows = new Map<string, ScanRecord>();
+  async create(s: Omit<ScanRecord, "id" | "createdAt">): Promise<ScanRecord> {
+    const row: ScanRecord = { ...s, id: randomUUID(), createdAt: Date.now() };
+    this.rows.set(row.id, row);
+    return row;
   }
   async get(id: string) {
-    if (!isValidUuid(id)) return null;
-    const { rows } = await this.pool.query(`SELECT * FROM patients WHERE id = $1`, [id]);
-    return rows[0] ? rowToPatient(rows[0]) : null;
+    return this.rows.get(id) ?? null;
   }
-  async list(search?: string) {
-    const { rows } = search
-      ? await this.pool.query(
-          `SELECT * FROM patients WHERE name ILIKE $1 ORDER BY name`,
-          [`%${search}%`],
-        )
-      : await this.pool.query(`SELECT * FROM patients ORDER BY name`);
-    return rows.map(rowToPatient);
+  async listByPatient(patientId: string) {
+    return [...this.rows.values()]
+      .filter((s) => s.patientId === patientId)
+      .map(({ imageJpeg: _img, ...rest }) => rest);
   }
-  async update(id: string, fields: Partial<Omit<Patient, "id" | "createdAt">>) {
-    if (!isValidUuid(id)) return null;
-    const cur = await this.get(id);
-    if (!cur) return null;
-    const next = { ...cur, ...fields };
-    await this.pool.query(
-      `UPDATE patients SET name=$2, external_ref=$3, notes=$4, consent_version=$5 WHERE id=$1`,
-      [id, next.name, next.externalRef, next.notes, next.consentVersion],
-    );
-    return next;
+  async getImage(id: string) {
+    const row = this.rows.get(id);
+    return row ? { jpeg: row.imageJpeg } : null;
+  }
+  async updateReport(id: string, report: AnalysisReport, promptVersion: number) {
+    const row = this.rows.get(id);
+    if (!row) return false;
+    row.report = report;
+    row.partial = false;
+    row.promptVersion = promptVersion;
+    return true;
   }
   async remove(id: string) {
-    if (!isValidUuid(id)) return false;
-    const { rowCount } = await this.pool.query(`DELETE FROM patients WHERE id = $1`, [id]);
-    return (rowCount ?? 0) > 0;
+    return this.rows.delete(id);
   }
 }
+
+// ---------- PostgreSQL ----------
 
 function rowToScan(r: Record<string, unknown>): ScanRecord {
   return {
@@ -132,20 +134,5 @@ export class PgScanRepo implements ScanRepo {
     if (!isValidUuid(id)) return false;
     const { rowCount } = await this.pool.query(`DELETE FROM scans WHERE id = $1`, [id]);
     return (rowCount ?? 0) > 0;
-  }
-}
-
-export class PgSettingsRepo implements SettingsRepo {
-  constructor(private pool: Pool) {}
-  async get(key: string) {
-    const { rows } = await this.pool.query(`SELECT value FROM settings WHERE key = $1`, [key]);
-    return rows[0]?.value ?? null;
-  }
-  async set(key: string, value: string) {
-    await this.pool.query(
-      `INSERT INTO settings (key, value) VALUES ($1, $2)
-       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
-      [key, value],
-    );
   }
 }

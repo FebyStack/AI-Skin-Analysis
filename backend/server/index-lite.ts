@@ -3,8 +3,10 @@
  * No Docker required — just `npm run dev:lite`.
  */
 import { randomBytes } from "node:crypto";
-import { createApp } from "./app";
-import { MemoryPatientRepo, MemoryScanRepo, MemorySettingsRepo } from "./repos";
+import { createApp } from "../app/app";
+import { MemoryPatientRepo } from "../modules/patients/repository";
+import { MemoryScanRepo } from "../modules/analysis/repository";
+import { MemorySettingsRepo } from "../modules/settings/repository";
 import { callGemini } from "../../ai/llm/providers/gemini";
 
 async function main() {

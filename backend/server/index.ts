@@ -2,8 +2,10 @@ import { readFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import path from "node:path";
 import { Pool } from "pg";
-import { createApp } from "./app";
-import { PgPatientRepo, PgScanRepo, PgSettingsRepo } from "./pg-repos";
+import { createApp } from "../app/app";
+import { PgPatientRepo } from "../modules/patients/repository";
+import { PgScanRepo } from "../modules/analysis/repository";
+import { PgSettingsRepo } from "../modules/settings/repository";
 import { callGemini } from "../../ai/llm/providers/gemini";
 
 async function main() {
@@ -14,7 +16,8 @@ async function main() {
     connectionTimeoutMillis: 2000, // Return an error after 2 seconds if connection could not be established
   });
   // Idempotent schema apply on boot — fine for a single-writer clinic app.
-  const schema = readFileSync(path.join(import.meta.dirname ?? __dirname, "../db/schema.sql"), "utf8");
+  // cwd is the repo root in dev (npm scripts) and /app in the container (WORKDIR).
+  const schema = readFileSync(path.resolve(process.cwd(), "database/schema/schema.sql"), "utf8");
   await pool.query(schema);
 
   const settings = new PgSettingsRepo(pool);

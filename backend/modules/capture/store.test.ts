@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { CaptureSessionStore } from "./capture-sessions";
+import { CaptureSessionStore } from "./store";
 
 describe("CaptureSessionStore", () => {
   it("creates a session and accepts one upload", () => {

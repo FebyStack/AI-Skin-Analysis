@@ -1,7 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import bcrypt from "bcryptjs";
-import type { NextFunction, Request, Response } from "express";
-import type { SettingsRepo } from "./repos";
+import type { SettingsRepo } from "../settings/repository";
 
 const PASSWORD_KEY = "password_hash";
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12h shift
@@ -43,15 +42,4 @@ export function parseCookies(header: string | undefined): Record<string, string>
     if (idx > 0) out[part.slice(0, idx).trim()] = part.slice(idx + 1).trim();
   }
   return out;
-}
-
-export function requireSession(secret: string, now: () => number) {
-  return (req: Request, res: Response, next: NextFunction) => {
-    const token = parseCookies(req.headers.cookie)["session"];
-    if (!isValidSession(token, secret, now())) {
-      res.status(401).json({ error: "login required" });
-      return;
-    }
-    next();
-  };
 }
