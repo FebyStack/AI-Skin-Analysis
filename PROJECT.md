@@ -29,6 +29,8 @@ Gemini (`@google/genai`, default `gemini-2.5-flash` for primary + critique), key
 
 ## Plan status
 
+**Next up:** AI redesign for close-up mode — EfficientNet-B0 (Python FastAPI service in `ai/service/`) + Gemini demoted to JSON-explainer; browser ONNX classifier to be decommissioned. Designed, not implemented: `docs/superpowers/specs/2026-07-10-ai-classifier-architecture.md`.
+
 Plans 1–4 executed and merged. Plan 5 (results/report UI) + Plan 6 (patients/history/QR UI) code was written and committed by Febriel in `a5920b5` (2026-07-10) — **2 tests in that WIP still fail** (verdict summary wording vs `/partial/i`; quality-gate missing `unsupported-aspect-ratio`) and 2 TODO(plan-6)s remain (real patient selection; results fetch of stored report). The `walk-in` sentinel patient hack in patients/analysis routes awaits Plan 6.
 
 ## Architecture invariants (do not weaken)
@@ -51,4 +53,4 @@ Plans 1–4 executed and merged. Plan 5 (results/report UI) + Plan 6 (patients/h
 
 Brainstorm → spec → writing-plans → subagent-driven execution with one final opus review before merge. Verify camera/browser changes live in the preview tool, not just unit tests. `git push` to `https://github.com/FebyStack/AI-Skin-Analysis.git` was configured via `gh auth git-credential` but never confirmed pushed.
 
-last Claude session: 2026-07-10 (hybrid-architecture migration on `feat/hybrid-architecture`)
+last Claude session: 2026-07-10 22:25
