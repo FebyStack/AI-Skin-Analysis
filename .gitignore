@@ -23,8 +23,11 @@ data/
 *.sqlite
 
 # ML model assets (provided out-of-band, not versioned)
-public/models/*.onnx
+*.onnx
+*.onnx.data
 
 # tooling scratch
 .superpowers/
 .worktrees/
+.venv/
+.DS_Store

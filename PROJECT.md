@@ -59,4 +59,4 @@ Camera/browser-observable changes were verified live via the preview tool, not j
 - Run tests: `npm run verify` (or `npx vitest run` for just tests)
 - Local stack: `docker compose up` / `make up`, `.env` from `.env.example` (needs `ANTHROPIC_API_KEY` for real analyses; blank key still runs but produces partial-only scans)
 
-last Claude session: 2026-07-10 09:18
+last Claude session: 2026-07-10 09:37
