@@ -3,6 +3,7 @@ node_modules/
 dist/
 dist-server/
 *.tsbuildinfo
+.tsbuild/
 vite.config.d.ts
 vite.config.js
 vitest.config.d.ts
