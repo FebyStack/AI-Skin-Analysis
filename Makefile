@@ -1,20 +1,23 @@
 .PHONY: up down lan build backup restore
 
+# Compose lives in infrastructure/docker/; --env-file keeps root .env interpolation working.
+COMPOSE = docker compose -f infrastructure/docker/docker-compose.yml --env-file .env
+
 up:
-	docker compose up -d
+	$(COMPOSE) up -d
 
 lan:
-	docker compose -f docker-compose.yml -f docker-compose.lan.yml up -d
+	$(COMPOSE) -f infrastructure/docker/docker-compose.lan.yml up -d
 
 down:
-	docker compose down
+	$(COMPOSE) down
 
 build:
-	docker compose build
+	$(COMPOSE) build
 
 backup:
-	docker compose exec -T db pg_dump --clean --if-exists -U skin skin > backup-$$(date +%Y%m%d-%H%M%S).sql
+	$(COMPOSE) exec -T db pg_dump --clean --if-exists -U skin skin > database/backups/backup-$$(date +%Y%m%d-%H%M%S).sql
 
 restore:
-	@test -n "$(FILE)" || (echo "usage: make restore FILE=backup-....sql" && exit 1)
-	cat $(FILE) | docker compose exec -T db psql -U skin skin
+	@test -n "$(FILE)" || (echo "usage: make restore FILE=database/backups/backup-....sql" && exit 1)
+	cat $(FILE) | $(COMPOSE) exec -T db psql -U skin skin

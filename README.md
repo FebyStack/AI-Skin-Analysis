@@ -33,7 +33,7 @@ Browser (laptop / LAN phones) → web → api → db
 
 On-device ML (MediaPipe quality gate + ONNX classifier in a web worker) runs in the browser before anything is sent.
 
-- **Frontend:** React + Vite + TypeScript + Tailwind (portable feature module under `src/features/skin-analysis/`)
+- **Frontend:** React + Vite + TypeScript + Tailwind (portable feature module under `frontend/src/features/skin-analysis/`)
 - **Server:** Node api container; provider adapter keeps the LLM swappable via env
 - **Storage:** Postgres; images as compressed JPEG `bytea`, reports as JSONB
 
