@@ -15,8 +15,12 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "baseUrl": ".",
-    "paths": { "@/*": ["src/*"] }
+    "paths": {
+      "@/*": ["frontend/src/*"],
+      "@ai/*": ["ai/*"],
+      "@shared/*": ["shared/*"]
+    }
   },
-  "include": ["src"],
+  "include": ["frontend/src", "ai", "shared"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

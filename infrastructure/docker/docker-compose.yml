@@ -1,0 +1,45 @@
+# Pinned project name: keeps the pre-migration volume (skinanalysis_skin_data)
+# and container names, since the compose file moved out of the repo root.
+name: skinanalysis
+
+services:
+  web:
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/Dockerfile
+      target: web
+    ports:
+      - "127.0.0.1:8080:80"
+    depends_on:
+      - api
+
+  api:
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/Dockerfile
+      target: api
+    environment:
+      DATABASE_URL: postgres://skin:${POSTGRES_PASSWORD:-skin}@db:5432/skin
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      PRIMARY_MODEL: ${PRIMARY_MODEL:-gemini-2.5-flash}
+      CRITIQUE_MODEL: ${CRITIQUE_MODEL:-gemini-2.5-flash}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: skin
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-skin}
+      POSTGRES_DB: skin
+    volumes:
+      - skin_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U skin"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  skin_data:

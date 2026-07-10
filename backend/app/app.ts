@@ -1,0 +1,27 @@
+import express, { type Express } from "express";
+import type { AppDeps } from "../shared/deps";
+import { requireSession } from "../middleware/require-session";
+import { CaptureSessionStore } from "../modules/capture/store";
+import { createAuthRoutes } from "../modules/auth/routes";
+import { createPatientRoutes } from "../modules/patients/routes";
+import { createAnalysisRoutes } from "../modules/analysis/routes";
+import { createCaptureRoutes } from "../modules/capture/routes";
+
+export function createApp(deps: AppDeps): Express {
+  const app = express();
+  app.use(express.json({ limit: "12mb" }));
+
+  app.get("/api/health", (_req, res) => {
+    res.json({ ok: true });
+  });
+
+  const auth = requireSession(deps.sessionSecret, deps.now);
+  const captures = new CaptureSessionStore(deps.now);
+
+  app.use(createAuthRoutes(deps));
+  app.use(createPatientRoutes(deps, auth));
+  app.use(createAnalysisRoutes(deps, auth));
+  app.use(createCaptureRoutes(captures, auth));
+
+  return app;
+}
