@@ -3,6 +3,7 @@ import {
   meanLuma,
   estimateSharpness,
   assessQuality,
+  buildQualityGuidance,
   QUALITY_THRESHOLDS,
 } from "./quality";
 
@@ -35,20 +36,45 @@ describe("estimateSharpness", () => {
 
 describe("assessQuality", () => {
   it("passes a well-lit, sharp image with a region", () => {
-    const r = assessQuality({ brightness: 0.5, sharpness: 0.1, regionFound: true });
+    const r = assessQuality({
+      brightness: 0.5,
+      sharpness: 0.1,
+      regionFound: true,
+      width: 640,
+      height: 480,
+      glareRatio: 0.01,
+      skinCoverage: 0.2,
+    });
     expect(r.ok).toBe(true);
     expect(r.issues).toEqual([]);
+    expect(r.guidance).toBe("");
   });
 
   it("flags a dark image", () => {
-    const r = assessQuality({ brightness: 0.05, sharpness: 0.1, regionFound: true });
+    const r = assessQuality({
+      brightness: 0.05,
+      sharpness: 0.1,
+      regionFound: true,
+      width: 640,
+      height: 480,
+      glareRatio: 0.01,
+      skinCoverage: 0.2,
+    });
     expect(r.ok).toBe(false);
     expect(r.issues).toContain("too-dark");
   });
 
-  it("flags an overexposed image", () => {
-    const r = assessQuality({ brightness: 0.98, sharpness: 0.1, regionFound: true });
-    expect(r.issues).toContain("overexposed");
+  it("flags a bright image", () => {
+    const r = assessQuality({
+      brightness: 0.98,
+      sharpness: 0.1,
+      regionFound: true,
+      width: 640,
+      height: 480,
+      glareRatio: 0.01,
+      skinCoverage: 0.2,
+    });
+    expect(r.issues).toContain("too-bright");
   });
 
   it("flags a blurry image", () => {
@@ -56,12 +82,55 @@ describe("assessQuality", () => {
       brightness: 0.5,
       sharpness: QUALITY_THRESHOLDS.minSharpness / 2,
       regionFound: true,
+      width: 640,
+      height: 480,
+      glareRatio: 0.01,
+      skinCoverage: 0.2,
     });
     expect(r.issues).toContain("blur");
   });
 
+  it("flags a low-resolution image and unsupported aspect ratio", () => {
+    const r = assessQuality({
+      brightness: 0.5,
+      sharpness: 0.1,
+      regionFound: true,
+      width: 160,
+      height: 120,
+      glareRatio: 0.01,
+      skinCoverage: 0.2,
+    });
+    expect(r.issues).toContain("low-resolution");
+  });
+
+  it("flags an unsupported aspect ratio", () => {
+    const r = assessQuality({
+      brightness: 0.5,
+      sharpness: 0.1,
+      regionFound: true,
+      width: 900,
+      height: 200,
+      glareRatio: 0.01,
+      skinCoverage: 0.2,
+    });
+    expect(r.issues).toContain("unsupported-aspect-ratio");
+  });
+
   it("flags a missing region", () => {
-    const r = assessQuality({ brightness: 0.5, sharpness: 0.1, regionFound: false });
+    const r = assessQuality({
+      brightness: 0.5,
+      sharpness: 0.1,
+      regionFound: false,
+      width: 640,
+      height: 480,
+      glareRatio: 0.01,
+      skinCoverage: 0,
+    });
     expect(r.issues).toContain("no-region");
+  });
+
+  it("builds user-friendly guidance", () => {
+    expect(buildQualityGuidance(["too-bright", "glare", "blur"])).toMatch(/too bright/i);
+    expect(buildQualityGuidance(["no-region"])).toMatch(/fill more of the frame/i);
   });
 });

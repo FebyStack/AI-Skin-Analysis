@@ -56,6 +56,7 @@ export function useCamera(mode: CaptureMode) {
       }
       setStatus("live");
     } catch (err) {
+      console.error("Camera access failed:", err);
       const name = (err as DOMException)?.name;
       setStatus(name === "NotAllowedError" ? "denied" : "no-camera");
     }

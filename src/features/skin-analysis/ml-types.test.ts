@@ -6,21 +6,33 @@ describe("ml types", () => {
     const r: QualityReport = {
       ok: true,
       issues: [],
+      guidance: "Looks good.",
       brightness: 0.5,
       sharpness: 0.1,
       regionFound: true,
+      width: 640,
+      height: 480,
+      aspectRatio: 4 / 3,
+      glareRatio: 0,
+      skinCoverage: 0.2,
     };
     expect(r.ok).toBe(true);
   });
 
   it("models a failing quality report with issues", () => {
-    const issues: QualityIssue[] = ["blur", "too-dark"];
+    const issues: QualityIssue[] = ["blur", "too-dark", "glare"];
     const r: QualityReport = {
       ok: false,
       issues,
+      guidance: "Too blurry, too dark, and too much glare.",
       brightness: 0.05,
       sharpness: 0.001,
       regionFound: false,
+      width: 120,
+      height: 120,
+      aspectRatio: 1,
+      glareRatio: 0.2,
+      skinCoverage: 0,
     };
     expect(r.issues).toContain("blur");
   });

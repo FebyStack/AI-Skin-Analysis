@@ -2,6 +2,11 @@ import type { Pool } from "pg";
 import type { AnalysisReport } from "../analysis/contract";
 import type { Patient, PatientRepo, ScanRecord, ScanRepo, SettingsRepo } from "./repos";
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function isValidUuid(id: string): boolean {
+  return UUID_REGEX.test(id);
+}
+
 function rowToPatient(r: Record<string, unknown>): Patient {
   return {
     id: String(r.id),
@@ -24,6 +29,7 @@ export class PgPatientRepo implements PatientRepo {
     return rowToPatient(rows[0]);
   }
   async get(id: string) {
+    if (!isValidUuid(id)) return null;
     const { rows } = await this.pool.query(`SELECT * FROM patients WHERE id = $1`, [id]);
     return rows[0] ? rowToPatient(rows[0]) : null;
   }
@@ -37,6 +43,7 @@ export class PgPatientRepo implements PatientRepo {
     return rows.map(rowToPatient);
   }
   async update(id: string, fields: Partial<Omit<Patient, "id" | "createdAt">>) {
+    if (!isValidUuid(id)) return null;
     const cur = await this.get(id);
     if (!cur) return null;
     const next = { ...cur, ...fields };
@@ -47,6 +54,7 @@ export class PgPatientRepo implements PatientRepo {
     return next;
   }
   async remove(id: string) {
+    if (!isValidUuid(id)) return false;
     const { rowCount } = await this.pool.query(`DELETE FROM patients WHERE id = $1`, [id]);
     return (rowCount ?? 0) > 0;
   }
@@ -90,10 +98,12 @@ export class PgScanRepo implements ScanRepo {
     return rowToScan(rows[0]);
   }
   async get(id: string) {
+    if (!isValidUuid(id)) return null;
     const { rows } = await this.pool.query(`SELECT * FROM scans WHERE id = $1`, [id]);
     return rows[0] ? rowToScan(rows[0]) : null;
   }
   async listByPatient(patientId: string) {
+    if (!isValidUuid(patientId)) return [];
     const { rows } = await this.pool.query(
       `SELECT id, patient_id, mode, created_at, image_width, image_height,
               report, partial, classifier_findings, prompt_version
@@ -106,10 +116,12 @@ export class PgScanRepo implements ScanRepo {
     });
   }
   async getImage(id: string) {
+    if (!isValidUuid(id)) return null;
     const { rows } = await this.pool.query(`SELECT image_jpeg FROM scans WHERE id = $1`, [id]);
     return rows[0] ? { jpeg: rows[0].image_jpeg as Uint8Array } : null;
   }
   async updateReport(id: string, report: AnalysisReport, promptVersion: number) {
+    if (!isValidUuid(id)) return false;
     const { rowCount } = await this.pool.query(
       `UPDATE scans SET report=$2, partial=false, prompt_version=$3 WHERE id=$1`,
       [id, JSON.stringify(report), promptVersion],
@@ -117,6 +129,7 @@ export class PgScanRepo implements ScanRepo {
     return (rowCount ?? 0) > 0;
   }
   async remove(id: string) {
+    if (!isValidUuid(id)) return false;
     const { rowCount } = await this.pool.query(`DELETE FROM scans WHERE id = $1`, [id]);
     return (rowCount ?? 0) > 0;
   }

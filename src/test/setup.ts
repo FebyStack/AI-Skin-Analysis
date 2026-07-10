@@ -52,3 +52,14 @@ if (!Blob.prototype.text) {
     });
   };
 }
+
+// Polyfill createImageBitmap for jsdom
+if (typeof globalThis.createImageBitmap === "undefined") {
+  globalThis.createImageBitmap = async function () {
+    return {
+      width: 100,
+      height: 100,
+      close() {},
+    } as unknown as ImageBitmap;
+  };
+}

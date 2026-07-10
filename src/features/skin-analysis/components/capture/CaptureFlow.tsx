@@ -1,30 +1,33 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { useScanMachine } from "../../store/scan-machine";
 import { CameraFeed } from "./CameraFeed";
 import { UploadDropzone } from "./UploadDropzone";
 import { useQualityGate } from "../../hooks/use-quality-gate";
-import { useClassifier } from "../../hooks/use-classifier";
+import { useAnalysis, type AnalysisStage } from "../../hooks/use-analysis";
+import { AnalysisProgress } from "../results/AnalysisProgress";
+import { ReportView } from "../results/ReportView";
 import { stripMetadata, canvasCodec, toCaptureResult } from "../../privacy/redact";
 import type { CaptureMode, CaptureResult } from "../../types";
 
-export function CaptureFlow({ mode }: { mode: CaptureMode }) {
+export function CaptureFlow({ mode, patientId }: { mode: CaptureMode; patientId: string }) {
   const machine = useScanMachine();
   const runQualityGate = useQualityGate();
-  const classify = useClassifier();
+  const [stage, setStage] = useState<AnalysisStage | "quality">("quality");
+  const runAnalysis = useAnalysis(setStage);
 
   const process = useCallback(
     async (result: CaptureResult) => {
       const report = await runQualityGate(result.blob);
       if (!report.ok) {
-        machine.qualityRejected(report.issues[0]);
+        console.error("Image quality check failed:", report.issues, report);
+        machine.qualityRejected(report);
         return;
       }
+      setStage("quality");
       machine.captured(result);
-      // Independent second opinion runs off the main thread. The verdict merge
-      // that consumes these findings alongside the LLM output lands in Plan 4.
-      classify(result.blob).catch(() => machine.analysisFailed());
+      void runAnalysis(result, patientId);
     },
-    [machine, runQualityGate, classify],
+    [machine, runQualityGate, runAnalysis, patientId],
   );
 
   const onUpload = useCallback(
@@ -32,7 +35,8 @@ export function CaptureFlow({ mode }: { mode: CaptureMode }) {
       try {
         const clean = await stripMetadata(file, "image/jpeg", canvasCodec);
         await process(toCaptureResult(clean, mode, "upload"));
-      } catch {
+      } catch (err) {
+        console.error("Failed to strip metadata and process uploaded file:", err);
         machine.uploadFailed();
       }
     },
@@ -44,6 +48,20 @@ export function CaptureFlow({ mode }: { mode: CaptureMode }) {
       reason === "denied" ? machine.cameraDenied() : machine.noCamera(),
     [machine],
   );
+  const quality = machine.quality;
+
+  // Results view
+  if (machine.state === "results" && machine.verdict) {
+    return (
+      <ReportView
+        report={null}
+        verdict={machine.verdict}
+        onNewScan={machine.reset}
+        capturedBlob={machine.capture?.blob}
+        // TODO(plan-6): fetch scan by machine.scanId to render dimensions + facial zones from the stored report
+      />
+    );
+  }
 
   if (machine.state === "idle") {
     return (
@@ -67,25 +85,37 @@ export function CaptureFlow({ mode }: { mode: CaptureMode }) {
     <div className="flex flex-col items-center gap-4">
       {machine.state === "error" && (
         <>
-          {machine.error === "blur" && (
-            <p className="text-sm text-stone-600" role="status">
-              That photo looked blurry — hold steady and try again, or upload a clearer one.
-            </p>
-          )}
-          {machine.error === "low-light" && (
-            <p className="text-sm text-stone-600" role="status">
-              Lighting was too dark or bright — find even light, or upload a photo.
-            </p>
-          )}
-          {machine.error === "denied" && (
-            <p className="text-sm text-stone-600">
-              Camera unavailable — upload a photo instead.
-            </p>
-          )}
-          {machine.error === "upload-failed" && (
-            <p className="text-sm text-stone-600" role="status">
-              Couldn't process that photo — it may be corrupt or unsupported. Try another.
-            </p>
+          {quality ? (
+            <div
+              className="max-w-xl rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"
+              role="alert"
+            >
+              <p className="font-semibold">This photo cannot be analyzed yet.</p>
+              <p className="mt-1">{quality.guidance}</p>
+            </div>
+          ) : (
+            <>
+              {machine.error === "blur" && (
+                <p className="text-sm text-stone-600" role="status">
+                  That photo looked blurry — hold steady and try again, or upload a clearer one.
+                </p>
+              )}
+              {machine.error === "low-light" && (
+                <p className="text-sm text-stone-600" role="status">
+                  Lighting was too dark or bright — find even light, or upload a photo.
+                </p>
+              )}
+              {machine.error === "denied" && (
+                <p className="text-sm text-stone-600">
+                  Camera unavailable — upload a photo instead.
+                </p>
+              )}
+              {machine.error === "upload-failed" && (
+                <p className="text-sm text-stone-600" role="status">
+                  Couldn't process that photo — it may be corrupt or unsupported. Try another.
+                </p>
+              )}
+            </>
           )}
         </>
       )}
@@ -102,7 +132,7 @@ export function CaptureFlow({ mode }: { mode: CaptureMode }) {
           </button>
         </div>
       )}
-      {!isAnalysisError &&
+      {!isAnalysisError && machine.state !== "analyzing" &&
         (useUpload ? (
           <>
             <UploadDropzone onFile={onUpload} />
@@ -129,10 +159,7 @@ export function CaptureFlow({ mode }: { mode: CaptureMode }) {
             </button>
           </>
         ))}
-      {machine.state === "analyzing" && (
-        // TODO(plan-4): verdict merge + results; add a "New scan" reset affordance
-        <p className="text-sm text-clinical">Analyzing… (verdict merge lands in Plan 4)</p>
-      )}
+      {machine.state === "analyzing" && <AnalysisProgress stage={stage} />}
     </div>
   );
 }

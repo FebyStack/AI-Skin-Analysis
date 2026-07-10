@@ -36,6 +36,8 @@ export interface Verdict {
   findings: MergedFinding[];
   disclaimerShown: true;
   degraded?: "classifier-only" | "llm-only";
+  inconclusive?: true;
+  confidenceThreshold?: number;
 }
 
 export interface ScanResult {
@@ -74,16 +76,25 @@ export function isFinding(x: unknown): x is Finding {
 
 export type QualityIssue =
   | "too-dark"
-  | "overexposed"
+  | "too-bright"
   | "blur"
-  | "no-region";
+  | "low-resolution"
+  | "glare"
+  | "no-region"
+  | "unsupported-aspect-ratio";
 
 export interface QualityReport {
   ok: boolean;
   issues: QualityIssue[];
+  guidance: string;
   brightness: number; // 0..1 mean luma
   sharpness: number; // 0..1 relative
   regionFound: boolean;
+  width: number;
+  height: number;
+  aspectRatio: number;
+  glareRatio: number;
+  skinCoverage: number;
 }
 
 export interface ClassifierOutput {

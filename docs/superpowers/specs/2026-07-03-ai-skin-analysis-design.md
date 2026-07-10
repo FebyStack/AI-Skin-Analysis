@@ -1,6 +1,6 @@
 # AI Skin Analysis — Design Spec (v2 — Clinic Edition)
 
-**Date:** 2026-07-03 · **Revised:** 2026-07-04 (architecture pivot: local clinic deployment)
+**Date:** 2026-07-03 · **Revised:** 2026-07-09 (image quality + confidence policy)
 **Status:** v2 approved direction — supersedes the public-web architecture of v1 (see git history)
 **Target:** A local clinic tool. Runs on one clinic laptop via Docker, portable to another laptop by moving the Docker volume / a database dump. Not deployed publicly.
 
@@ -12,7 +12,7 @@ A clinic-local web tool that helps practitioners assess skin and decide whether/
 
 ### Analysis scope
 
-Unchanged from v1: broad, open taxonomy of visually-presenting conditions (inflammatory/allergic, infectious, acne/follicular, pigmentary, hair/scalp, nail) with the hard photographic line — no malignancy verdicts (red-flag escalation only), no claims requiring dermoscopy/palpation/systemic context, quality-gated images only.
+Unchanged from v1: broad, open taxonomy of visually-presenting conditions (inflammatory/allergic, infectious, acne/follicular, pigmentary, hair/scalp, nail) with the hard photographic line — no malignancy verdicts (red-flag escalation only), no claims requiring dermoscopy/palpation/systemic context, quality-gated images only. Poor-quality images never reach AI inference.
 
 ### Primary focus: facial skin analysis
 
@@ -77,6 +77,7 @@ Unchanged: zone-tagged findings (forehead, nose, cheeks, chin, periorbital) rend
 ### Reports
 
 - On-screen structured report per scan (summary → facial map → dimension scores → findings with dual-AI badges → trends → disclaimer).
+- **Inconclusive Analysis** state: if the merged prediction confidence is below the configured threshold (default/example: 70%), the UI does **not** present a predicted condition as the primary result. It shows "Inconclusive Analysis," explains that the image does not provide sufficient confidence for a reliable AI assessment, and recommends capturing another image or consulting a dermatologist. The raw prediction/report remains stored internally for auditing.
 - **Downloadable PDF** generated on-device, same content + disclaimer.
 - **Before/after comparison**: any two scans of the same patient side-by-side with per-dimension deltas.
 
@@ -102,6 +103,8 @@ Browser (on the laptop, or phones on the clinic LAN) → web → api → db
 
 **On-device ML stays in the browser** (unchanged from Plan 2): MediaPipe quality gate + ONNX classifier run client-side before anything is sent — the independent second opinion and the quality floor.
 
+**Pre-inference image quality gate:** every camera capture, QR capture, and upload is evaluated before classifier or LLM inference. Images are rejected when they are too blurry, too dark, too bright/overexposed, extremely low-resolution, missing a detectable skin region, affected by excessive glare, or in an unsupported aspect ratio. Rejection returns user-friendly guidance explaining why the image cannot be analyzed and how to retake it. The app never attempts inference on a rejected image.
+
 **Camera sources & QR remote capture:** capture works with the laptop's built-in webcam, an external USB camera (device picker via `enumerateDevices`), or **any phone/external device via QR pairing**: the desktop scan flow shows a QR code encoding `http://<lan-ip>:<port>/capture/<token>`; the phone scans it, opens a capture-only page (no login — the short-lived token *is* the authorization), runs the same camera + quality-gate flow, and uploads the photo to the api. The waiting desktop session receives the image (polling the capture-session endpoint) and continues into analysis as if captured locally. Tokens are single-use, expire in ~5 minutes, and grant upload-only access to that one capture session.
 
 **Portability:** move to another laptop via `docker compose down` → copy the `skin_data` volume (or `pg_dump` file) → `docker compose up` on the new machine. A `make backup` / `make restore` script pair wraps this.
@@ -124,12 +127,21 @@ settings:  key (pk), value — includes password_hash (bcrypt), consent_text_ver
 ```
 
 - **Images:** after analysis completes, the captured image is re-encoded to **JPEG**, downscaled to max 1280px on the long edge, quality ~0.8 → typically 100–300 KB, stored as `bytea` with the scan. One volume/dump therefore carries *everything* (photos included) between laptops.
+- **Audit retention:** low-confidence predictions are not shown as the primary result, but their underlying `report` and `classifier_findings` remain stored in the scan row for audit/review. Quality-rejected images are not analyzed and should not create an AI prediction.
 - **Deletion:** deleting a patient cascades to their scans/images; single scans deletable too.
 - The `report` JSONB is exactly the wire `AnalysisReport` contract, so history rendering reuses the same validators/components.
 
 ## 4. Dual-AI pipeline
 
 Unchanged from v1 in substance: on-device ONNX classifier (independent, never sees the LLM's answer) + Claude vision analysis + Claude critique pass (approved/amended/rejected, one retry, honest failure); merge rules with agreement badges, disagreement flags, and the safety override (lesion red-flags always escalate). Provider adapter keeps the LLM swappable via env config. Degraded modes: offline → classifier-only "partial"; classifier unavailable → LLM-only single-source.
+
+**Confidence policy:** a configurable confidence threshold gates what is presented to the practitioner/patient. Default/example threshold: **70%**. If every merged prediction is below the threshold, the report enters **Inconclusive Analysis**:
+
+- Do **not** present any predicted condition as the primary result.
+- Explain: "The uploaded image does not provide sufficient confidence for a reliable AI assessment."
+- Recommend capturing another clear image or consulting a dermatologist.
+- Still store the underlying prediction/report internally for auditing.
+- Do not weaken red-flag escalation: any attention-level lesion/red-flag finding remains escalated to professional care even if confidence handling changes the primary result presentation.
 
 ## 5. Privacy, consent, and guardrails (clinic reframe)
 
@@ -150,7 +162,8 @@ Tier 1 calibration data (dual-AI agreement outcomes) now accumulates naturally i
 
 - **Design system**: unchanged (clinical-clean + warm accents; provisional visuals).
 - **App shell**: Login → Patients list (search/add) → Patient page (profile, scan history timeline with thumbnails, "New scan", "Compare") → Scan flow (consent check → capture → quality gate → loading screen → report) → Report page (dimensions, facial map, findings, PDF download). The capture step offers **three sources**: this device's camera (with device picker for external/USB cameras), photo upload, or **"Use another device"** (QR code; the paired phone captures and the desktop flow continues automatically).
-- **Analysis loading screen** and **quality guidance dialog**: unchanged from v1 spec (staged real-pipeline progress; per-issue fix instructions in an `alertdialog`; upload fallback after repeated failures).
+- **Analysis loading screen** and **quality guidance dialog**: staged real-pipeline progress; per-issue fix instructions in an `alertdialog`; upload fallback after repeated failures. Quality guidance must name the rejection reason: blur, darkness, brightness/overexposure, low resolution, missing skin region, glare, or unsupported aspect ratio.
+- **Inconclusive report state**: title reads "Inconclusive Analysis"; condition-specific findings/maps are not treated as the primary result; the user sees the confidence explanation and retake/dermatologist recommendation.
 - **History with pictures**: patient timeline shows compressed JPEG thumbnails; tapping opens the stored report exactly as originally rendered; before/after picks any two scans.
 - **Responsive**: unchanged (phone + desktop; phones on the clinic LAN can run the capture flow).
 
@@ -162,7 +175,7 @@ Unchanged from v1 (live-region equivalents for capture guides, keyboard operabil
 
 - All existing unit tests carry over (60 passing at pivot time).
 - API container: contract tests with mocked Claude (schema/guardrails/critique), auth tests, image-compression tests (dimension + size bounds), patient/scan CRUD tests against a throwaway Postgres (docker compose test profile or testcontainers).
-- Frontend: history/compare components tested against golden report fixtures.
+- Frontend: history/compare components tested against golden report fixtures; quality gate tests cover blur, dark, bright, low-resolution, no skin region, glare, and unsupported aspect ratio; verdict/report tests cover the confidence-threshold "Inconclusive Analysis" path and verify low-confidence predictions are not presented as the primary result.
 - One end-to-end smoke: compose up → login → create patient → upload scan (mock LLM) → report stored → visible in history with thumbnail.
 
 ## 10. Deployment & operations

@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "dev:server": "dotenv -e .env -- tsx watch server/api/index.ts",
-    "dev:all": "npm run dev:server & npm run dev",
+    "dev:all": "concurrently -n \"db,api,web\" -c \"cyan,green,yellow\" \"docker compose up db\" \"npx tsx --env-file=.env server/api/index.ts\" \"vite\"",
+    "dev:lite": "concurrently -n \"api,web\" -c \"green,yellow\" \"npx tsx --env-file=.env server/api/index-lite.ts\" \"vite\"",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "test": "vitest run",
@@ -42,16 +43,18 @@
     "@types/supertest": "^6.0.3",
     "@vitejs/plugin-react": "^4.3.2",
     "autoprefixer": "^10.4.20",
+    "concurrently": "^10.0.3",
     "dotenv-cli": "^7.4.4",
     "esbuild": "^0.24.2",
     "eslint": "^9.12.0",
     "jsdom": "^25.0.1",
     "postcss": "^8.4.47",
+    "std-env": "^4.2.0",
     "supertest": "^7.2.2",
     "tailwindcss": "^3.4.13",
     "tsx": "^4.23.0",
     "typescript": "^5.6.2",
     "vite": "^5.4.8",
-    "vitest": "^2.1.2"
+    "vitest": "^2.1.9"
   }
 }

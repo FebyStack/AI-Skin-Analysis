@@ -28,7 +28,7 @@ export function SkinAnalysisPage() {
             ))}
           </div>
           <div className="mt-6 flex justify-center">
-            <CaptureFlow mode={mode} />
+            <CaptureFlow mode={mode} patientId="walk-in" /> {/* TODO(plan-6): real patient selection */}
           </div>
         </ConsentGate>
       </div>

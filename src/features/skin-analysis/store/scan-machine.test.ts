@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { useScanMachine } from "./scan-machine";
-import type { CaptureResult } from "../types";
+import type { CaptureResult, Verdict } from "../types";
 
 const sample: CaptureResult = {
   blob: new Blob(["x"], { type: "image/jpeg" }),
@@ -85,5 +85,50 @@ describe("scan machine — camera retry", () => {
     useScanMachine.getState().chooseUpload();
     useScanMachine.getState().chooseCamera();
     expect(useScanMachine.getState().captureSource).toBe("camera");
+  });
+});
+
+describe("scan machine — results", () => {
+  beforeEach(() => useScanMachine.getState().reset());
+
+  const verdict: Verdict = {
+    summary: "ok",
+    findings: [],
+    disclaimerShown: true,
+  };
+
+  it("resultsReady carries the verdict into the results state", () => {
+    useScanMachine.getState().grantConsent();
+    useScanMachine.getState().cameraReady();
+    useScanMachine.getState().captured(sample);
+    useScanMachine.getState().resultsReady(verdict, "scan-1");
+    expect(useScanMachine.getState().state).toBe("results");
+    expect(useScanMachine.getState().verdict?.summary).toBe("ok");
+    expect(useScanMachine.getState().scanId).toBe("scan-1");
+  });
+
+  it("resultsReady clears any previous quality rejection", () => {
+    useScanMachine.getState().qualityRejected({
+      ok: false,
+      issues: ["blur"],
+      guidance: "Too blurry.",
+      brightness: 0.5,
+      sharpness: 0,
+      regionFound: true,
+      width: 640,
+      height: 480,
+      aspectRatio: 4 / 3,
+      glareRatio: 0,
+      skinCoverage: 0.2,
+    });
+    useScanMachine.getState().resultsReady(verdict, "scan-1");
+    expect(useScanMachine.getState().quality).toBeNull();
+  });
+
+  it("reset clears the verdict and scanId", () => {
+    useScanMachine.getState().resultsReady(verdict, "scan-1");
+    useScanMachine.getState().reset();
+    expect(useScanMachine.getState().verdict).toBeNull();
+    expect(useScanMachine.getState().scanId).toBeNull();
   });
 });

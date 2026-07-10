@@ -1,6 +1,6 @@
 import express, { type Express } from "express";
 import type { AppDeps } from "./repos";
-import { verifyOrBootstrapPassword, makeSessionToken, requireSession } from "./auth";
+import { verifyOrBootstrapPassword, makeSessionToken, requireSession, parseCookies, isValidSession } from "./auth";
 import { handleAnalyze } from "../analysis/pipeline";
 import { compressToJpeg } from "./image";
 import { CaptureSessionStore } from "./capture-sessions";
@@ -25,6 +25,12 @@ export function createApp(deps: AppDeps): Express {
       `session=${token}; HttpOnly; Path=/; SameSite=Strict; Max-Age=43200`,
     );
     res.json({ ok: true });
+  });
+
+  app.get("/api/auth/status", (req, res) => {
+    const token = parseCookies(req.headers.cookie)["session"];
+    const authenticated = isValidSession(token, deps.sessionSecret, deps.now());
+    res.json({ authenticated });
   });
 
   const auth = requireSession(deps.sessionSecret, deps.now);
@@ -86,7 +92,23 @@ export function createApp(deps: AppDeps): Express {
 
   app.post("/api/analyze", auth, async (req, res) => {
     const { patientId, image, mime, mode, classifierFindings } = req.body ?? {};
-    const patient = await deps.patients.get(String(patientId));
+    
+    let patient;
+    if (patientId === "walk-in") {
+      const list = await deps.patients.list();
+      patient = list.find((p) => p.externalRef === "walk-in");
+      if (!patient) {
+        patient = await deps.patients.create({
+          name: "Walk-in Patient",
+          externalRef: "walk-in",
+          notes: "Auto-created placeholder for walk-in scans",
+          consentVersion: 1,
+        });
+      }
+    } else {
+      patient = await deps.patients.get(String(patientId));
+    }
+
     if (!patient) {
       res.status(404).json({ error: "patient not found" });
       return;
@@ -136,7 +158,13 @@ export function createApp(deps: AppDeps): Express {
   });
 
   app.get("/api/patients/:id/scans", auth, async (req, res) => {
-    res.json({ scans: await deps.scans.listByPatient(req.params.id) });
+    let id = req.params.id;
+    if (id === "walk-in") {
+      const list = await deps.patients.list();
+      const patient = list.find((p) => p.externalRef === "walk-in");
+      id = patient ? patient.id : id;
+    }
+    res.json({ scans: await deps.scans.listByPatient(id) });
   });
 
   app.get("/api/scans/:id/image", auth, async (req, res) => {
