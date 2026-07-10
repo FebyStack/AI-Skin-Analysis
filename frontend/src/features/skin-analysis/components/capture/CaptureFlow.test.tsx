@@ -3,7 +3,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { CaptureFlow } from "./CaptureFlow";
 import { useScanMachine } from "../../store/scan-machine";
-import { buildVerdict } from "../../ml/verdict";
+import { buildVerdict } from "@ai/shared/verdict";
 
 vi.mock("../../privacy/redact", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../privacy/redact")>();

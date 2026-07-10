@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { validateAnalysisReport, DIMENSION_KEYS, FACE_ZONES } from "./contract";
+import { validateAnalysisReport, DIMENSION_KEYS, FACE_ZONES } from "@shared/contract";
 import golden from "@ai/evaluation/fixtures/golden-report.json";
 
 describe("client contract mirror", () => {

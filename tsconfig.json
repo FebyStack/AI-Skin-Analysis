@@ -17,9 +17,10 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["frontend/src/*"],
-      "@ai/*": ["ai/*"]
+      "@ai/*": ["ai/*"],
+      "@shared/*": ["shared/*"]
     }
   },
-  "include": ["frontend/src", "ai"],
+  "include": ["frontend/src", "ai", "shared"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

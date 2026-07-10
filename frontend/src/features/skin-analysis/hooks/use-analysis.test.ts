@@ -3,7 +3,7 @@ import { runAnalysisPipeline, type AnalysisStage } from "./use-analysis";
 import type { CaptureResult, Finding } from "../types";
 import type { ScanWire } from "../api/analyze-client";
 import golden from "@ai/evaluation/fixtures/golden-report.json";
-import type { AnalysisReport } from "../api/contract";
+import type { AnalysisReport } from "@shared/contract";
 
 const capture: CaptureResult = {
   blob: new Blob(["x"], { type: "image/jpeg" }),

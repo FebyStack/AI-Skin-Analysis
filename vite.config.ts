@@ -9,6 +9,7 @@ export default defineConfig({
     alias: {
       "@": resolve(__dirname, "frontend/src"),
       "@ai": resolve(__dirname, "ai"),
+      "@shared": resolve(__dirname, "shared"),
     },
   },
   build: {

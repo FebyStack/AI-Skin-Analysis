@@ -1,5 +1,5 @@
-import type { Finding, MergedFinding, Severity, Verdict } from "../types";
-import type { AnalysisReport, WireFinding } from "../api/contract";
+import type { Finding, MergedFinding, Severity, Verdict } from "../../shared/types";
+import type { AnalysisReport, WireFinding } from "../../shared/contract";
 
 export const DEFAULT_CONFIDENCE_THRESHOLD = 0.7;
 

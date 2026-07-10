@@ -1,5 +1,5 @@
 import type { CaptureResult, Finding } from "../types";
-import type { AnalysisReport } from "./contract";
+import type { AnalysisReport } from "@shared/contract";
 
 export class AnalyzeAuthError extends Error {
   constructor() {

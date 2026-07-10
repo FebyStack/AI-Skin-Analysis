@@ -1,5 +1,5 @@
-import { createOnnxInference, type InferenceFn } from "./classifier";
-import { runClassification, type ClassifyRequest } from "./worker-protocol";
+import { createOnnxInference, type InferenceFn } from "@ai/classifier/classifier";
+import { runClassification, type ClassifyRequest } from "@ai/classifier/worker-protocol";
 
 let inferPromise: Promise<InferenceFn> | null = null;
 

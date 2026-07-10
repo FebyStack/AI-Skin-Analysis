@@ -1,4 +1,4 @@
-import { validateAnalysisReport, type AnalysisReport } from "./contract";
+import { validateAnalysisReport, type AnalysisReport } from "../../shared/contract";
 import { extractJson } from "./providers/common";
 
 export type CritiqueOutcome =

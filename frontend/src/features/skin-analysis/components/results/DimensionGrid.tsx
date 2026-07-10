@@ -1,4 +1,4 @@
-import { DIMENSION_KEYS, PROXY_DIMENSIONS, type AnalysisReport } from "../../api/contract";
+import { DIMENSION_KEYS, PROXY_DIMENSIONS, type AnalysisReport } from "@shared/contract";
 
 const LABELS: Record<(typeof DIMENSION_KEYS)[number], string> = {
   "hydration-appearance": "Hydration",

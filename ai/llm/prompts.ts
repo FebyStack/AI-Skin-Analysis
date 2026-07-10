@@ -1,4 +1,4 @@
-import { DIMENSION_KEYS, FACE_ZONES, PROXY_DIMENSIONS } from "./contract";
+import { DIMENSION_KEYS, FACE_ZONES, PROXY_DIMENSIONS } from "../../shared/contract";
 
 export const PROMPT_VERSION = 2;
 

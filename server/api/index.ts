@@ -4,7 +4,7 @@ import path from "node:path";
 import { Pool } from "pg";
 import { createApp } from "./app";
 import { PgPatientRepo, PgScanRepo, PgSettingsRepo } from "./pg-repos";
-import { callGemini } from "../analysis/providers/gemini";
+import { callGemini } from "../../ai/llm/providers/gemini";
 
 async function main() {
   const pool = new Pool({

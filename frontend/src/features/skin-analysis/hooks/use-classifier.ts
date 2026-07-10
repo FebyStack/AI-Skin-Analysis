@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import type { Finding } from "../types";
-import type { ClassifyRequest, ClassifyResponse } from "../ml/worker-protocol";
+import type { ClassifyRequest, ClassifyResponse } from "@ai/classifier/worker-protocol";
 
 async function pixelsFromBlob(blob: Blob) {
   const bitmap = await createImageBitmap(blob);

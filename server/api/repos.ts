@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import type { AnalysisReport } from "../analysis/contract";
-import type { PipelineDeps } from "../analysis/pipeline";
+import type { AnalysisReport } from "../../shared/contract";
+import type { PipelineDeps } from "../../ai/llm/pipeline";
 
 export interface Patient {
   id: string;

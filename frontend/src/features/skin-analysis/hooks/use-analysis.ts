@@ -2,7 +2,7 @@ import { useCallback } from "react";
 import type { CaptureResult, Finding, Verdict } from "../types";
 import type { ScanWire } from "../api/analyze-client";
 import { analyzeCapture } from "../api/analyze-client";
-import { buildVerdict } from "../ml/verdict";
+import { buildVerdict } from "@ai/shared/verdict";
 import { useClassifier } from "./use-classifier";
 import { useScanMachine } from "../store/scan-machine";
 

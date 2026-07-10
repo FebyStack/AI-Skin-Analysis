@@ -6,8 +6,8 @@ import {
   parseConfidenceThreshold,
   INCONCLUSIVE_DETAIL,
 } from "./verdict";
-import type { Finding } from "../types";
-import type { AnalysisReport } from "../api/contract";
+import type { Finding } from "../../shared/types";
+import type { AnalysisReport } from "../../shared/contract";
 import golden from "@ai/evaluation/fixtures/golden-report.json";
 
 const report = golden as unknown as AnalysisReport;

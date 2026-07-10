@@ -1,4 +1,4 @@
-import type { AnalysisReport } from "./contract";
+import type { AnalysisReport } from "../../shared/contract";
 
 export const MAX_IMAGE_BYTES = 8 * 1024 * 1024; // 8MB decoded
 const ALLOWED_MIMES = ["image/jpeg", "image/png", "image/webp"] as const;

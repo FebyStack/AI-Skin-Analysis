@@ -1,5 +1,5 @@
 import type { Pool } from "pg";
-import type { AnalysisReport } from "../analysis/contract";
+import type { AnalysisReport } from "../../shared/contract";
 import type { Patient, PatientRepo, ScanRecord, ScanRepo, SettingsRepo } from "./repos";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

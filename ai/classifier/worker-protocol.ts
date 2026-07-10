@@ -1,4 +1,4 @@
-import type { Finding } from "../types";
+import type { Finding } from "../../shared/types";
 import type { InferenceFn } from "./classifier";
 import { logitsToFindings, CLASSIFIER_THRESHOLD } from "./classifier";
 

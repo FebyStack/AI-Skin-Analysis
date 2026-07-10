@@ -1,4 +1,4 @@
-import type { Severity } from "../types";
+import type { Severity } from "../../shared/types";
 
 export interface LabelInfo {
   id: string;

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { PROMPT_VERSION, systemPrompt, userPrompt } from "./prompts";
-import { DIMENSION_KEYS, FACE_ZONES, PROXY_DIMENSIONS } from "./contract";
+import { DIMENSION_KEYS, FACE_ZONES, PROXY_DIMENSIONS } from "../../shared/contract";
 
 describe("prompts", () => {
   it("has version 2 (clinic vocabulary)", () => {

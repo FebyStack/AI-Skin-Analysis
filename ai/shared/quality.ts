@@ -1,4 +1,4 @@
-import type { QualityIssue, QualityReport } from "../types";
+import type { QualityIssue, QualityReport } from "../../shared/types";
 
 export const QUALITY_THRESHOLDS = {
   minBrightness: 0.15,

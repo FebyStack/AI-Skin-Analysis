@@ -1,7 +1,7 @@
 import express, { type Express } from "express";
 import type { AppDeps } from "./repos";
 import { verifyOrBootstrapPassword, makeSessionToken, requireSession, parseCookies, isValidSession } from "./auth";
-import { handleAnalyze } from "../analysis/pipeline";
+import { handleAnalyze } from "../../ai/llm/pipeline";
 import { compressToJpeg } from "./image";
 import { CaptureSessionStore } from "./capture-sessions";
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { pigmentationMap, rednessMap, textureMap } from "../../ml/derived-views";
+import { pigmentationMap, rednessMap, textureMap } from "@ai/shared/derived-views";
 
 export const DERIVED_LABELS = {
   original: "Original",

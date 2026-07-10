@@ -5,7 +5,7 @@
 import { randomBytes } from "node:crypto";
 import { createApp } from "./app";
 import { MemoryPatientRepo, MemoryScanRepo, MemorySettingsRepo } from "./repos";
-import { callGemini } from "../analysis/providers/gemini";
+import { callGemini } from "../../ai/llm/providers/gemini";
 
 async function main() {
   const settings = new MemorySettingsRepo();

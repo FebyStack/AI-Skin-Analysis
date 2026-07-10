@@ -2,9 +2,9 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ReportView } from "./ReportView";
-import { buildVerdict } from "../../ml/verdict";
+import { buildVerdict } from "@ai/shared/verdict";
 import golden from "@ai/evaluation/fixtures/golden-report.json";
-import type { AnalysisReport } from "../../api/contract";
+import type { AnalysisReport } from "@shared/contract";
 
 const report = golden as unknown as AnalysisReport;
 

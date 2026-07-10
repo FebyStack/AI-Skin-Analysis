@@ -1,4 +1,4 @@
-import type { Finding } from "../types";
+import type { Finding } from "../../shared/types";
 import { labelAt, LABELS } from "./labels";
 
 export function softmax(logits: number[]): number[] {

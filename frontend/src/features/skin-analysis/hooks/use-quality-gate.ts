@@ -7,7 +7,7 @@ import {
   estimateSkinCoverage,
   meanLuma,
   QUALITY_THRESHOLDS,
-} from "../ml/quality";
+} from "@ai/shared/quality";
 
 export function reportFromPixels(
   rgba: Uint8ClampedArray,

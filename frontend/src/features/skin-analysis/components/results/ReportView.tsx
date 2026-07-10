@@ -1,10 +1,10 @@
 import type { Verdict } from "../../types";
-import type { AnalysisReport } from "../../api/contract";
+import type { AnalysisReport } from "@shared/contract";
 import { FacialMap } from "./FacialMap";
 import { DimensionGrid } from "./DimensionGrid";
 import { FindingsList } from "./FindingsList";
 import { DerivedViews } from "./DerivedViews";
-import { INCONCLUSIVE_DETAIL } from "../../ml/verdict";
+import { INCONCLUSIVE_DETAIL } from "@ai/shared/verdict";
 
 export function ReportView({
   report,

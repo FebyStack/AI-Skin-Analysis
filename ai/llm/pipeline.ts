@@ -1,4 +1,4 @@
-import { validateAnalysisReport, type AnalysisReport } from "./contract";
+import { validateAnalysisReport, type AnalysisReport } from "../../shared/contract";
 import { validateInput, checkOutputGuardrails, type AnalyzeInput } from "./guardrails";
 import { systemPrompt, userPrompt, PROMPT_VERSION } from "./prompts";
 import { extractJson, ProviderAuthError } from "./providers/common";
