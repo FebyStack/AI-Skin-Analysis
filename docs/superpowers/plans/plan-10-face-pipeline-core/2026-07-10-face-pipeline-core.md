@@ -1249,6 +1249,139 @@ export function buildFaceReport(
 
 ---
 
+### Task 12 (v3.1): ModelManager + Classifier interface + MockClassifier (+ reserved ONNX/update seams)
+
+**Files:** Create `ai/face/models/manager.ts` · Test `ai/face/models/manager.test.ts`
+
+- [ ] **Step 1 — failing test:**
+
+```typescript
+// ai/face/models/manager.test.ts
+import { describe, it, expect } from "vitest";
+import { ModelManager, MockClassifier, type ModelDescriptor } from "./manager";
+
+const desc = (over: Partial<ModelDescriptor> = {}): ModelDescriptor => ({
+  name: "face-landmarker", version: "1.0.0", task: "landmarks", framework: "mediapipe",
+  files: [{ path: "face_landmarker.task", sha256: "abc", bytes: 1 }],
+  createdAt: "2026-07-10", ...over,
+});
+
+describe("ModelManager", () => {
+  it("activates a descriptor via its framework loader and reports versions", async () => {
+    const mm = new ModelManager();
+    mm.registerLoader("mediapipe", async (d) => ({ loaded: d.name }));
+    await mm.activate(desc());
+    expect(mm.get("face-landmarker")).toEqual({ loaded: "face-landmarker" });
+    expect(mm.versions()).toEqual({ "face-landmarker": "1.0.0" });
+  });
+  it("rejects activation without a registered loader", async () => {
+    const mm = new ModelManager();
+    await expect(mm.activate(desc({ framework: "onnx" }))).rejects.toThrow(/loader/i);
+  });
+  it("re-activation replaces the version atomically", async () => {
+    const mm = new ModelManager();
+    mm.registerLoader("mediapipe", async (d) => d.version);
+    await mm.activate(desc());
+    await mm.activate(desc({ version: "1.1.0" }));
+    expect(mm.versions()["face-landmarker"]).toBe("1.1.0");
+  });
+});
+
+describe("MockClassifier", () => {
+  it("is deterministic and honest about being a mock", async () => {
+    const c = new MockClassifier(["A", "B"]);
+    const r1 = await c.classify({ data: new Uint8ClampedArray(4), width: 1, height: 1 });
+    const r2 = await c.classify({ data: new Uint8ClampedArray(4), width: 1, height: 1 });
+    expect(r1).toEqual(r2);
+    expect(r1.model.name).toMatch(/mock/i);
+    expect(r1.top[0].confidence).toBeLessThanOrEqual(1);
+  });
+});
+```
+
+- [ ] **Step 2 — run, FAIL.**
+- [ ] **Step 3 — implement:**
+
+```typescript
+// ai/face/models/manager.ts
+// v3.1 inference abstraction layer. ModelManager owns model lifecycle on the client.
+// Loaders are per-framework; adding ONNX later = registerLoader("onnx", ...), zero refactor.
+import type { Pixels } from "../types";
+
+export interface ModelDescriptor {
+  name: string;
+  version: string;
+  task: "landmarks" | "classification" | "dimension-scoring";
+  framework: "mediapipe" | "onnx" | "mock" | "heuristic";
+  files: { path: string; sha256: string; bytes: number }[];
+  inputSpec?: { width: number; height: number; channels: number; normalize?: string };
+  classes?: string[];
+  metrics?: Record<string, number> | null;
+  datasetManifestSha256?: string | null;
+  createdAt?: string;
+  notes?: string;
+}
+
+export type ModelLoader = (d: ModelDescriptor) => Promise<unknown>;
+
+export class ModelManager {
+  private loaders = new Map<string, ModelLoader>();
+  private active = new Map<string, { descriptor: ModelDescriptor; handle: unknown }>();
+
+  registerLoader(framework: ModelDescriptor["framework"], loader: ModelLoader): void {
+    this.loaders.set(framework, loader);
+  }
+  async activate(descriptor: ModelDescriptor): Promise<void> {
+    const loader = this.loaders.get(descriptor.framework);
+    if (!loader) throw new Error(`no loader registered for framework "${descriptor.framework}"`);
+    const handle = await loader(descriptor);   // load fully BEFORE switching (atomic)
+    this.active.set(descriptor.name, { descriptor, handle });
+  }
+  get<T = unknown>(name: string): T | null {
+    return (this.active.get(name)?.handle as T) ?? null;
+  }
+  descriptor(name: string): ModelDescriptor | null {
+    return this.active.get(name)?.descriptor ?? null;
+  }
+  versions(): Record<string, string> {
+    return Object.fromEntries([...this.active.values()].map((m) => [m.descriptor.name, m.descriptor.version]));
+  }
+}
+
+// ---- Classification seam (future lesion module + learned analyzers) ----
+export interface ClassificationOutput {
+  top: { label: string; confidence: number }[];
+  model: { name: string; version: string };
+}
+export interface Classifier {
+  classify(pixels: Pixels): Promise<ClassificationOutput>;
+}
+
+/** Dev/test classifier — deterministic, no weights, no downloads. Replaces any "untrained dev model". */
+export class MockClassifier implements Classifier {
+  constructor(private labels: string[]) {}
+  async classify(): Promise<ClassificationOutput> {
+    const top = this.labels.map((label, i) => ({
+      label, confidence: Math.max(0.05, 0.9 - i * 0.85 / Math.max(1, this.labels.length - 1)),
+    }));
+    return { top, model: { name: "mock-classifier", version: "0.0.0" } };
+  }
+}
+
+// Reserved (Phase D implements; interface fixed now so nothing refactors later):
+export interface ModelUpdateService {
+  sync(): Promise<Record<string, string>>;   // manifest → verified cache → activate; returns versions
+  rollbackLocal(name: string): Promise<boolean>; // reactivate previous cached version
+}
+// Reserved (future): class OnnxClassifier implements Classifier — onnxruntime-web loader under framework "onnx".
+```
+
+- [ ] **Step 4 — run, PASS + typecheck.** **Step 5 — commit** `feat(face): ModelManager + Classifier seam + MockClassifier (v3.1 abstraction layer)`
+
+Also (same task): Task 11's `buildFaceReport` callers pass `modelVersions` from `ModelManager.versions()` once Phase B wires the landmarker through a loader — Phase A tests keep passing literals.
+
+---
+
 ## Self-review checklist
 - [ ] Every spec §3 stage present: quality ✓ (T5) · landmarks/zones ✓ (T3) · skin-region extraction ✓ (masks, T3/T4) · per-image analysis ✓ (T11) · merge ✓ (T9) · report ✓ (T11)
 - [ ] All 11 result dimensions + overall + confidence + recommendations + disclaimer ✓ (T1, T6–T10)
