@@ -34,3 +34,5 @@ data/
 .DS_Store
 __pycache__/
 *.task
+ai/datasets/
+ai/models/**/*.pt
