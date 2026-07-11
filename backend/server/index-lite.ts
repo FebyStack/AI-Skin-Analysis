@@ -4,6 +4,7 @@
  */
 import { randomBytes } from "node:crypto";
 import { createApp } from "../app/app";
+import { lesionProviderFromEnv } from "../modules/analysis/lesion-provider";
 import { MemoryPatientRepo } from "../modules/patients/repository";
 import { MemoryScanRepo } from "../modules/analysis/repository";
 import { MemorySettingsRepo } from "../modules/settings/repository";
@@ -39,6 +40,7 @@ async function main() {
         return result.text;
       },
     },
+    lesion: lesionProviderFromEnv(),
     sessionSecret,
     now: () => Date.now(),
   });

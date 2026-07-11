@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import path from "node:path";
 import { Pool } from "pg";
 import { createApp } from "../app/app";
+import { lesionProviderFromEnv } from "../modules/analysis/lesion-provider";
 import { PgPatientRepo } from "../modules/patients/repository";
 import { PgScanRepo } from "../modules/analysis/repository";
 import { PgSettingsRepo } from "../modules/settings/repository";
@@ -50,6 +51,7 @@ async function main() {
         return result.text;
       },
     },
+    lesion: lesionProviderFromEnv(),
     sessionSecret,
     now: () => Date.now(),
   });
