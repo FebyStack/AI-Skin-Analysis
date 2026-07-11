@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ConsentGate } from "./components/consent/ConsentGate";
 import { CaptureFlow } from "./components/capture/CaptureFlow";
+import { LesionScanFlow } from "./components/lesion/LesionScanFlow";
 import type { CaptureMode } from "./types";
 
 export function SkinAnalysisPage() {
@@ -28,7 +29,11 @@ export function SkinAnalysisPage() {
             ))}
           </div>
           <div className="mt-6 flex justify-center">
-            <CaptureFlow mode={mode} patientId="walk-in" /> {/* TODO(plan-6): real patient selection */}
+            {mode === "closeup" ? (
+              <LesionScanFlow />
+            ) : (
+              <CaptureFlow mode={mode} patientId="walk-in" /> /* TODO(plan-6): real patient selection */
+            )}
           </div>
         </ConsentGate>
       </div>
