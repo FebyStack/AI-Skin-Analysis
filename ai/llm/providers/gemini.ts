@@ -20,15 +20,10 @@ export async function callGemini(
       contents: [
         {
           role: "user",
-          parts: [
-            { text: req.user },
-            {
-              inlineData: {
-                data: req.imageB64,
-                mimeType: req.mime,
-              },
-            },
-          ],
+          // Image is optional: text-only calls (e.g. lesion-JSON explanation) omit it.
+          parts: req.imageB64
+            ? [{ text: req.user }, { inlineData: { data: req.imageB64, mimeType: req.mime } }]
+            : [{ text: req.user }],
         },
       ],
       config: {

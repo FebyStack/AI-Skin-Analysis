@@ -11,13 +11,39 @@ async function login(app: ReturnType<typeof createApp>) {
 }
 
 describe("POST /api/lesion", () => {
-  it("returns the analysis for an authenticated request (fake provider)", async () => {
+  it("returns analysis + builtin explanation when no online explainer is wired", async () => {
     const app = createApp(makeTestDeps());
     const cookie = await login(app);
     const res = await request(app).post("/api/lesion").set("Cookie", cookie).send({ image: "aGk=", mime: "image/png" });
     expect(res.status).toBe(200);
     expect(res.body.analysis.lesions[0].classification.predicted).toBe("MEL");
-    expect(res.body.analysis.model.classifier).toBe("efficientnet_b1-isic2019");
+    // golden fixture is MEL → builtin explanation must force referral
+    expect(res.body.explanation.source).toBe("builtin");
+    expect(res.body.explanation.referral.recommended).toBe(true);
+    expect(res.body.explanation.disclaimer).toMatch(/not a diagnosis/i);
+  });
+
+  it("uses the online explainer when it succeeds", async () => {
+    const geminiExplanation = {
+      patientSummary: "The analysis suggests melanoma features; a professional must confirm.",
+      education: "Melanoma education.",
+      referral: { recommended: true, urgency: "urgent" as const, reason: "possible melanoma" },
+      disclaimer: "This is not a diagnosis.",
+      source: "gemini" as const,
+      promptVersion: 1,
+    };
+    const app = createApp(makeTestDeps({ lesionExplain: async () => geminiExplanation }));
+    const cookie = await login(app);
+    const res = await request(app).post("/api/lesion").set("Cookie", cookie).send({ image: "aGk=" });
+    expect(res.body.explanation.source).toBe("gemini");
+  });
+
+  it("falls back to builtin when the online explainer fails", async () => {
+    const app = createApp(makeTestDeps({ lesionExplain: async () => { throw new Error("offline"); } }));
+    const cookie = await login(app);
+    const res = await request(app).post("/api/lesion").set("Cookie", cookie).send({ image: "aGk=" });
+    expect(res.status).toBe(200);
+    expect(res.body.explanation.source).toBe("builtin");
   });
 
   it("401 without a session", async () => {

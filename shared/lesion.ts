@@ -20,6 +20,47 @@ export interface LesionAnalysis {
   model: { classifier: string; detector: string };
 }
 
+// Malignant / concerning classes in the 6-class PAD-UFES/ISIC scheme.
+// MEL melanoma · BCC basal-cell · SCC squamous-cell carcinoma (all malignant).
+export const LESION_MALIGNANT = ["MEL", "BCC", "SCC"] as const;
+
+export type ReferralUrgency = "routine" | "soon" | "urgent";
+
+export interface LesionExplanation {
+  patientSummary: string;
+  education: string;
+  referral: { recommended: boolean; urgency: ReferralUrgency; reason: string };
+  disclaimer: string;
+  source: "gemini" | "builtin";
+  promptVersion: number;
+}
+
+const URGENCIES: readonly string[] = ["routine", "soon", "urgent"];
+
+export function validateLesionExplanation(
+  x: unknown,
+): { ok: true; explanation: LesionExplanation } | { ok: false; errors: string[] } {
+  const errors: string[] = [];
+  if (typeof x !== "object" || x === null) return { ok: false, errors: ["not an object"] };
+  const e = x as Record<string, unknown>;
+  if (typeof e.patientSummary !== "string" || e.patientSummary.length === 0) errors.push("patientSummary missing");
+  if (typeof e.education !== "string" || e.education.length === 0) errors.push("education missing");
+  const ref = e.referral as Record<string, unknown> | undefined;
+  if (typeof ref?.recommended !== "boolean" || !URGENCIES.includes(ref?.urgency as string) || typeof ref?.reason !== "string")
+    errors.push("referral malformed");
+  if (typeof e.disclaimer !== "string" || e.disclaimer.length === 0) errors.push("disclaimer missing");
+  if (e.source !== "gemini" && e.source !== "builtin") errors.push("source malformed");
+  if (typeof e.promptVersion !== "number") errors.push("promptVersion missing");
+  return errors.length === 0 ? { ok: true, explanation: x as LesionExplanation } : { ok: false, errors };
+}
+
+// Does the analysis surface a malignant class with meaningful weight anywhere in top-k?
+export function hasMalignantSignal(analysis: LesionAnalysis, floor = 0.15): boolean {
+  return analysis.lesions.some((l) =>
+    l.classification.top.some((t) => (LESION_MALIGNANT as readonly string[]).includes(t.label) && t.confidence >= floor),
+  );
+}
+
 const in01 = (n: unknown): n is number =>
   typeof n === "number" && n >= 0 && n <= 1 && !Number.isNaN(n);
 
