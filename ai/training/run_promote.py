@@ -17,9 +17,9 @@ def main() -> None:
     production_meta = None
     prod_json = production / "model.json"
     if prod_json.exists():
+        # A PRESENT production model with no metrics is suspicious — decide_promotion
+        # blocks it ("metrics incomplete") rather than silently treating it as absent.
         production_meta = json.loads(prod_json.read_text())
-        if not production_meta.get("metrics"):
-            production_meta = None  # dev/untrained placeholder never blocks promotion
     ok, reason = decide_promotion(candidate_meta, production_meta)
     print(reason)
     if not ok:
