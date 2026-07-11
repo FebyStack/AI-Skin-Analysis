@@ -1,0 +1,17 @@
+{
+  "name": "efficientnet-b0",
+  "version": "0.0.0-dev-untrained",
+  "classes": [
+    "Melanoma",
+    "Nevus",
+    "Basal Cell Carcinoma",
+    "Actinic Keratosis",
+    "Benign Keratosis",
+    "Dermatofibroma",
+    "Vascular Lesion",
+    "Squamous Cell Carcinoma"
+  ],
+  "img_size": 224,
+  "metrics": null,
+  "dataset_manifest_sha256": null
+}
