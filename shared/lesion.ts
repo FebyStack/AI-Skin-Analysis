@@ -24,6 +24,14 @@ export interface LesionAnalysis {
 // MEL melanoma · BCC basal-cell · SCC squamous-cell carcinoma (all malignant).
 export const LESION_MALIGNANT = ["MEL", "BCC", "SCC"] as const;
 
+// Persisted lesion scan report (stored in scans.report JSONB; distinguishes from
+// the face AnalysisReport by `kind`).
+export interface LesionScanReport {
+  kind: "lesion";
+  analysis: LesionAnalysis;
+  explanation: LesionExplanation;
+}
+
 export type ReferralUrgency = "routine" | "soon" | "urgent";
 
 export interface LesionExplanation {

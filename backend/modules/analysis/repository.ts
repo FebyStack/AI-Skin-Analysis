@@ -1,7 +1,12 @@
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import type { AnalysisReport } from "../../../shared/contract";
+import type { LesionScanReport } from "../../../shared/lesion";
 import { isValidUuid } from "../../shared/pg";
+
+// A stored report is either the face AnalysisReport or a lesion report (JSONB is
+// shape-agnostic; `kind` on the lesion report disambiguates on read).
+export type StoredReport = AnalysisReport | LesionScanReport;
 
 export interface ScanRecord {
   id: string;
@@ -11,7 +16,7 @@ export interface ScanRecord {
   imageJpeg: Uint8Array;
   imageWidth: number;
   imageHeight: number;
-  report: AnalysisReport | null;
+  report: StoredReport | null;
   partial: boolean;
   classifierFindings: unknown[];
   promptVersion: number | null;
