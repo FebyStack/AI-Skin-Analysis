@@ -1,28 +1,10 @@
 // shared/face.test.ts
+import { goldenFaceReport } from "./testing/face-fixtures";
 import { describe, it, expect } from "vitest";
 import {
   FACE_ANGLES, FACE_DIMENSIONS, FACE_ANALYSIS_ZONES,
-  validateFaceReport, type FaceReport,
+  validateFaceReport,
 } from "./face";
-
-export function goldenFaceReport(): FaceReport {
-  const dim = (evidence: string) => ({
-    score: 0.4, confidence: 0.8,
-    perZone: [{ zone: "forehead" as const, score: 0.4 }],
-    evidence,
-  });
-  return {
-    kind: "face-v2",
-    overall: { score: 0.45, confidence: 0.8 },
-    dimensions: Object.fromEntries(FACE_DIMENSIONS.map((d) => [d, dim(`${d} via zone pixel metrics`)])) as FaceReport["dimensions"],
-    capture: { angles: [{ angle: "front", quality: { ok: true, issues: [] } }] },
-    recommendations: { skincare: ["Daily broad-spectrum sunscreen."], treatments: [] },
-    explanation: null,
-    disclaimer: "This is not a diagnosis.",
-    pipelineVersion: 1,
-    modelVersions: { "face-landmarker": "dev" },
-  };
-}
 
 describe("face contract", () => {
   it("has 5 required angles and 11 dimensions", () => {
