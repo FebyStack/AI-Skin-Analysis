@@ -1,4 +1,4 @@
-"""Map each source's label vocabulary to the 8 canonical classes (must match shared/contract LESION_CLASSES)."""
+"""Map each source's label vocabulary to the 8 canonical ISIC-2019 classes; keep in sync with the future lesion-module contract when it lands."""
 CANONICAL = [
     "Melanoma", "Nevus", "Basal Cell Carcinoma", "Actinic Keratosis",
     "Benign Keratosis", "Dermatofibroma", "Vascular Lesion", "Squamous Cell Carcinoma",

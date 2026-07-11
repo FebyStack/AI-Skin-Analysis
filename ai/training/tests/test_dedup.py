@@ -10,6 +10,17 @@ def test_phash_stable(tmp_path):
     p = tmp_path / "a.png"; _save(p, 100)
     assert phash_hex(p) == phash_hex(p)
 
+def test_nan_source_id_is_not_a_duplicate(tmp_path):
+    # pandas yields NaN for missing source_id; NaN is truthy and must not self-match
+    rows = []
+    rng = np.random.default_rng(0)
+    nan = float("nan")  # shared object, like pandas' np.nan singleton (identity self-matches in a set)
+    for name in ("a.png", "b.png"):  # visually distinct (different random noise)
+        Image.fromarray(rng.integers(0, 255, (64, 64, 3), np.uint8)).save(tmp_path / name)
+        rows.append({"path": str(tmp_path / name), "source_id": nan})
+    keep, dropped = find_duplicates(rows, hamming_max=4)
+    assert len(keep) == 2 and not dropped
+
 def test_finds_near_and_id_duplicates(tmp_path):
     rows = []
     for name, lum, sid in [("a.png", 100, "S1"), ("b.png", 101, "S2"), ("c.png", 10, "S1")]:

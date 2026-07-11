@@ -12,7 +12,7 @@ def main() -> None:
     cand_json = candidate / "model.json"
     if not cand_json.exists():
         print(f"No candidate model at {cand_json} — run `make -C ai train` first.")
-        return
+        sys.exit(1)
     candidate_meta = json.loads(cand_json.read_text())
     production_meta = None
     prod_json = production / "model.json"

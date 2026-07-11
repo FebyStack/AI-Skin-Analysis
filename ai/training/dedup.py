@@ -16,6 +16,7 @@ def find_duplicates(rows: list[dict], hamming_max: int = 4) -> tuple[list[dict],
     dropped: list[dict] = []
     for row in rows:
         sid = row.get("source_id")
+        sid = sid.strip() if isinstance(sid, str) and sid.strip() else None  # pandas NaN etc. → no id
         h = imagehash.hex_to_hash(phash_hex(row["path"]))
         if sid and sid in seen_ids:
             dropped.append({**row, "reason": "source_id"}); continue
