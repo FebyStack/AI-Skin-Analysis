@@ -7,7 +7,7 @@ export const QUALITY_THRESHOLDS = {
   minDimensionPx: 320,
   minSkinCoverage: 0.03,
   minAspectRatio: 0.6,
-  maxAspectRatio: 1.8,
+  maxAspectRatio: 1.4, // 4:3 landscape ok; 3:2+ unsupported (face captures are portrait-ish)
   maxGlareRatio: 0.08,
 };
 

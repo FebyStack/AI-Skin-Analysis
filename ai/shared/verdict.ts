@@ -72,6 +72,13 @@ const PARTIAL_SUMMARY =
 const INCONCLUSIVE_SUMMARY =
   "Inconclusive Analysis";
 
+// Classifier-only (partial) verdicts must keep saying "partial" even when the
+// confidence policy marks them inconclusive — the user still needs to know the
+// AI review never ran.
+const INCONCLUSIVE_PARTIAL_SUMMARY =
+  "Inconclusive partial analysis — the AI review is pending and the on-device " +
+  "findings are low-confidence. Re-analyze when online or capture a clearer image.";
+
 export const INCONCLUSIVE_DETAIL =
   "The uploaded image does not provide sufficient confidence for a reliable AI assessment. Capture another clear, well-lit image or consult a dermatologist.";
 
@@ -103,7 +110,7 @@ function applyConfidencePolicy(verdict: Verdict, threshold: number): Verdict {
   }
   return {
     ...verdict,
-    summary: INCONCLUSIVE_SUMMARY,
+    summary: verdict.degraded === "classifier-only" ? INCONCLUSIVE_PARTIAL_SUMMARY : INCONCLUSIVE_SUMMARY,
     inconclusive: true,
     confidenceThreshold: normalized,
   };
