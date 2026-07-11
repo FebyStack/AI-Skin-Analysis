@@ -29,7 +29,11 @@ Gemini (`@google/genai`, default `gemini-2.5-flash` for primary + critique), key
 
 ## Plan status
 
-**Next up (v3 pivot, 2026-07-10):** whole-face multi-angle aesthetic analysis PWA — master architecture in `docs/superpowers/specs/2026-07-10-face-analysis-architecture.md` (guided 5-angle capture, on-device MediaPipe landmarks + per-dimension CV analyzers, cross-angle merge, offline-first PWA, manual model lifecycle w/ rollback). Phase plans A–D still to be written. **Parked:** the lesion-classifier work (spec `2026-07-10-ai-classifier-architecture.md`, Plans 7–9, branch `feat/ai-classifier` @ e1b0537) is now the FUTURE Skin Spot module — do not delete.
+**Current branch `feat/face-analysis`:**
+- Plans 10 (face pipeline core) + 11 (guided capture) executed — on-device MediaPipe + per-dimension CV analyzers, all committed. Plan 8 (Python training toolkit) executed + review-fixed. Full suite green (246 TS + 29 py).
+- **Pretrained-model pivot (2026-07-10→11, Febriel):** dropped "train our own" in favor of a **real pretrained ISIC/PAD-UFES-20 6-class EfficientNet-B1** (timm, HF `conan17970/efficientnet-b1-skin-cancer-isic2019`, F1 0.688, runs on MPS) + YOLO11n + MobileSAM weights. Now wired: `ai/models/manager.py` (lazy singleton ModelManager), `ai/inference/lesion_classifier.py` (predict/predict_image, weights_only=True), `ai/inference/pipeline.py` (detect→crop→classify, whole-image fallback since yolo11n is a generic placeholder detector). Verified end-to-end on MPS; 4 pipeline unit tests.
+- **Weights are gitignored** (69MB) + `MobileSAM/` clone (181MB); re-fetch with `.venv/bin/python -m ai.models.fetch_models`. No git LFS.
+- Roadmap in the v3 master arch (`docs/superpowers/specs/2026-07-10-face-analysis-architecture.md`); Phases C/D (Plans 12/13: persistence+explanation, PWA+sync+models) not yet executed. Still TODO: complete ModelManager wiring into a unified face+lesion pipeline, segmentation/quality/skin-attribute models, FaceReport extension, lesion-trained detector.
 
 Plans 1–4 executed and merged. Plan 5 (results/report UI) + Plan 6 (patients/history/QR UI) code was written and committed by Febriel in `a5920b5` (2026-07-10) — **2 tests in that WIP still fail** (verdict summary wording vs `/partial/i`; quality-gate missing `unsupported-aspect-ratio`) and 2 TODO(plan-6)s remain (real patient selection; results fetch of stored report). The `walk-in` sentinel patient hack in patients/analysis routes awaits Plan 6.
 
@@ -53,4 +57,4 @@ Plans 1–4 executed and merged. Plan 5 (results/report UI) + Plan 6 (patients/h
 
 Brainstorm → spec → writing-plans → subagent-driven execution with one final opus review before merge. Verify camera/browser changes live in the preview tool, not just unit tests. `git push` to `https://github.com/FebyStack/AI-Skin-Analysis.git` was configured via `gh auth git-credential` but never confirmed pushed.
 
-last Claude session: 2026-07-11 13:46
+last Claude session: 2026-07-11 17:12
