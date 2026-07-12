@@ -4,6 +4,7 @@ import path from "node:path";
 import { Pool } from "pg";
 import { createApp } from "../app/app";
 import { lesionProviderFromEnv } from "../modules/analysis/lesion-provider";
+import { LlmLesionProvider } from "../modules/analysis/lesion-client";
 import { explainLesion } from "../../ai/llm/lesion-explainer";
 import { explainFace } from "../../ai/llm/face-explainer";
 import { PgPatientRepo } from "../modules/patients/repository";
@@ -33,27 +34,34 @@ async function main() {
   const apiKey = process.env.GEMINI_API_KEY ?? "";
   if (!apiKey) console.error("WARNING: GEMINI_API_KEY unset — analyses will fail (partial scans only)");
 
+  // Pipeline deps (used to construct an LLM-based lesion provider when requested)
+  const pipelineDeps = {
+    config: {
+      apiKey,
+      primaryModel: process.env.PRIMARY_MODEL ?? "gemini-2.5-flash",
+      critiqueModel: process.env.CRITIQUE_MODEL ?? "gemini-2.5-flash",
+      maxTokens: Number(process.env.MAX_TOKENS ?? "2048"),
+    },
+    callProvider: async (req: any, model: string) => {
+      const result = await callGemini(req, {
+        apiKey,
+        model,
+        maxTokens: Number(process.env.MAX_TOKENS ?? "2048"),
+      });
+      return result.text;
+    },
+  };
+
+  const useLlmForLesion = apiKey && process.env.LESION_USE_LLM === "1";
+  const lesionProvider = useLlmForLesion ? new LlmLesionProvider(pipelineDeps) : lesionProviderFromEnv();
+
   const app = createApp({
+    pool,
     patients: new PgPatientRepo(pool),
     scans: new PgScanRepo(pool),
     settings,
-    pipeline: {
-      config: {
-        apiKey,
-        primaryModel: process.env.PRIMARY_MODEL ?? "gemini-2.5-flash",
-        critiqueModel: process.env.CRITIQUE_MODEL ?? "gemini-2.5-flash",
-        maxTokens: Number(process.env.MAX_TOKENS ?? "2048"),
-      },
-      callProvider: async (req, model) => {
-        const result = await callGemini(req, {
-          apiKey,
-          model,
-          maxTokens: Number(process.env.MAX_TOKENS ?? "2048"),
-        });
-        return result.text;
-      },
-    },
-    lesion: lesionProviderFromEnv(),
+    pipeline: pipelineDeps,
+    lesion: lesionProvider,
     lesionExplain: apiKey
       ? (analysis) =>
           explainLesion(analysis, (prompt) =>
