@@ -2,12 +2,12 @@ import { useCallback, useState } from "react";
 import { UploadDropzone } from "../capture/UploadDropzone";
 import { LesionResultView } from "../results/LesionResultView";
 import {
-  analyzeLesion,
   listLesionScans,
   LesionAuthError,
   type LesionResult,
   type LesionScanWire,
 } from "../../api/lesion-client";
+import { saveLesionScan } from "../../pwa/save-flow";
 
 type View = "idle" | "analyzing" | "result" | "history" | "error";
 
@@ -21,9 +21,15 @@ export function LesionScanFlow() {
     setView("analyzing");
     setError("");
     try {
-      const res = await analyzeLesion(file, file.type || "image/jpeg");
-      setResult(res);
-      setView("result");
+      const outcome = await saveLesionScan(file, file.type || "image/jpeg");
+      if (outcome.result) {
+        setResult(outcome.result);
+        setView("result");
+      } else {
+        // Queued offline — no result to render yet; nudge the user to history.
+        setError("You're offline — your scan is queued and will sync when back online.");
+        setView("error");
+      }
     } catch (err) {
       if (err instanceof LesionAuthError) {
         setError("Your session expired — please log in again.");
