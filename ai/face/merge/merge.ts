@@ -20,11 +20,15 @@ export interface MergedAnalysis {
 export function mergeViews(views: AnalyzedView[]): MergedAnalysis {
     const usable = views.filter((v) => v.quality.ok);
     const captureCoverage = clamp01(usable.length / REQUIRED_ANGLE_COUNT);
+    const parsingBoost = parsingConfidenceBoost(usable);
 
     const dimensions = Object.fromEntries(
         FACE_DIMENSIONS.map((d) => {
             const raw = ANALYZERS[d](usable);
-            return [d, { ...raw, confidence: clamp01(raw.confidence * (0.5 + 0.5 * captureCoverage)) }];
+            return [d, {
+                ...raw,
+                confidence: clamp01(raw.confidence * (0.5 + 0.5 * captureCoverage) * parsingBoost),
+            }];
         }),
     ) as Record<FaceDimension, DimensionScore>;
 
@@ -35,4 +39,14 @@ export function mergeViews(views: AnalyzedView[]): MergedAnalysis {
         FACE_DIMENSIONS.reduce((a, d) => a + dimensions[d].confidence, 0) / FACE_DIMENSIONS.length,
     );
     return { dimensions, overall: { score: overallScore, confidence: overallConfidence } };
+}
+
+/** Up to +15% confidence when parsed skin masks drive zone stats. */
+export function parsingConfidenceBoost(views: AnalyzedView[]): number {
+    if (views.length === 0) return 1;
+    const parsed = views.filter((v) => v.maskSource === "parsing");
+    if (parsed.length === 0) return 1;
+    const avgQuality = parsed.reduce((a, v) => a + (v.maskQuality ?? 0), 0) / parsed.length;
+    const coverage = parsed.length / views.length;
+    return 1 + 0.15 * coverage * avgQuality;
 }

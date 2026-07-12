@@ -30,4 +30,8 @@ export interface AnalyzedView {
   angle: FaceAngle;
   quality: AngleQuality;
   zones: Partial<Record<FaceAnalysisZone, ZoneStats>>; // only zones visible from this angle
+  /** parsing = SegFormer skin masks; landmarks = polygon fallback */
+  maskSource?: "parsing" | "landmarks";
+  /** 0..1 — share of visible zones with enough parsed skin pixels */
+  maskQuality?: number;
 }

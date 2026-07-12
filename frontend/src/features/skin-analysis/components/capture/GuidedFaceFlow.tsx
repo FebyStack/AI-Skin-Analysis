@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useCamera } from "../../hooks/use-camera";
 import { useFaceScan } from "../../hooks/use-face-scan";
-import { makeAnalyzeFrame } from "./frame-adapter";
+import { makeAnalyzeFrame, FACE_MODEL_VERSIONS } from "./frame-adapter";
 import { FaceReportView } from "../results/FaceReportView";
 import { saveFaceScanWithFallback } from "../../pwa/save-flow";
 import { HistoryView } from "../history/HistoryView";
@@ -25,7 +25,7 @@ async function frameToJpeg(video: HTMLVideoElement | null): Promise<Blob | null>
 export function GuidedFaceFlow() {
   const camera = useCamera("face");
   const analyzeFrame = useMemo(() => makeAnalyzeFrame(() => camera.videoRef.current), [camera.videoRef]);
-  const scan = useFaceScan({ analyzeFrame });
+  const scan = useFaceScan({ analyzeFrame, modelVersions: FACE_MODEL_VERSIONS });
   // Keyed by angle so retakes overwrite the failed frame instead of stacking up.
   // Only the *last* frame for each angle survives — and since the sequence
   // doesn't advance past a failed capture, that last one is guaranteed good.

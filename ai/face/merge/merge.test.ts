@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { mergeViews, OVERALL_WEIGHTS } from "./merge";
+import { mergeViews, OVERALL_WEIGHTS, parsingConfidenceBoost } from "./merge";
 import { FACE_DIMENSIONS } from "../../../shared/face";
 import type { AnalyzedView, ZoneStats } from "../types";
 
@@ -9,8 +9,8 @@ function stats(zone: ZoneStats["zone"], over: Partial<ZoneStats> = {}): ZoneStat
         rednessIdx: 0.12, highFreqRatio: 0.008, darkSpotRatio: 0.01, brightSpotRatio: 0.01, redSpotRatio: 0.01, ...over
     };
 }
-const view = (angle: AnalyzedView["angle"], zones: ZoneStats[], ok = true): AnalyzedView =>
-    ({ angle, quality: { ok, issues: ok ? [] : ["blur"] }, zones: Object.fromEntries(zones.map((z) => [z.zone, z])) });
+const view = (angle: AnalyzedView["angle"], zones: ZoneStats[], ok = true, maskSource?: AnalyzedView["maskSource"], maskQuality?: number): AnalyzedView =>
+    ({ angle, quality: { ok, issues: ok ? [] : ["blur"] }, zones: Object.fromEntries(zones.map((z) => [z.zone, z])), maskSource, maskQuality });
 
 const fullFront = () => view("front", [stats("forehead"), stats("nose"), stats("left-cheek"), stats("right-cheek"), stats("chin"), stats("periorbital"), stats("under-eye")]);
 
@@ -42,5 +42,11 @@ describe("mergeViews", () => {
         const calm = mergeViews([fullFront()]);
         const angry = mergeViews([view("front", [stats("forehead", { brightSpotRatio: 0.3 }), stats("nose", { brightSpotRatio: 0.3 }), stats("left-cheek", { rednessIdx: 0.4, redSpotRatio: 0.2 }), stats("right-cheek", { rednessIdx: 0.4, redSpotRatio: 0.2 }), stats("chin"), stats("periorbital", { highFreqRatio: 0.06 }), stats("under-eye", { meanLuma: 0.3 })])]);
         expect(angry.overall.score).toBeGreaterThan(calm.overall.score);
+    });
+    it("parsed masks raise confidence vs landmark-only", () => {
+        const landmark = mergeViews([fullFront()]);
+        const parsed = mergeViews([{ ...fullFront(), maskSource: "parsing", maskQuality: 1 }]);
+        expect(parsed.dimensions.redness.confidence).toBeGreaterThan(landmark.dimensions.redness.confidence);
+        expect(parsingConfidenceBoost([{ ...fullFront(), maskSource: "parsing", maskQuality: 1 }])).toBeGreaterThan(1);
     });
 });

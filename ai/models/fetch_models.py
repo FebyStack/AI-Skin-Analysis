@@ -6,7 +6,7 @@ fresh machine into the paths the code expects.
     .venv/bin/python -m ai.models.fetch_models            # fetch all
     .venv/bin/python -m ai.models.fetch_models classifier # one target
 
-Targets: classifier · detector · segmentation
+Targets: classifier · detector · segmentation · face-parsing
 """
 from __future__ import annotations
 
@@ -60,10 +60,27 @@ def fetch_segmentation() -> None:
     )
 
 
+def fetch_face_parsing() -> None:
+    # SegFormer-B5 face parsing (CelebAMask-HQ). Non-commercial license — see HF model card.
+    from huggingface_hub import hf_hub_download
+
+    repo = "jonathandinu/face-parsing"
+    dest_dir = BASE.parent.parent / "frontend" / "public" / "models" / "face-parsing"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    target = dest_dir / "model_quantized.onnx"
+    if target.exists():
+        print(f"  ✓ exists: {target.relative_to(BASE.parent.parent)}")
+        return
+    cached = hf_hub_download(repo_id=repo, filename="onnx/model_quantized.onnx")
+    target.write_bytes(Path(cached).read_bytes())
+    print(f"  ✓ {target.stat().st_size // 1_000_000} MB → {target.relative_to(BASE.parent.parent)}")
+
+
 TARGETS = {
     "classifier": fetch_classifier,
     "detector": fetch_detector,
     "segmentation": fetch_segmentation,
+    "face-parsing": fetch_face_parsing,
 }
 
 
