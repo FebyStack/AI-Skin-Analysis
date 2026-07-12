@@ -35,7 +35,25 @@ export function createModelUploadRouter(deps: AppDeps, auth?: RequestHandler): R
     },
   });
 
-  const upload = multer({ storage });
+  const MAX_BYTES = Number(process.env.MAX_MODEL_UPLOAD_BYTES ?? 50 * 1024 * 1024); // default 50MB
+  const upload = multer({ storage, limits: { fileSize: MAX_BYTES } });
+
+  // Basic file-scan: reject obviously unsafe files (no real AV scanner installed).
+  // If an AV binary is available in the environment (e.g. `clamscan`), call it here.
+  async function scanFile(path: string): Promise<boolean> {
+    // Reject zero-byte files and disallowed extensions
+    try {
+      const stat = fs.statSync(path);
+      if (!stat.isFile() || stat.size === 0) return false;
+      const allowed = [".onnx", ".task", ".bin", ".zip", ".tar", ".tgz", ".onnx.data"];
+      const ext = path.endsWith(".onnx.data") ? ".onnx.data" : require("node:path").extname(path).toLowerCase();
+      if (!allowed.includes(ext)) return false;
+      // TODO: call out to real AV scanner if available
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
   const repo = new ModelsRepository(deps.pool);
   const service = new ModelsService(repo);
 
@@ -48,8 +66,15 @@ export function createModelUploadRouter(deps: AppDeps, auth?: RequestHandler): R
         const { version, isStable, setCurrent } = req.body ?? {};
         if (!file) return res.status(400).json({ success: false, error: 'file required' });
 
-        const relPath = `/models/${modelId}/${path.basename(file.path)}`;
         const absolute = file.path;
+        const ok = await scanFile(absolute);
+        if (!ok) {
+          // remove file and reject
+          try { fs.unlinkSync(absolute); } catch (e) { /* ignore */ }
+          return res.status(400).json({ success: false, error: 'file failed basic safety checks' });
+        }
+
+        const relPath = `/models/${modelId}/${path.basename(file.path)}`;
         const buffer = fs.readFileSync(absolute);
         const checksum = crypto.createHash('sha256').update(buffer).digest('hex');
         const versionId = crypto.randomUUID();
@@ -84,8 +109,14 @@ export function createModelUploadRouter(deps: AppDeps, auth?: RequestHandler): R
         const { version, isStable, setCurrent } = req.body ?? {};
         if (!file) return res.status(400).json({ success: false, error: 'file required' });
 
-        const relPath = `/models/${modelId}/${path.basename(file.path)}`;
         const absolute = file.path;
+        const ok = await scanFile(absolute);
+        if (!ok) {
+          try { fs.unlinkSync(absolute); } catch (e) { /* ignore */ }
+          return res.status(400).json({ success: false, error: 'file failed basic safety checks' });
+        }
+
+        const relPath = `/models/${modelId}/${path.basename(file.path)}`;
         const buffer = fs.readFileSync(absolute);
         const checksum = crypto.createHash('sha256').update(buffer).digest('hex');
         const versionId = crypto.randomUUID();

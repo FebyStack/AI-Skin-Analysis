@@ -27,6 +27,7 @@ export function createApp(deps: AppDeps): Express {
 
 
   const auth = requireSession(deps.sessionSecret, deps.now);
+  const admin = require("../middleware/require-admin").requireAdmin(deps.settings, deps.sessionSecret, deps.now);
   const captures = new CaptureSessionStore(deps.now);
 
   app.use(createAuthRoutes(deps));
@@ -35,13 +36,13 @@ export function createApp(deps: AppDeps): Express {
   app.use(createLesionRoutes(deps, auth));
   app.use(createFaceScanRoutes(deps, auth));
   app.use(createCaptureRoutes(captures, auth));
-  app.use("/api/models", createModelsRoutes(deps, auth));
-  // Upload endpoint for model files (optional in test/lite envs)
+  app.use("/api/models", createModelsRoutes(deps, admin));
+  // Upload endpoint for model files (admin-only; optional in test/lite envs)
   // Use require to avoid top-level await and bundler transform issues in tests
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   try {
     const createModelUploadRouter = require("../modules/models/upload-route").createModelUploadRouter;
-    if (createModelUploadRouter) app.use("/api/models", createModelUploadRouter(deps, auth));
+    if (createModelUploadRouter) app.use("/api/models", createModelUploadRouter(deps, admin));
   } catch (e) {
     // upload router missing in some lightweight test environments — continue without it
     console.debug('Model upload router not mounted:', e?.message ?? e);
