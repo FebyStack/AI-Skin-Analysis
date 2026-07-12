@@ -37,8 +37,7 @@ export function GuidedFaceFlow() {
 
   useEffect(() => {
     void camera.start();
-    return () => camera.stop();
-  }, []);
+  }, [camera]);
 
   const captureNow = useCallback(async () => {
     const angle = scan.currentAngle as FaceAngle;

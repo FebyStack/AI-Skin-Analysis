@@ -4,39 +4,6 @@ import type { FaceGeometry } from "../types";
 export const LANDMARKER_MODEL_URL = "/models/face_landmarker.task";
 const WASM_BASE = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm"; // Phase D: self-host via model channel
 
-// Helper: try to read cached model blob from the ModelUpdateService IndexedDB store
-async function getCachedModelObjectUrl(modelId: string): Promise<string | null> {
-    if (typeof indexedDB === "undefined") return null;
-    try {
-        const req = indexedDB.open("ai-skin-analysis-models", 1);
-        return await new Promise((resolve) => {
-            req.onerror = () => resolve(null);
-            req.onsuccess = () => {
-                const db = req.result;
-                try {
-                    const tx = db.transaction(["models"], "readonly");
-                    const store = tx.objectStore("models");
-                    const getReq = store.get(modelId);
-                    getReq.onsuccess = () => {
-                        const val = getReq.result;
-                        if (val && val.blob) {
-                            const url = URL.createObjectURL(val.blob as Blob);
-                            resolve(url);
-                        } else {
-                            resolve(null);
-                        }
-                    };
-                    getReq.onerror = () => resolve(null);
-                } catch (e) {
-                    resolve(null);
-                }
-            };
-        });
-    } catch (e) {
-        return null;
-    }
-}
-
 // v3.1: register as a ModelManager "mediapipe" loader so version reporting + future
 // manifest-driven updates flow through one place. getLandmarker() stays the call site.
 let landmarkerPromise: Promise<FaceLandmarker> | null = null;
@@ -44,11 +11,8 @@ let landmarkerPromise: Promise<FaceLandmarker> | null = null;
 export function getLandmarker(): Promise<FaceLandmarker> {
     landmarkerPromise ??= (async () => {
         const fileset = await FilesetResolver.forVisionTasks(WASM_BASE);
-        // If the model was provisioned via model-update-service, prefer the cached blob URL
-        const cachedUrl = await getCachedModelObjectUrl("face-landmarker");
-        const modelAssetPath = cachedUrl ?? LANDMARKER_MODEL_URL;
         return FaceLandmarker.createFromOptions(fileset, {
-            baseOptions: { modelAssetPath },
+            baseOptions: { modelAssetPath: LANDMARKER_MODEL_URL },
             runningMode: "VIDEO",
             numFaces: 1,
             outputFacialTransformationMatrixes: true,

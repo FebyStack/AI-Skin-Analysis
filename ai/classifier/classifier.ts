@@ -44,26 +44,24 @@ export const CLASSIFIER_THRESHOLD = 0.3;
 const MODEL_URL =
   import.meta.env?.VITE_CLASSIFIER_MODEL_URL ?? "/models/skin-classifier.onnx";
 
-export async function createOnnxInference(modelUrl?: string): Promise<InferenceFn> {
-  const url = modelUrl ?? MODEL_URL;
-
+export async function createOnnxInference(): Promise<InferenceFn> {
   // Pre-flight: verify the model file exists before loading the heavy ONNX
   // runtime — this avoids noisy WASM compile errors in the console when the
   // model hasn't been placed in public/models/ yet.
   // NOTE: Vite's SPA fallback returns 200 OK with text/html for missing files,
   // so we must also check the content-type header.
-  const probe = await fetch(url, { method: "HEAD" });
+  const probe = await fetch(MODEL_URL, { method: "HEAD" });
   const ct = probe.headers.get("content-type") ?? "";
   if (!probe.ok || ct.includes("text/html")) {
     throw new Error(
-      `Classifier model not found at ${url} (status=${probe.status}, type=${ct}). ` +
+      `Classifier model not found at ${MODEL_URL} (status=${probe.status}, type=${ct}). ` +
         "Place an ONNX model there or set VITE_CLASSIFIER_MODEL_URL.",
     );
   }
 
   const ort = await import("onnxruntime-web");
   const hasWebGpu = typeof navigator !== "undefined" && "gpu" in navigator;
-  const session = await ort.InferenceSession.create(url, {
+  const session = await ort.InferenceSession.create(MODEL_URL, {
     executionProviders: pickExecutionProviders(hasWebGpu),
   });
 

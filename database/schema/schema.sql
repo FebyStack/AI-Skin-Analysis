@@ -41,30 +41,3 @@ CREATE TABLE IF NOT EXISTS scan_images (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS scan_images_scan ON scan_images (scan_id);
-
--- Model registry for versioning, distribution, and rollback (Plan 13 Task 1).
-CREATE TABLE IF NOT EXISTS model_registry (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  description TEXT,
-  model_type TEXT NOT NULL CHECK (model_type IN ('landmarker', 'segmentation', 'classifier')),
-  current_version TEXT NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS model_versions (
-  id TEXT PRIMARY KEY,
-  model_id TEXT NOT NULL REFERENCES model_registry(id) ON DELETE CASCADE,
-  version TEXT NOT NULL,
-  file_path TEXT NOT NULL,
-  file_size INT,
-  checksum TEXT,
-  is_stable BOOLEAN NOT NULL DEFAULT false,
-  is_current BOOLEAN NOT NULL DEFAULT false,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE(model_id, version)
-);
-
-CREATE INDEX IF NOT EXISTS model_versions_model ON model_versions (model_id);
-CREATE INDEX IF NOT EXISTS model_versions_current ON model_versions (is_current);

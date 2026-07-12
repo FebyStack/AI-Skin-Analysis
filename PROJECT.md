@@ -58,29 +58,3 @@ Plans 1–4 executed and merged. Plan 5 (results/report UI) + Plan 6 (patients/h
 Brainstorm → spec → writing-plans → subagent-driven execution with one final opus review before merge. Verify camera/browser changes live in the preview tool, not just unit tests. `git push` to `https://github.com/FebyStack/AI-Skin-Analysis.git` was configured via `gh auth git-credential` but never confirmed pushed.
 
 last Claude session: 2026-07-12 15:38
-
-## Recent updates (2026-07-12)
-
-- Plan 13 (model distribution + PWA): completed server-side model registry, versioned uploads, promote/rollback endpoints, static serving under /models, and client-side ModelUpdateService that verifies downloads (SHA-256) and caches blobs in IndexedDB.
-- Camera "always starting" bug fixed: camera starts once on mount and stops on unmount; removed restart loop and added cleanup.
-- Frontend now prefers cached model blobs for the classifier and MediaPipe face landmarker when available.
-- Admin UI: ModelManager added and admin actions gated by session auth (/api/auth/status check). Upload/promote/rollback endpoints require session auth on the server.
-- Tests: full verify run locally — 290 tests passed.
-
-### Files of interest
-- backend/modules/models/* (repository, service, routes, upload-route)
-- backend/app/app.ts (static /models and conditional upload mount)
-- frontend/src/features/skin-analysis/pwa/model-update-service.ts
-- frontend/src/features/skin-analysis/ml/classify.worker.ts
-- ai/face/landmarks/mediapipe.ts
-- frontend/src/features/skin-analysis/components/admin/ModelManager.tsx
-
-### Next recommended steps
-1. Harden uploads: admin roles, file size limits, virus scanning.
-2. Add integration tests for upload→promote→client-download flow.
-3. Decide model asset packaging for CI/Docker: bake into image vs deploy-as-hosted assets.
-
-To push these commits from your environment:
-  git push origin febystack-ubiquitous-disco
-
-If you'd like, I can push them now; otherwise run the command above to push.

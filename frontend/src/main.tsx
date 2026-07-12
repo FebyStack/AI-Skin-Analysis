@@ -11,8 +11,3 @@ createRoot(document.getElementById("root")!).render(
 );
 
 registerServiceWorker();
-
-// Initialize background model updates in production only
-if (typeof window !== 'undefined' && import.meta.env.PROD) {
-  void import('@/pwa/init-model-updates').then((m) => m.initModelUpdates(''));
-}

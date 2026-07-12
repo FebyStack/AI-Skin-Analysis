@@ -20,7 +20,7 @@ export function CameraFeed({
 
   useEffect(() => {
     start();
-  }, []);
+  }, [start]);
 
   useEffect(() => {
     if (status === "denied") onUnavailable("denied");

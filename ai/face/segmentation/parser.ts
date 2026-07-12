@@ -26,29 +26,6 @@ export function ensureFaceParser(): Promise<OrtSession | null> {
 
 async function loadSession(): Promise<OrtSession | null> {
     try {
-        // Prefer a cached model blob if available (downloaded via ModelUpdateService)
-        try {
-            if (typeof window !== 'undefined') {
-                // dynamic import to avoid server-side bundling issues
-                // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-                // @ts-ignore
-                const { modelUpdateService } = await import("@/features/skin-analysis/pwa/model-update-service");
-                const cached = await modelUpdateService.getCachedModel('face-parsing');
-                if (cached && cached.blob) {
-                    const url = URL.createObjectURL(cached.blob as Blob);
-                    const ort = await import('onnxruntime-web');
-                    const hasWebGpu = typeof navigator !== 'undefined' && 'gpu' in navigator;
-                    const session = await ort.InferenceSession.create(url, {
-                        executionProviders: pickExecutionProviders(hasWebGpu),
-                    });
-                    return session;
-                }
-            }
-        } catch (err) {
-            // Fall back to remote fetch on any error
-            console.warn('Failed to load parser from cache, falling back to remote:', err);
-        }
-
         const probe = await fetch(FACE_PARSING_MODEL_URL, { method: "HEAD" });
         const ct = probe.headers.get("content-type") ?? "";
         if (!probe.ok || ct.includes("text/html")) return null;
