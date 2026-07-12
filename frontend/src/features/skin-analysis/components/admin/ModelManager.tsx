@@ -7,8 +7,12 @@ export default function ModelManager({ apiBase = '' }: { apiBase?: string }) {
   const [version, setVersion] = useState('');
   const [status, setStatus] = useState('');
 
+  const [authed, setAuthed] = useState(false);
+
   useEffect(() => {
     void fetch(`${apiBase}/api/models/manifest`).then((r) => r.json()).then((j) => setManifest(j.data || []));
+    // Check auth state to show/hide admin controls
+    void fetch(`${apiBase}/api/auth/status`).then((r) => r.json()).then((j) => setAuthed(Boolean(j.authenticated)) ).catch(() => setAuthed(false));
   }, [apiBase]);
 
   async function upload() {
@@ -43,10 +47,16 @@ export default function ModelManager({ apiBase = '' }: { apiBase?: string }) {
     <div className="p-4">
       <h3 className="font-semibold mb-2">Model Manager</h3>
       <div className="mb-3">
-        <input placeholder="model id" value={modelId} onChange={(e) => setModelId(e.target.value)} className="border p-1 mr-2" />
-        <input type="file" onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)} />
-        <input placeholder="version (optional)" value={version} onChange={(e) => setVersion(e.target.value)} className="border p-1 ml-2" />
-        <button onClick={upload} className="ml-2 bg-clinical text-white px-3 py-1 rounded">Upload & Promote</button>
+        {authed ? (
+          <>
+            <input placeholder="model id" value={modelId} onChange={(e) => setModelId(e.target.value)} className="border p-1 mr-2" />
+            <input type="file" onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)} />
+            <input placeholder="version (optional)" value={version} onChange={(e) => setVersion(e.target.value)} className="border p-1 ml-2" />
+            <button onClick={upload} className="ml-2 bg-clinical text-white px-3 py-1 rounded">Upload & Promote</button>
+          </>
+        ) : (
+          <div className="text-sm text-muted">Admin actions require login. Use /api/auth/login to authenticate.</div>
+        )}
       </div>
       <div className="mb-2">Status: {status}</div>
       <div>
@@ -60,10 +70,10 @@ export default function ModelManager({ apiBase = '' }: { apiBase?: string }) {
                   <div className="text-xs">{v.version}</div>
                   <div className="text-xs">{v.isCurrent ? 'current' : ''} {v.isStable ? 'stable' : ''}</div>
                   <div className="mt-1">
-                    {!v.isCurrent && (
+                    {!v.isCurrent && authed && (
                       <button onClick={() => promote(m.id, v.id)} className="text-xs mr-2">Promote</button>
                     )}
-                    <button onClick={() => rollback(m.id)} className="text-xs">Rollback</button>
+                    {authed && <button onClick={() => rollback(m.id)} className="text-xs">Rollback</button>}
                   </div>
                 </div>
               ))}
