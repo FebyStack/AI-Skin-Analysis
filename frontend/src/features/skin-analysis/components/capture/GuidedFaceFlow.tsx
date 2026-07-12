@@ -5,7 +5,7 @@ import { makeAnalyzeFrame } from "./frame-adapter";
 import { FaceReportView } from "../results/FaceReportView";
 import { saveFaceScanWithFallback } from "../../pwa/save-flow";
 import { HistoryView } from "../history/HistoryView";
-import type { FaceReport, FaceAngle } from "@shared/face";
+import { FACE_ANGLES, type FaceReport, type FaceAngle } from "@shared/face";
 import type { CapturedAngle } from "../../api/face-client";
 
 type View = "capture" | "saving" | "result" | "history";
@@ -26,7 +26,10 @@ export function GuidedFaceFlow() {
   const camera = useCamera("face");
   const analyzeFrame = useMemo(() => makeAnalyzeFrame(() => camera.videoRef.current), [camera.videoRef]);
   const scan = useFaceScan({ analyzeFrame });
-  const capturedRef = useRef<CapturedAngle[]>([]);
+  // Keyed by angle so retakes overwrite the failed frame instead of stacking up.
+  // Only the *last* frame for each angle survives — and since the sequence
+  // doesn't advance past a failed capture, that last one is guaranteed good.
+  const capturedByAngle = useRef<Map<FaceAngle, Blob>>(new Map());
   const [view, setView] = useState<View>("capture");
   const [saved, setSaved] = useState<FaceReport | null>(null);
   const [offline, setOffline] = useState(false);
@@ -36,16 +39,11 @@ export function GuidedFaceFlow() {
     void camera.start();
   }, [camera]);
 
-  // Wrap captureCurrent so we also grab a JPEG of the *raw* frame right before
-  // handing it to the analyzer. This ensures the saved image matches the one
-  // the analysis saw.
   const captureNow = useCallback(async () => {
     const angle = scan.currentAngle as FaceAngle;
     const blob = await frameToJpeg(camera.videoRef.current);
+    if (blob) capturedByAngle.current.set(angle, blob);
     await scan.captureCurrent();
-    if (blob) {
-      capturedRef.current.push({ angle, blob, mime: "image/jpeg" });
-    }
   }, [camera.videoRef, scan]);
 
   // When the pipeline finishes, save (local + server) and switch to result view.
@@ -53,8 +51,13 @@ export function GuidedFaceFlow() {
     if (!scan.report || view !== "capture") return;
     (async () => {
       setView("saving");
+      const angles: CapturedAngle[] = [];
+      for (const a of FACE_ANGLES) {
+        const blob = capturedByAngle.current.get(a);
+        if (blob) angles.push({ angle: a, blob, mime: "image/jpeg" });
+      }
       try {
-        const outcome = await saveFaceScanWithFallback(scan.report as FaceReport, capturedRef.current);
+        const outcome = await saveFaceScanWithFallback(scan.report as FaceReport, angles);
         setSaved(outcome.localReport);
         setOffline(outcome.offline);
         setView("result");
@@ -68,7 +71,7 @@ export function GuidedFaceFlow() {
 
   const reset = useCallback(() => {
     scan.reset();
-    capturedRef.current = [];
+    capturedByAngle.current = new Map();
     setSaved(null);
     setOffline(false);
     setError("");
