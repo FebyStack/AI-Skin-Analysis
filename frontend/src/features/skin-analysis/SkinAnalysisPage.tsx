@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ConsentGate } from "./components/consent/ConsentGate";
-import { CaptureFlow } from "./components/capture/CaptureFlow";
+import { GuidedFaceFlow } from "./components/capture/GuidedFaceFlow";
 import { LesionScanFlow } from "./components/lesion/LesionScanFlow";
 import { HistoryView } from "./components/history/HistoryView";
 import { installOnlineSync, syncPending } from "./pwa/sync";
@@ -61,11 +61,7 @@ export function SkinAnalysisPage() {
               ))}
             </div>
             <div className="mt-6 flex justify-center">
-              {mode === "closeup" ? (
-                <LesionScanFlow />
-              ) : (
-                <CaptureFlow mode={mode} patientId="walk-in" /> /* TODO(plan-6): real patient selection */
-              )}
+              {mode === "closeup" ? <LesionScanFlow /> : <GuidedFaceFlow />}
             </div>
           </ConsentGate>
         )}
