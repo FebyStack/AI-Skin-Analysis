@@ -27,7 +27,20 @@ export function createApp(deps: AppDeps): Express {
 
 
   const auth = requireSession(deps.sessionSecret, deps.now);
-  const admin = require("../middleware/require-admin").requireAdmin(deps.settings, deps.sessionSecret, deps.now);
+  // Admin middleware: requires a valid session and settings.admin_enabled === 'true'
+  // Import via require in a try/catch so lightweight test environments don't fail
+  let admin: import("express").RequestHandler;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { requireAdmin } = require("../middleware/require-admin");
+    admin = requireAdmin(deps.settings, deps.sessionSecret, deps.now);
+  } catch (e) {
+    // Tests or lite environments may not have the admin middleware file available.
+    // Fallback admin middleware returns 503 for admin-only endpoints.
+    console.debug("Admin middleware not available, admin endpoints disabled:", e?.message ?? e);
+    // simple middleware: respond 503 for admin endpoints
+    admin = (_req, res, _next) => res.status(503).json({ error: "admin endpoints unavailable" });
+  }
   const captures = new CaptureSessionStore(deps.now);
 
   app.use(createAuthRoutes(deps));
