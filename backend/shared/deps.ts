@@ -1,3 +1,4 @@
+import type { Pool } from "pg";
 import type { PatientRepo } from "../modules/patients/repository";
 import type { ScanRepo } from "../modules/analysis/repository";
 import type { SettingsRepo } from "../modules/settings/repository";
@@ -7,6 +8,7 @@ import type { LesionAnalysis, LesionExplanation } from "../../shared/lesion";
 import type { FaceReport, FaceExplanation } from "../../shared/face";
 
 export interface AppDeps {
+  pool?: Pool;
   patients: PatientRepo;
   scans: ScanRepo;
   settings: SettingsRepo;
