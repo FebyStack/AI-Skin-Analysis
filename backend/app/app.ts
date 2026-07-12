@@ -36,16 +36,11 @@ export function createApp(deps: AppDeps): Express {
   app.use(createFaceScanRoutes(deps, auth));
   app.use(createCaptureRoutes(captures, auth));
   app.use("/api/models", createModelsRoutes(deps));
-  // Upload endpoint separate to avoid circular import issues
-  try {
-    const { createModelUploadRouter } = await import("../modules/models/upload-route");
-    app.use("/api/models", createModelUploadRouter(deps));
-  } catch (e) {
-    // dynamic import only in environments that support top-level await; fallback to require
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const createModelUploadRouter = require("../modules/models/upload-route").createModelUploadRouter;
-    app.use("/api/models", createModelUploadRouter(deps));
-  }
+  // Upload endpoint for model files
+  // Use require to avoid top-level await and bundler transform issues in tests
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const createModelUploadRouter = require("../modules/models/upload-route").createModelUploadRouter;
+  app.use("/api/models", createModelUploadRouter(deps));
 
   return app;
 }
