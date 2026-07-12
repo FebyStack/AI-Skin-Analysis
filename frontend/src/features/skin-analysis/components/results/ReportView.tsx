@@ -11,11 +11,13 @@ export function ReportView({
   verdict,
   onNewScan,
   capturedBlob,
+  reportUnavailable,
 }: {
   report: AnalysisReport | null;
   verdict: Verdict;
   onNewScan: () => void;
   capturedBlob?: Blob;
+  reportUnavailable?: boolean;
 }) {
   const showConditionDetails = !verdict.inconclusive;
 
@@ -24,6 +26,12 @@ export function ReportView({
       {verdict.degraded === "classifier-only" && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800" role="status">
           Partial analysis — AI review pending. Re-analyze when back online.
+        </div>
+      )}
+      {reportUnavailable && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800" role="alert">
+          Couldn't load the full report right now — the summary below is still accurate. Try
+          reloading in a moment.
         </div>
       )}
 

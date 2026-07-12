@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { CaptureFlow } from "./CaptureFlow";
 import { useScanMachine } from "../../store/scan-machine";
 import { buildVerdict } from "@ai/shared/verdict";
+import * as analyzeClient from "../../api/analyze-client";
 
 vi.mock("../../privacy/redact", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../privacy/redact")>();
@@ -64,7 +65,10 @@ describe("CaptureFlow — camera retry from upload fallback", () => {
 });
 
 describe("CaptureFlow — results rendering", () => {
-  beforeEach(() => useScanMachine.getState().reset());
+  beforeEach(() => {
+    useScanMachine.getState().reset();
+    vi.restoreAllMocks();
+  });
 
   it("renders the loading stages while analyzing", () => {
     useScanMachine.getState().grantConsent();
@@ -82,10 +86,37 @@ describe("CaptureFlow — results rendering", () => {
     expect(screen.getByText(/running deep analysis/i)).toBeInTheDocument();
   });
 
-  it("renders the report when results are ready", () => {
+  it("renders the report when results are ready", async () => {
+    vi.spyOn(analyzeClient, "getScan").mockResolvedValue(null);
     useScanMachine.getState().resultsReady(buildVerdict(null, []), "scan-1");
     render(<CaptureFlow mode="face" patientId="p-1" />);
     expect(screen.getByRole("status")).toHaveTextContent(/partial analysis/i);
     expect(screen.getByRole("button", { name: /new scan/i })).toBeInTheDocument();
+  });
+
+  it("fetches the stored report by scan id and renders it once loaded", async () => {
+    const golden = (await import("@ai/evaluation/fixtures/golden-report.json")).default;
+    vi.spyOn(analyzeClient, "getScan").mockResolvedValue({
+      id: "scan-1",
+      patientId: "p-1",
+      mode: "face",
+      createdAt: 1,
+      imageWidth: 10,
+      imageHeight: 10,
+      report: golden as never,
+      partial: false,
+      classifierFindings: [],
+      promptVersion: 1,
+    });
+    useScanMachine.getState().resultsReady(buildVerdict(golden as never, []), "scan-1");
+    render(<CaptureFlow mode="face" patientId="p-1" />);
+    expect(await screen.findByText(/fitzpatrick/i)).toBeInTheDocument();
+  });
+
+  it("shows a load-failure banner without breaking the results screen", async () => {
+    vi.spyOn(analyzeClient, "getScan").mockRejectedValue(new Error("network down"));
+    useScanMachine.getState().resultsReady(buildVerdict(null, []), "scan-1");
+    render(<CaptureFlow mode="face" patientId="p-1" />);
+    expect(await screen.findByRole("alert")).toHaveTextContent(/couldn't load the full report/i);
   });
 });

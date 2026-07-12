@@ -27,6 +27,19 @@ describe("ReportView", () => {
     expect(screen.getByRole("status")).toHaveTextContent(/partial analysis/i);
   });
 
+  it("shows a distinct message when the report failed to load, not the degraded-verdict banner", () => {
+    render(
+      <ReportView
+        report={null}
+        verdict={buildVerdict(report, [])}
+        onNewScan={() => {}}
+        reportUnavailable
+      />,
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent(/couldn't load the full report/i);
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
   it("shows inconclusive guidance without presenting condition findings", () => {
     const lowConfidenceReport: AnalysisReport = {
       ...report,
