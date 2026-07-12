@@ -1,15 +1,19 @@
+import { describe, test, expect } from "vitest";
 import request from "supertest";
 import express from "express";
 import { createModelsRoutes } from "./routes";
 import { createModelUploadRouter } from "./upload-route";
 import { requireSession } from "../../middleware/require-session";
+import type { AppDeps } from "../../shared/deps";
 
 describe("models routes auth guards", () => {
   test("POST /api/models (register) requires auth when auth provided", async () => {
     const app = express();
     app.use(express.json());
 
-    const deps: any = { pool: {} }; // pool truthy to avoid 503 guard
+    // pool truthy (but not a real Pool) to avoid the 503 no-database guard in these
+    // auth-only tests, which never touch the database.
+    const deps = { pool: {} } as unknown as AppDeps;
     const auth = requireSession("test-secret", () => Date.now());
     app.use("/api/models", createModelsRoutes(deps, auth));
 
@@ -20,7 +24,7 @@ describe("models routes auth guards", () => {
 
   test("POST /api/models/:modelId/upload requires auth when auth provided", async () => {
     const app = express();
-    const deps: any = { pool: {} };
+    const deps = { pool: {} } as unknown as AppDeps;
     const auth = requireSession("test-secret", () => Date.now());
     app.use("/api/models", createModelUploadRouter(deps, auth));
 

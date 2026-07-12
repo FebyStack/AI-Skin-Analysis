@@ -1,4 +1,4 @@
-import { Router, type Request, type Response } from "express";
+import { Router, type Request, type Response, type RequestHandler } from "express";
 import type { AppDeps } from "../../shared/deps";
 import { ModelsRepository } from "./repository";
 import { ModelsService } from "./service";

@@ -10,6 +10,8 @@ import { createFaceScanRoutes } from "../modules/analysis/face-routes";
 import { createCaptureRoutes } from "../modules/capture/routes";
 import { createModelsRoutes } from "../modules/models/routes";
 
+const errMessage = (err: unknown): string => (err instanceof Error ? err.message : String(err));
+
 export function createApp(deps: AppDeps): Express {
   const app = express();
   app.use(express.json({ limit: "12mb" }));
@@ -37,7 +39,7 @@ export function createApp(deps: AppDeps): Express {
   } catch (e) {
     // Tests or lite environments may not have the admin middleware file available.
     // Fallback admin middleware returns 503 for admin-only endpoints.
-    console.debug("Admin middleware not available, admin endpoints disabled:", e?.message ?? e);
+    console.debug("Admin middleware not available, admin endpoints disabled:", errMessage(e));
     // simple middleware: respond 503 for admin endpoints
     admin = (_req, res, _next) => res.status(503).json({ error: "admin endpoints unavailable" });
   }
@@ -58,7 +60,7 @@ export function createApp(deps: AppDeps): Express {
     if (createModelUploadRouter) app.use("/api/models", createModelUploadRouter(deps, admin));
   } catch (e) {
     // upload router missing in some lightweight test environments — continue without it
-    console.debug('Model upload router not mounted:', e?.message ?? e);
+    console.debug('Model upload router not mounted:', errMessage(e));
   }
 
   return app;
