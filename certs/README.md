@@ -23,13 +23,15 @@ on their own Mac.
    # or: hostname
    ```
 
-3. **Generate the cert** covering every name/IP you'll use to reach the app:
+3. **Generate the cert** covering every name/IP you'll use to reach the app.
+   `scutil --get LocalHostName` gives the mDNS name without the `.local`
+   suffix, so appending `.local` doesn't double up:
    ```bash
    cd "$(git rev-parse --show-toplevel)/certs"
    mkcert -key-file dev-key.pem -cert-file dev-cert.pem \
      localhost 127.0.0.1 ::1 \
      $(ipconfig getifaddr en0) \
-     $(hostname).local
+     "$(scutil --get LocalHostName).local"
    ```
 
 4. **Trust the CA on each phone/iPad you want to test on:**
