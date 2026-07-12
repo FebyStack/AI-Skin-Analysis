@@ -34,6 +34,7 @@ async function main() {
   if (!apiKey) console.error("WARNING: GEMINI_API_KEY unset — analyses will fail (partial scans only)");
 
   const app = createApp({
+    pool,
     patients: new PgPatientRepo(pool),
     scans: new PgScanRepo(pool),
     settings,

@@ -8,6 +8,7 @@ import { createAnalysisRoutes } from "../modules/analysis/routes";
 import { createLesionRoutes } from "../modules/analysis/lesion-routes";
 import { createFaceScanRoutes } from "../modules/analysis/face-routes";
 import { createCaptureRoutes } from "../modules/capture/routes";
+import { createModelsRoutes } from "../modules/models/routes";
 
 export function createApp(deps: AppDeps): Express {
   const app = express();
@@ -26,6 +27,7 @@ export function createApp(deps: AppDeps): Express {
   app.use(createLesionRoutes(deps, auth));
   app.use(createFaceScanRoutes(deps, auth));
   app.use(createCaptureRoutes(captures, auth));
+  app.use("/api/models", createModelsRoutes(deps));
 
   return app;
 }
