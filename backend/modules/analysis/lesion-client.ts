@@ -8,6 +8,9 @@ export class LesionUnavailableError extends Error {
   }
 }
 
+import { handleAnalyze } from "../../../ai/llm/pipeline";
+import type { PipelineDeps } from "../../../ai/llm/pipeline";
+
 export interface LesionProvider {
   analyze(imageB64: string, mime: string): Promise<LesionAnalysis>;
 }
@@ -40,6 +43,20 @@ export class HttpLesionProvider implements LesionProvider {
     } finally {
       clearTimeout(timer);
     }
+  }
+}
+
+// LLM-backed lesion provider: runs the pipeline (which uses the configured provider, e.g., Gemini)
+export class LlmLesionProvider implements LesionProvider {
+  constructor(private pipelineDeps: PipelineDeps) {}
+
+  async analyze(imageB64: string, mime: string): Promise<LesionAnalysis> {
+    const input = { image: imageB64, mime, mode: "closeup" as const };
+    const outcome = await handleAnalyze(input, this.pipelineDeps);
+    if (!outcome.ok) throw new LesionUnavailableError(`LLM analysis failed: ${outcome.reason}`);
+    const parsed = validateLesionAnalysis(outcome.report as any);
+    if (!parsed.ok) throw new LesionUnavailableError(`LLM produced invalid report: ${parsed.errors.join("; ")}`);
+    return parsed.analysis;
   }
 }
 
