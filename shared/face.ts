@@ -32,6 +32,19 @@ export interface FaceExplanation {
   promptVersion: number;
 }
 
+export function validateFaceExplanation(
+  x: unknown,
+): { ok: true; explanation: FaceExplanation } | { ok: false; errors: string[] } {
+  const errors: string[] = [];
+  if (typeof x !== "object" || x === null) return { ok: false, errors: ["not an object"] };
+  const e = x as Record<string, unknown>;
+  if (typeof e.patientSummary !== "string" || e.patientSummary.length === 0) errors.push("patientSummary missing");
+  if (typeof e.education !== "string" || e.education.length === 0) errors.push("education missing");
+  if (e.source !== "gemini" && e.source !== "builtin") errors.push("source malformed");
+  if (typeof e.promptVersion !== "number") errors.push("promptVersion missing");
+  return errors.length === 0 ? { ok: true, explanation: x as FaceExplanation } : { ok: false, errors };
+}
+
 export interface FaceReport {
   kind: "face-v2";
   overall: { score: number; confidence: number };
