@@ -22,9 +22,16 @@ export default defineConfig({
     format: "es",
   },
   server: {
+    // host:true binds to 0.0.0.0 so phones on the same Wi-Fi can reach vite.
+    // The proxy still targets the local backend running on this machine.
+    host: true,
     proxy: {
       "/api": "http://localhost:3001",
       "/capture": "http://localhost:3001",
     },
+  },
+  preview: {
+    // Same for `vite preview` (production build). Handy for testing the PWA.
+    host: true,
   },
 });
