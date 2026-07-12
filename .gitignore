@@ -23,12 +23,22 @@ backup-*.sql
 data/
 *.sqlite
 
-# ML model assets (provided out-of-band, not versioned)
+# ML model assets (provided out-of-band, not versioned — see ai/models/fetch_models.py)
 *.onnx
 *.onnx.data
+*.pth
+*.pt
+*.safetensors
+ai/models/**/best_checkpoint.pth
+# Vendored upstream clone (181MB, its own git repo) — install via pip / fetch script instead
+MobileSAM/
 
 # tooling scratch
 .superpowers/
 .worktrees/
 .venv/
 .DS_Store
+__pycache__/
+*.task
+ai/datasets/
+ai/models/**/*.pt

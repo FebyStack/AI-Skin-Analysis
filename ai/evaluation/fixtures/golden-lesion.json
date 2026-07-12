@@ -1,0 +1,19 @@
+{
+  "lesions": [
+    {
+      "bbox": null,
+      "detector_confidence": null,
+      "classification": {
+        "predicted": "MEL",
+        "confidence": 0.72,
+        "top": [
+          { "label": "MEL", "confidence": 0.72 },
+          { "label": "NEV", "confidence": 0.18 },
+          { "label": "BCC", "confidence": 0.1 }
+        ]
+      }
+    }
+  ],
+  "whole_image_fallback": true,
+  "model": { "classifier": "efficientnet_b1-isic2019", "detector": "yolo11n-generic" }
+}

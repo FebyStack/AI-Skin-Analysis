@@ -1,3 +1,4 @@
+> **SUPERSEDED (v3.1, 2026-07-10):** the FastAPI *runtime* inference service and the untrained dev model in this plan are superseded — backend does NO runtime inference; the future lesion module runs ONNX in the browser via ModelManager (see face-analysis spec D6/D7), and dev/test paths use MockClassifier instead of dummy weights. The dataset/training toolkit parts (Plan 8) remain valid as-is.
 # Inference Platform Implementation Plan (Plan 7)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. Spec: `docs/superpowers/specs/2026-07-10-ai-classifier-architecture.md`.

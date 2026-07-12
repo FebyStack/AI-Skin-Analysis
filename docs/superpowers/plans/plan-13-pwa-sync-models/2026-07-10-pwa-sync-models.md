@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS model_registry (
 ```
 
 - [ ] **Step 2 — failing integration test:** seed registry (memory repo) with `face-landmarker@1.0.0 production` whose manifest lists `face_landmarker.task {sha256, bytes}` →
-  - `GET /api/models/manifest` (auth) → `{models:[{name,version,files[]}]}` production-only
+  - `GET /api/models/manifest` (auth) → `{models: ModelDescriptor[]}` production-only, full D8 metadata (name, version, task, framework, files{path,sha256,bytes}, inputSpec?, classes?, metrics?, datasetManifestSha256?, createdAt, notes?)
   - `GET /api/models/files/face-landmarker/1.0.0/face_landmarker.task` → bytes + `cache-control: public, max-age=31536000, immutable`
   - `POST /api/models/face-landmarker/promote {version}` (auth) → candidate→production, old production→archived
   - `POST /api/models/face-landmarker/rollback {version}` (auth) → archived version→production, current→archived
@@ -38,9 +38,11 @@ CREATE TABLE IF NOT EXISTS model_registry (
 
 ---
 
-### Task 2: Client model updater (sha256 verify + atomic switch)
+### Task 2: ModelUpdateService (implements the Phase A reserved interface)
 
-**Files:** Create `frontend/src/features/skin-analysis/pwa/model-updater.ts` · Test alongside
+**Files:** Create `frontend/src/features/skin-analysis/pwa/model-update-service.ts` · Test alongside
+
+v3.1: implements `ModelUpdateService` from `ai/face/models/manager.ts` (`sync()`, `rollbackLocal(name)`), drives `ModelManager.activate` after verification, and keeps the PREVIOUS version's cached files until the new version fully verifies — that cached previous version is what `rollbackLocal` reactivates. Manifest entries are full `ModelDescriptor`s (D8 metadata).
 
 - [ ] **Step 1 — failing test:** with injected `fetchFn` + in-memory `CacheLike { put,get,delete,keys }`:
   - fresh install: downloads all manifest files, verifies sha256 (WebCrypto `crypto.subtle.digest`), stores under key `name@version/file`, records `activeVersion`

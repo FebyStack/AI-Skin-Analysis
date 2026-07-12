@@ -27,6 +27,19 @@ Enhancement calls send the merged report JSON — never images. Existing guardra
 ### D4 — Face detection/landmarks: **MediaPipe Face Landmarker**
 On-device, no training, no server, gives detection + orientation (head pose from landmarks) + the zone geometry (forehead/cheeks/nose/chin/periorbital) the pipeline needs. Zone definitions map landmark indices → polygons, shared by capture guidance and analyzers.
 
+### D6 (v3.1 revision) — Inference abstraction layer: **ModelManager + interface-first, MockClassifier for dev, ONNX reserved**
+- **No untrained dev model ships, ever.** The lesion-era `make_dev_model` (random weights) is removed; development and tests use a **`MockClassifier`** implementing the same `Classifier` interface — deterministic, honest, zero download.
+- **`ModelManager`** (client, `ai/face/models/manager.ts`): single owner of model lifecycle — registers framework loaders, activates descriptor versions, reports `versions()` into every report's `modelVersions`. The MediaPipe landmarker is its first managed model; future learned per-dimension models and the future lesion classifier join the same registry.
+- **Classification and explanation are separate services** end-to-end: local inference (analyzers/classifiers via ModelManager) never calls the network; explanation (Gemini proxy or builtin) never scores skin.
+- **Reserved, not built:** `OnnxClassifier` (onnxruntime-web) slot behind the `Classifier` interface — the future lesion module and learned analyzers load through it; adding it is a loader registration, not a refactor. `ModelUpdateService` interface reserved in Phase A types; implemented in Phase D.
+- **`ConnectivityService`** (client): one named service exposing both axes — `backendReachable` and `llmAvailable` — consumed by the sync queue, explanation upgrades, and UI badges. Hooks wrap the service; no component polls ad-hoc.
+
+### D7 (v3.1) — Backend does **no runtime inference**
+Backend responsibilities are exactly: **training** (offline Python toolkit), **authentication**, **synchronization** (scan/history persistence), **model distribution** (manifest + artifacts + promote/rollback), and **LLM proxying** (Gemini key custody — explanation only, never scoring). The FastAPI runtime-inference service from the parked lesion plan is superseded: the future lesion module runs ONNX **in the browser** through ModelManager. The Python code remains solely as the training/dataset toolkit.
+
+### D8 (v3.1) — Expanded model metadata
+Every distributed model carries a full descriptor: `{name, version, task, framework, files[{path,sha256,bytes}], inputSpec, classes?, metrics?, datasetManifestSha256?, createdAt, notes}`. The registry keeps every version (promote/rollback = status flips, never deletes); clients keep the previous cached version until a new one fully verifies (local rollback).
+
 ### D5 — In-flight lesion work: **parked, becomes the future module**
 Plans 7–9, the lesion spec, and branch `feat/ai-classifier` (2 commits: python scaffolding + transforms) are the future Skin Spot module's head start: separate pipeline, datasets, models, UI — exactly as this spec's "future optional module" requires. Nothing to unwind.
 

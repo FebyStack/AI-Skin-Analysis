@@ -1,0 +1,30 @@
+{
+  "model_name": "efficientnet_b1",
+  "best_f1": 0.6879147479191271,
+  "best_accuracy": 68.23671497584542,
+  "best_epoch": 29,
+  "total_epochs": 30,
+  "num_classes": 6,
+  "class_mapping": {
+    "ACK": 0,
+    "BCC": 1,
+    "MEL": 2,
+    "NEV": 3,
+    "SCC": 4,
+    "SEK": 5
+  },
+  "img_size": 224,
+  "batch_size": 32,
+  "lr": 0.0001,
+  "num_params": 6520870,
+  "num_trainable_params": 6520870,
+  "files": {
+    "weights": "best_weights.pth",
+    "checkpoint": "best_checkpoint.pth",
+    "history": "training_history.csv",
+    "accuracy_loss_plot": "accuracy_loss_curves.png",
+    "confusion_matrix": "confusion_matrix.png",
+    "per_class_metrics": "per_class_metrics.png",
+    "classification_report": "classification_report.txt"
+  }
+}

@@ -53,14 +53,21 @@ export function CameraFeed({
           ref={videoRef}
           playsInline
           muted
-          className="h-full w-full object-cover"
+          // Mirror the LIVE PREVIEW only for the selfie camera (facingMode:"user")
+          // so what the user sees matches a real mirror during framing. The
+          // captured photo is drawn from the raw video stream (untransformed)
+          // in snap() below, so the stored image is not mirrored.
+          className={`h-full w-full object-cover ${mode === "face" ? "scale-x-[-1]" : ""}`}
         />
 
-        {/* Interactive facial positioning overlay */}
+        {/* Interactive facial positioning overlay.
+            The video is mirrored in face mode (see className above); mirror the
+            alignment shapes too so "left cheek" guidance stays over the user's
+            actual left cheek in the mirrored preview. */}
         {status === "live" && mode === "face" && (
           <>
             {/* Oval Alignment Grid - mathematically centered in the entire container */}
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none scale-x-[-1]">
               <div
                 className={`transition-all duration-500 transform ${
                   guideStep === "left"

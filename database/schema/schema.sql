@@ -27,3 +27,17 @@ CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+
+-- Face-scan angles are stored as separate rows tied to the parent scan.
+-- (Plan 12 — v3 face-analysis architecture.)
+CREATE TABLE IF NOT EXISTS scan_images (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  scan_id UUID NOT NULL REFERENCES scans(id) ON DELETE CASCADE,
+  angle TEXT NOT NULL CHECK (angle IN ('front','left-45','right-45','left-profile','right-profile','forehead','chin')),
+  image_jpeg BYTEA NOT NULL,
+  image_width INT NOT NULL,
+  image_height INT NOT NULL,
+  quality JSONB NOT NULL DEFAULT '{}',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS scan_images_scan ON scan_images (scan_id);

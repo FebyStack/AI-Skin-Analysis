@@ -147,6 +147,8 @@ import type { FaceGeometry } from "../types";
 export const LANDMARKER_MODEL_URL = "/models/face_landmarker.task";
 const WASM_BASE = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm"; // Phase D: self-host via model channel
 
+// v3.1: register as a ModelManager "mediapipe" loader so version reporting + future
+// manifest-driven updates flow through one place. getLandmarker() stays the call site.
 let landmarkerPromise: Promise<FaceLandmarker> | null = null;
 
 export function getLandmarker(): Promise<FaceLandmarker> {

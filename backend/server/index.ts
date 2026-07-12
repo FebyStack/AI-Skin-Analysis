@@ -3,6 +3,9 @@ import { randomBytes } from "node:crypto";
 import path from "node:path";
 import { Pool } from "pg";
 import { createApp } from "../app/app";
+import { lesionProviderFromEnv } from "../modules/analysis/lesion-provider";
+import { explainLesion } from "../../ai/llm/lesion-explainer";
+import { explainFace } from "../../ai/llm/face-explainer";
 import { PgPatientRepo } from "../modules/patients/repository";
 import { PgScanRepo } from "../modules/analysis/repository";
 import { PgSettingsRepo } from "../modules/settings/repository";
@@ -50,6 +53,25 @@ async function main() {
         return result.text;
       },
     },
+    lesion: lesionProviderFromEnv(),
+    lesionExplain: apiKey
+      ? (analysis) =>
+          explainLesion(analysis, (prompt) =>
+            callGemini(
+              { imageB64: "", mime: "", system: "You are a careful medical-communication assistant.", user: prompt },
+              { apiKey, model: process.env.CRITIQUE_MODEL ?? "gemini-2.5-flash", maxTokens: Number(process.env.MAX_TOKENS ?? "2048") },
+            ).then((r) => r.text),
+          )
+      : undefined,
+    faceExplain: apiKey
+      ? (report) =>
+          explainFace(report, (prompt) =>
+            callGemini(
+              { imageB64: "", mime: "", system: "You are a careful cosmetic-communication assistant.", user: prompt },
+              { apiKey, model: process.env.CRITIQUE_MODEL ?? "gemini-2.5-flash", maxTokens: Number(process.env.MAX_TOKENS ?? "2048") },
+            ).then((r) => r.text),
+          )
+      : undefined,
     sessionSecret,
     now: () => Date.now(),
   });

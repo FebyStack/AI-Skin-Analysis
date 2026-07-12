@@ -1,6 +1,7 @@
 import { MemoryPatientRepo } from "../modules/patients/repository";
 import { MemoryScanRepo } from "../modules/analysis/repository";
 import { MemorySettingsRepo } from "../modules/settings/repository";
+import { FakeLesionProvider } from "../modules/analysis/lesion-client";
 import type { AppDeps } from "./deps";
 import goldenReport from "../../ai/evaluation/fixtures/golden-report.json";
 
@@ -21,6 +22,7 @@ export function makeTestDeps(overrides: Partial<AppDeps> = {}): AppDeps {
           ? JSON.stringify(goldenReport)
           : '{"verdict":"approved"}',
     },
+    lesion: new FakeLesionProvider(),
     sessionSecret: "test-secret",
     now: () => Date.now(),
     ...overrides,
