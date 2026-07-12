@@ -18,6 +18,14 @@ export function createApp(deps: AppDeps): Express {
     res.json({ ok: true });
   });
 
+  // Serve model weight files uploaded/admin-managed under /models/*
+  // Stored on disk at backend/public/models so they are available to the browser
+  const modelsDir = require("node:path").resolve(process.cwd(), "backend/public/models");
+  app.use('/models', express.static(modelsDir));
+  // Ensure directory exists (created at boot by the server process if missing)
+  try { require('node:fs').mkdirSync(modelsDir, { recursive: true }); } catch (e) { /* ignore */ }
+
+
   const auth = requireSession(deps.sessionSecret, deps.now);
   const captures = new CaptureSessionStore(deps.now);
 
