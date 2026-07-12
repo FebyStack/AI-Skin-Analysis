@@ -3,7 +3,7 @@ import type { AppDeps } from "../../shared/deps";
 import { ModelsRepository } from "./repository";
 import { ModelsService } from "./service";
 
-export function createModelsRoutes(deps: AppDeps): Router {
+export function createModelsRoutes(deps: AppDeps, auth?: RequestHandler): Router {
   const router = Router();
 
   // Guard: models routes require a database pool
@@ -86,81 +86,161 @@ export function createModelsRoutes(deps: AppDeps): Router {
     }
   });
 
-  router.post("/:modelId/promote/:versionId", async (req: Request, res: Response) => {
-    try {
-      const { modelId, versionId } = req.params;
-      const promoted = await service.promoteVersion(modelId, versionId);
-      res.json({
-        success: true,
-        message: `Promoted ${modelId} to version ${promoted.version}`,
-        data: {
-          modelId,
-          version: promoted.version,
-          isCurrent: promoted.is_current,
-        },
-      });
-    } catch (error) {
-      console.error("Failed to promote version:", error);
-      res.status(error instanceof Error && error.message.includes("not found") ? 404 : 500).json({
-        success: false,
-        error: error instanceof Error ? error.message : "Failed to promote version",
-      });
-    }
-  });
-
-  router.post("/:modelId/rollback", async (req: Request, res: Response) => {
-    try {
-      const { modelId } = req.params;
-      const rolled = await service.rollback(modelId);
-      if (!rolled) {
-        return res.status(400).json({
+  // Admin operations require auth if provided
+  if (auth) {
+    router.post("/:modelId/promote/:versionId", auth, async (req: Request, res: Response) => {
+      try {
+        const { modelId, versionId } = req.params;
+        const promoted = await service.promoteVersion(modelId, versionId);
+        res.json({
+          success: true,
+          message: `Promoted ${modelId} to version ${promoted.version}`,
+          data: {
+            modelId,
+            version: promoted.version,
+            isCurrent: promoted.is_current,
+          },
+        });
+      } catch (error) {
+        console.error("Failed to promote version:", error);
+        res.status(error instanceof Error && error.message.includes("not found") ? 404 : 500).json({
           success: false,
-          error: "No previous stable version available for rollback",
+          error: error instanceof Error ? error.message : "Failed to promote version",
         });
       }
+    });
 
-      res.json({
-        success: true,
-        message: `Rolled back ${modelId} to version ${rolled.version}`,
-        data: {
-          modelId,
-          version: rolled.version,
-          isCurrent: rolled.is_current,
-        },
-      });
-    } catch (error) {
-      console.error("Failed to rollback:", error);
-      res.status(error instanceof Error && error.message.includes("not found") ? 404 : 500).json({
-        success: false,
-        error: error instanceof Error ? error.message : "Failed to rollback",
-      });
-    }
-  });
+    router.post("/:modelId/rollback", auth, async (req: Request, res: Response) => {
+      try {
+        const { modelId } = req.params;
+        const rolled = await service.rollback(modelId);
+        if (!rolled) {
+          return res.status(400).json({
+            success: false,
+            error: "No previous stable version available for rollback",
+          });
+        }
 
-  router.post("/", async (req: Request, res: Response) => {
-    try {
-      const { id, name, type, description } = req.body;
-      if (!id || !name || !type) {
-        return res.status(400).json({
+        res.json({
+          success: true,
+          message: `Rolled back ${modelId} to version ${rolled.version}`,
+          data: {
+            modelId,
+            version: rolled.version,
+            isCurrent: rolled.is_current,
+          },
+        });
+      } catch (error) {
+        console.error("Failed to rollback:", error);
+        res.status(error instanceof Error && error.message.includes("not found") ? 404 : 500).json({
           success: false,
-          error: "Missing required fields: id, name, type",
+          error: error instanceof Error ? error.message : "Failed to rollback",
         });
       }
+    });
 
-      const model = await service.registerModel(id, name, type as any, description);
-      res.status(201).json({
-        success: true,
-        message: `Registered new model: ${name}`,
-        data: model,
-      });
-    } catch (error) {
-      console.error("Failed to register model:", error);
-      res.status(500).json({
-        success: false,
-        error: error instanceof Error ? error.message : "Failed to register model",
-      });
-    }
-  });
+    router.post("/", auth, async (req: Request, res: Response) => {
+      try {
+        const { id, name, type, description } = req.body;
+        if (!id || !name || !type) {
+          return res.status(400).json({
+            success: false,
+            error: "Missing required fields: id, name, type",
+          });
+        }
+
+        const model = await service.registerModel(id, name, type as any, description);
+        res.status(201).json({
+          success: true,
+          message: `Registered new model: ${name}`,
+          data: model,
+        });
+      } catch (error) {
+        console.error("Failed to register model:", error);
+        res.status(500).json({
+          success: false,
+          error: error instanceof Error ? error.message : "Failed to register model",
+        });
+      }
+    });
+  } else {
+    // If no auth provided, expose POSTs but log a warning
+    router.post("/:modelId/promote/:versionId", async (req: Request, res: Response) => {
+      try {
+        const { modelId, versionId } = req.params;
+        const promoted = await service.promoteVersion(modelId, versionId);
+        res.json({
+          success: true,
+          message: `Promoted ${modelId} to version ${promoted.version}`,
+          data: {
+            modelId,
+            version: promoted.version,
+            isCurrent: promoted.is_current,
+          },
+        });
+      } catch (error) {
+        console.error("Failed to promote version:", error);
+        res.status(error instanceof Error && error.message.includes("not found") ? 404 : 500).json({
+          success: false,
+          error: error instanceof Error ? error.message : "Failed to promote version",
+        });
+      }
+    });
+
+    router.post("/:modelId/rollback", async (req: Request, res: Response) => {
+      try {
+        const { modelId } = req.params;
+        const rolled = await service.rollback(modelId);
+        if (!rolled) {
+          return res.status(400).json({
+            success: false,
+            error: "No previous stable version available for rollback",
+          });
+        }
+
+        res.json({
+          success: true,
+          message: `Rolled back ${modelId} to version ${rolled.version}`,
+          data: {
+            modelId,
+            version: rolled.version,
+            isCurrent: rolled.is_current,
+          },
+        });
+      } catch (error) {
+        console.error("Failed to rollback:", error);
+        res.status(error instanceof Error && error.message.includes("not found") ? 404 : 500).json({
+          success: false,
+          error: error instanceof Error ? error.message : "Failed to rollback",
+        });
+      }
+    });
+
+    router.post("/", async (req: Request, res: Response) => {
+      try {
+        const { id, name, type, description } = req.body;
+        if (!id || !name || !type) {
+          return res.status(400).json({
+            success: false,
+            error: "Missing required fields: id, name, type",
+          });
+        }
+
+        const model = await service.registerModel(id, name, type as any, description);
+        res.status(201).json({
+          success: true,
+          message: `Registered new model: ${name}`,
+          data: model,
+        });
+      } catch (error) {
+        console.error("Failed to register model:", error);
+        res.status(500).json({
+          success: false,
+          error: error instanceof Error ? error.message : "Failed to register model",
+        });
+      }
+    });
+  }
 
   return router;
 }

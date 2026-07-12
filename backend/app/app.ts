@@ -35,13 +35,13 @@ export function createApp(deps: AppDeps): Express {
   app.use(createLesionRoutes(deps, auth));
   app.use(createFaceScanRoutes(deps, auth));
   app.use(createCaptureRoutes(captures, auth));
-  app.use("/api/models", createModelsRoutes(deps));
+  app.use("/api/models", createModelsRoutes(deps, auth));
   // Upload endpoint for model files (optional in test/lite envs)
   // Use require to avoid top-level await and bundler transform issues in tests
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   try {
     const createModelUploadRouter = require("../modules/models/upload-route").createModelUploadRouter;
-    if (createModelUploadRouter) app.use("/api/models", createModelUploadRouter(deps));
+    if (createModelUploadRouter) app.use("/api/models", createModelUploadRouter(deps, auth));
   } catch (e) {
     // upload router missing in some lightweight test environments — continue without it
     console.debug('Model upload router not mounted:', e?.message ?? e);
