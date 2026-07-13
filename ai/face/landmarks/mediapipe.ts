@@ -1,60 +1,51 @@
 import { FaceLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
+import { resolveModelSource, type ModelCacheProvider } from "../models/cached-blob";
 import type { FaceGeometry } from "../types";
 
 export const LANDMARKER_MODEL_URL = "/models/face_landmarker.task";
 const WASM_BASE = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm"; // Phase D: self-host via model channel
 
-// Helper: try to read cached model blob from the ModelUpdateService IndexedDB store
-async function getCachedModelObjectUrl(modelId: string): Promise<string | null> {
-    if (typeof indexedDB === "undefined") return null;
-    try {
-        const req = indexedDB.open("ai-skin-analysis-models", 1);
-        return await new Promise((resolve) => {
-            req.onerror = () => resolve(null);
-            req.onsuccess = () => {
-                const db = req.result;
-                try {
-                    const tx = db.transaction(["models"], "readonly");
-                    const store = tx.objectStore("models");
-                    const getReq = store.get(modelId);
-                    getReq.onsuccess = () => {
-                        const val = getReq.result;
-                        if (val && val.blob) {
-                            const url = URL.createObjectURL(val.blob as Blob);
-                            resolve(url);
-                        } else {
-                            resolve(null);
-                        }
-                    };
-                    getReq.onerror = () => resolve(null);
-                } catch (e) {
-                    resolve(null);
-                }
-            };
-        });
-    } catch (e) {
-        return null;
-    }
-}
-
 // v3.1: register as a ModelManager "mediapipe" loader so version reporting + future
 // manifest-driven updates flow through one place. getLandmarker() stays the call site.
 let landmarkerPromise: Promise<FaceLandmarker> | null = null;
 
+// Same shared resolver as ai/face/segmentation/parser.ts -- one cache lookup
+// implementation for every on-device model, not a separate hand-rolled one per
+// file. Left null until a real model cache/registry exists to inject here.
+let cacheProvider: ModelCacheProvider | null = null;
+export function setLandmarkerCacheProvider(provider: ModelCacheProvider | null): void {
+    cacheProvider = provider;
+}
+
 export function getLandmarker(): Promise<FaceLandmarker> {
     landmarkerPromise ??= (async () => {
         const fileset = await FilesetResolver.forVisionTasks(WASM_BASE);
-        // If the model was provisioned via model-update-service, prefer the cached blob URL
-        const cachedUrl = await getCachedModelObjectUrl("face-landmarker");
-        const modelAssetPath = cachedUrl ?? LANDMARKER_MODEL_URL;
-        return FaceLandmarker.createFromOptions(fileset, {
-            baseOptions: { modelAssetPath },
-            runningMode: "VIDEO",
-            numFaces: 1,
-            outputFacialTransformationMatrixes: true,
-        });
+        const source = await resolveModelSource(
+            "face-landmarker",
+            LANDMARKER_MODEL_URL,
+            cacheProvider,
+            (reason, detail) => {
+                if (reason === "error") console.warn("face-landmarker cache lookup failed, using remote:", detail);
+            },
+        );
+        try {
+            return await FaceLandmarker.createFromOptions(fileset, {
+                baseOptions: { modelAssetPath: source.url },
+                runningMode: "VIDEO",
+                numFaces: 1,
+                outputFacialTransformationMatrixes: true,
+            });
+        } finally {
+            source.release();
+        }
     })();
     return landmarkerPromise;
+}
+
+/** Reset the cached landmarker + cache provider (tests). */
+export function resetLandmarkerCache(): void {
+    landmarkerPromise = null;
+    cacheProvider = null;
 }
 
 /** 4x4 row-major transformation matrix → yaw/pitch/roll degrees. Pure, unit-tested. */

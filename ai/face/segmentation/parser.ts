@@ -1,6 +1,7 @@
 import { pickExecutionProviders } from "../../classifier/classifier";
 import { NUM_PARSE_CLASSES } from "./labels";
 import { argmaxLogits, upscaleLabelMap, type LabelMap } from "./masks";
+import { resolveModelSource, type ModelCacheProvider } from "../models/cached-blob";
 import type { Pixels } from "../types";
 
 export const FACE_PARSING_MODEL_URL =
@@ -18,6 +19,16 @@ type OrtSession = import("onnxruntime-web").InferenceSession;
 
 let sessionPromise: Promise<OrtSession | null> | null = null;
 
+// Set by the app shell once a real model cache/registry exists (e.g. a future
+// model-update-service). Left null today, so this always falls through to the
+// plain remote fetch below -- exactly the previous behavior. Wiring a real
+// provider in later is a one-line call to setFaceParsingCacheProvider, no
+// changes needed here.
+let cacheProvider: ModelCacheProvider | null = null;
+export function setFaceParsingCacheProvider(provider: ModelCacheProvider | null): void {
+    cacheProvider = provider;
+}
+
 /** Preload ONNX session; returns null when model file is absent (offline / dev without weights). */
 export function ensureFaceParser(): Promise<OrtSession | null> {
     sessionPromise ??= loadSession();
@@ -25,41 +36,41 @@ export function ensureFaceParser(): Promise<OrtSession | null> {
 }
 
 async function loadSession(): Promise<OrtSession | null> {
-    try {
-        // Prefer a cached model blob if available (downloaded via ModelUpdateService)
-        try {
-            if (typeof window !== 'undefined') {
-                // dynamic import to avoid server-side bundling issues
-                // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-                // @ts-ignore
-                const { modelUpdateService } = await import("@/features/skin-analysis/pwa/model-update-service");
-                const cached = await modelUpdateService.getCachedModel('face-parsing');
-                if (cached && cached.blob) {
-                    const url = URL.createObjectURL(cached.blob as Blob);
-                    const ort = await import('onnxruntime-web');
-                    const hasWebGpu = typeof navigator !== 'undefined' && 'gpu' in navigator;
-                    const session = await ort.InferenceSession.create(url, {
-                        executionProviders: pickExecutionProviders(hasWebGpu),
-                    });
-                    return session;
-                }
-            }
-        } catch (err) {
-            // Fall back to remote fetch on any error
-            console.warn('Failed to load parser from cache, falling back to remote:', err);
-        }
+    const source = await resolveModelSource(
+        "face-parsing",
+        FACE_PARSING_MODEL_URL,
+        cacheProvider,
+        (reason, detail) => {
+            if (reason === "error") console.warn("face-parsing model cache lookup failed, using remote:", detail);
+        },
+    );
 
-        const probe = await fetch(FACE_PARSING_MODEL_URL, { method: "HEAD" });
-        const ct = probe.headers.get("content-type") ?? "";
-        if (!probe.ok || ct.includes("text/html")) return null;
+    try {
+        // A cached blob is trusted (it was verified when it was stored) -- only
+        // probe the URL when we're actually about to hit the network, so a HEAD
+        // request isn't wasted when the cache already answered.
+        if (source.url === FACE_PARSING_MODEL_URL) {
+            const probe = await fetch(FACE_PARSING_MODEL_URL, { method: "HEAD" });
+            const ct = probe.headers.get("content-type") ?? "";
+            if (!probe.ok || ct.includes("text/html")) {
+                source.release();
+                return null;
+            }
+        }
 
         const ort = await import("onnxruntime-web");
         const hasWebGpu = typeof navigator !== "undefined" && "gpu" in navigator;
-        return ort.InferenceSession.create(FACE_PARSING_MODEL_URL, {
+        const session = await ort.InferenceSession.create(source.url, {
             executionProviders: pickExecutionProviders(hasWebGpu),
         });
+        return session;
     } catch {
         return null;
+    } finally {
+        // Session creation has finished reading the blob (or failed) either way --
+        // the object URL isn't needed past this point. release() on a plain
+        // fallback URL is a safe no-op.
+        source.release();
     }
 }
 
@@ -102,7 +113,8 @@ export async function parseFaceLabels(pixels: Pixels): Promise<LabelMap | null> 
     return upscaleLabelMap(small, w, h, pixels.width, pixels.height);
 }
 
-/** Reset cached session (tests). */
+/** Reset cached session + cache provider (tests). */
 export function resetFaceParserCache(): void {
     sessionPromise = null;
+    cacheProvider = null;
 }
