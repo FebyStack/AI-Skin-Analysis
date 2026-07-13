@@ -73,6 +73,16 @@ export function createAnalysisRoutes(deps: AppDeps, auth: RequestHandler): Route
     res.json({ ok: true });
   });
 
+  router.get("/api/scans/:id", auth, async (req, res) => {
+    const scan = await deps.scans.get(req.params.id);
+    if (!scan) {
+      res.status(404).json({ error: "not found" });
+      return;
+    }
+    const { imageJpeg: _img, ...scanWire } = scan;
+    res.json({ scan: scanWire });
+  });
+
   router.get("/api/scans/:id/image", auth, async (req, res) => {
     const img = await deps.scans.getImage(req.params.id);
     if (!img) {

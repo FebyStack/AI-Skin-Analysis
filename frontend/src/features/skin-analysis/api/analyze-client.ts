@@ -65,3 +65,14 @@ export async function analyzeCapture(
   if (!data.scan) throw new AnalyzeFailedError("Malformed server response.");
   return data.scan;
 }
+
+// Re-fetch a previously analyzed scan by id — used to render the results screen
+// on reload/deep-link, and for scans synced later from the offline queue.
+export async function getScan(id: string, fetchFn: FetchFn = fetch): Promise<ScanWire | null> {
+  const res = await fetchFn(`/api/scans/${id}`, { credentials: "include" });
+  if (res.status === 401) throw new AnalyzeAuthError();
+  if (res.status === 404) return null;
+  if (!res.ok) throw new AnalyzeFailedError("Could not load the scan.");
+  const data = (await res.json()) as { scan?: ScanWire };
+  return data.scan ?? null;
+}

@@ -192,6 +192,36 @@ describe("analyze", () => {
     expect(img.status).toBe(200);
     expect(img.headers["content-type"]).toBe("image/jpeg");
   });
+
+  it("fetches a single scan by id, without the raw image bytes", async () => {
+    const { app, cookie } = await loggedInAgent();
+    const patient = await request(app).post("/api/patients").set("Cookie", cookie).send({ name: "Cy" });
+    const pid = patient.body.patient.id;
+    const analyzed = await request(app)
+      .post("/api/analyze")
+      .set("Cookie", cookie)
+      .send({ patientId: pid, image: await tinyJpegB64(), mime: "image/jpeg", mode: "face" });
+
+    const fetched = await request(app)
+      .get(`/api/scans/${analyzed.body.scan.id}`)
+      .set("Cookie", cookie);
+    expect(fetched.status).toBe(200);
+    expect(fetched.body.scan.id).toBe(analyzed.body.scan.id);
+    expect(fetched.body.scan.report).toEqual(analyzed.body.scan.report);
+    expect(fetched.body.scan.imageJpeg).toBeUndefined();
+  });
+
+  it("returns 404 for an unknown scan id", async () => {
+    const { app, cookie } = await loggedInAgent();
+    const res = await request(app).get("/api/scans/does-not-exist").set("Cookie", cookie);
+    expect(res.status).toBe(404);
+  });
+
+  it("blocks scan retrieval without a session", async () => {
+    const { app } = await loggedInAgent();
+    const res = await request(app).get("/api/scans/anything");
+    expect(res.status).toBe(401);
+  });
 });
 
 describe("capture sessions (QR)", () => {

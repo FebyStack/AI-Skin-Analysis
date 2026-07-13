@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useScanMachine } from "../../store/scan-machine";
 import { CameraFeed } from "./CameraFeed";
 import { UploadDropzone } from "./UploadDropzone";
@@ -7,6 +7,8 @@ import { useAnalysis, type AnalysisStage } from "../../hooks/use-analysis";
 import { AnalysisProgress } from "../results/AnalysisProgress";
 import { ReportView } from "../results/ReportView";
 import { stripMetadata, canvasCodec, toCaptureResult } from "../../privacy/redact";
+import { getScan } from "../../api/analyze-client";
+import type { AnalysisReport } from "@shared/contract";
 import type { CaptureMode, CaptureResult } from "../../types";
 
 export function CaptureFlow({ mode, patientId }: { mode: CaptureMode; patientId: string }) {
@@ -50,15 +52,37 @@ export function CaptureFlow({ mode, patientId }: { mode: CaptureMode; patientId:
   );
   const quality = machine.quality;
 
+  // The scan's report already exists server-side by the time we reach "results" —
+  // fetch it by id so results survive a reload and work for scans synced later
+  // from the offline queue, rather than trusting only in-memory state from this capture.
+  const [report, setReport] = useState<AnalysisReport | null>(null);
+  const [reportError, setReportError] = useState(false);
+  useEffect(() => {
+    if (machine.state !== "results" || !machine.scanId) return;
+    let cancelled = false;
+    setReportError(false);
+    getScan(machine.scanId)
+      .then((scan) => {
+        if (!cancelled) setReport(scan?.report ?? null);
+      })
+      .catch((err) => {
+        console.error("Failed to fetch scan report:", err);
+        if (!cancelled) setReportError(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [machine.state, machine.scanId]);
+
   // Results view
   if (machine.state === "results" && machine.verdict) {
     return (
       <ReportView
-        report={null}
+        report={report}
         verdict={machine.verdict}
         onNewScan={machine.reset}
         capturedBlob={machine.capture?.blob}
-        // TODO(plan-6): fetch scan by machine.scanId to render dimensions + facial zones from the stored report
+        reportUnavailable={reportError}
       />
     );
   }

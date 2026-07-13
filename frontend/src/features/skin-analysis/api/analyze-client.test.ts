@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { analyzeCapture, AnalyzeAuthError, AnalyzeFailedError } from "./analyze-client";
+import { analyzeCapture, getScan, AnalyzeAuthError, AnalyzeFailedError } from "./analyze-client";
 import type { CaptureResult } from "../types";
 
 const capture: CaptureResult = {
@@ -46,5 +46,31 @@ describe("analyzeCapture", () => {
   it("throws AnalyzeFailedError on other failures", async () => {
     const fetchFn = vi.fn(async () => new Response("{}", { status: 502 }));
     await expect(analyzeCapture(capture, "p-1", [], fetchFn)).rejects.toThrow(AnalyzeFailedError);
+  });
+});
+
+describe("getScan", () => {
+  it("fetches with credentials and returns the scan", async () => {
+    const fetchFn = vi.fn(async () => new Response(JSON.stringify({ scan: scanWire }), { status: 200 }));
+    const scan = await getScan("scan-1", fetchFn);
+    expect(scan?.id).toBe("scan-1");
+    const [url, init] = fetchFn.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("/api/scans/scan-1");
+    expect(init.credentials).toBe("include");
+  });
+
+  it("returns null on 404 instead of throwing", async () => {
+    const fetchFn = vi.fn(async () => new Response("{}", { status: 404 }));
+    await expect(getScan("missing", fetchFn)).resolves.toBeNull();
+  });
+
+  it("throws AnalyzeAuthError on 401", async () => {
+    const fetchFn = vi.fn(async () => new Response("{}", { status: 401 }));
+    await expect(getScan("scan-1", fetchFn)).rejects.toThrow(AnalyzeAuthError);
+  });
+
+  it("throws AnalyzeFailedError on other failures", async () => {
+    const fetchFn = vi.fn(async () => new Response("{}", { status: 502 }));
+    await expect(getScan("scan-1", fetchFn)).rejects.toThrow(AnalyzeFailedError);
   });
 });
