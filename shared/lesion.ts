@@ -11,6 +11,12 @@ export interface LesionClassification {
 export interface LesionDetection {
   bbox: [number, number, number, number] | null; // null = whole-image fallback
   detectorConfidence: number | null;
+  // How much to trust that `classification` was run on an actual, localized
+  // lesion crop, vs. a whole undifferentiated photo (wholeImageFallback).
+  // Deliberately separate from classification.confidence: hasMalignantSignal()
+  // below reads classification confidence directly for the mandatory-referral
+  // safety check, and that must never be diluted by a localization caveat.
+  localizationConfidence: number;
   classification: LesionClassification;
 }
 
@@ -102,9 +108,12 @@ export function validateLesionAnalysis(
       const bboxOk = bbox === null || (Array.isArray(bbox) && bbox.length === 4 && bbox.every((n) => typeof n === "number"));
       if (!bboxOk) errors.push(`lesions[${i}].bbox malformed`);
       const detConf = (l.detector_confidence ?? l.detectorConfidence) as unknown;
+      const locConf = (l.localization_confidence ?? l.localizationConfidence) as unknown;
+      if (!in01(locConf)) errors.push(`lesions[${i}].localizationConfidence out of range`);
       lesions.push({
         bbox: (bbox as LesionDetection["bbox"]) ?? null,
         detectorConfidence: typeof detConf === "number" ? detConf : null,
+        localizationConfidence: in01(locConf) ? locConf : 0,
         classification: {
           predicted: (c.predicted as string | null) ?? null,
           confidence: (c.confidence as number) ?? 0,

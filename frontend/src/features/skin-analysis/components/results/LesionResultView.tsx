@@ -13,9 +13,15 @@ const URGENCY_STYLES: Record<ReferralUrgency, string> = {
 
 const pct = (n: number) => `${Math.round(n * 100)}%`;
 
+// Below this, the classification ran on the whole photo, not a detected/cropped
+// lesion — worth a real, visible caveat, not just small print in the header.
+const LOW_LOCALIZATION_THRESHOLD = 0.5;
+
 export function LesionResultView({ analysis, explanation }: Props) {
   // First lesion drives the headline; whole-image fallback means one entry.
   const primary = analysis.lesions[0]?.classification;
+  const localization = analysis.lesions[0]?.localizationConfidence ?? 1;
+  const lowLocalization = analysis.wholeImageFallback || localization < LOW_LOCALIZATION_THRESHOLD;
 
   return (
     <section className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6">
@@ -25,9 +31,16 @@ export function LesionResultView({ analysis, explanation }: Props) {
         </h2>
         <p className="mt-1 text-sm text-stone-500">
           Automated visual assessment · model {analysis.model.classifier}
-          {analysis.wholeImageFallback ? " · whole image (no detector localization)" : ""}
         </p>
       </header>
+
+      {lowLocalization && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900" role="status">
+          <strong className="font-semibold">This result covers the whole photo</strong>, not a specific
+          spot — we couldn't automatically identify a single lesion to focus on. For a more precise
+          result, try a closer, well-lit photo centered on the area of concern.
+        </div>
+      )}
 
       {explanation.referral.recommended && (
         <div

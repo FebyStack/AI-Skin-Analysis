@@ -9,7 +9,7 @@ import {
 
 function analysis(label: string, confidence = 0.8): LesionAnalysis {
   return {
-    lesions: [{ bbox: null, detectorConfidence: null, classification: { predicted: label, confidence, top: [{ label, confidence }] } }],
+    lesions: [{ bbox: null, detectorConfidence: null, localizationConfidence: 0.2, classification: { predicted: label, confidence, top: [{ label, confidence }] } }],
     wholeImageFallback: true,
     model: { classifier: "efficientnet_b1-isic2019", detector: "yolo11n-generic" },
   };

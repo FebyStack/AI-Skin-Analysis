@@ -3,6 +3,7 @@
     {
       "bbox": null,
       "detector_confidence": null,
+      "localization_confidence": 0.2,
       "classification": {
         "predicted": "MEL",
         "confidence": 0.72,

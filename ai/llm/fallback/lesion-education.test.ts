@@ -4,7 +4,7 @@ import { builtinLesionExplanation, LESION_DISCLAIMER } from "./lesion-education"
 
 function analysis(top: { label: string; confidence: number }[]): LesionAnalysis {
   return {
-    lesions: [{ bbox: null, detectorConfidence: null, classification: { predicted: top[0]?.label ?? null, confidence: top[0]?.confidence ?? 0, top } }],
+    lesions: [{ bbox: null, detectorConfidence: null, localizationConfidence: 0.2, classification: { predicted: top[0]?.label ?? null, confidence: top[0]?.confidence ?? 0, top } }],
     wholeImageFallback: true,
     model: { classifier: "efficientnet_b1-isic2019", detector: "yolo11n-generic" },
   };

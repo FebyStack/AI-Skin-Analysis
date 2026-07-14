@@ -28,6 +28,16 @@ ClassifyFn = Callable[[Image.Image], dict]
 CLASSIFIER_VERSION = "efficientnet_b1-isic2019"
 DETECTOR_VERSION = "yolo11n-generic"  # NOT lesion-trained — placeholder
 
+# Honest caveat, not a real measurement: yolo11n-generic was never trained on
+# lesion imagery, so it rarely fires on a lesion shape and analyze() usually
+# falls through to classifying the whole, undifferentiated photo. That's a
+# meaningfully different (weaker) situation than a real detected+cropped
+# lesion, and callers (report builder, UI) should be able to tell the two
+# apart -- without this being folded into classification.confidence, which
+# hasMalignantSignal() (shared/lesion.ts) depends on for the mandatory-referral
+# safety check. A single flat value keeps that promise legible and auditable.
+WHOLE_IMAGE_LOCALIZATION_CONFIDENCE = 0.2
+
 
 def _summarize(probs: dict) -> dict:
     items = list(probs.items())
@@ -79,6 +89,9 @@ class LesionPipeline:
                 lesions.append({
                     "bbox": d["bbox"],
                     "detector_confidence": d["confidence"],
+                    # A real detection: localization confidence is the detector's
+                    # own confidence in that box actually being a lesion.
+                    "localization_confidence": d["confidence"],
                     "classification": _summarize(self._classify(crop)),
                 })
             whole_image_fallback = False
@@ -88,6 +101,7 @@ class LesionPipeline:
             lesions.append({
                 "bbox": None,
                 "detector_confidence": None,
+                "localization_confidence": WHOLE_IMAGE_LOCALIZATION_CONFIDENCE,
                 "classification": _summarize(self._classify(img)),
             })
             whole_image_fallback = True

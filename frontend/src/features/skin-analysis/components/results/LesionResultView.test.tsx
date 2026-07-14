@@ -8,6 +8,7 @@ const analysis: LesionAnalysis = {
     {
       bbox: null,
       detectorConfidence: null,
+      localizationConfidence: 0.2,
       classification: {
         predicted: "MEL",
         confidence: 0.72,
@@ -58,7 +59,7 @@ describe("LesionResultView", () => {
   it("renders inconclusive headline when there is no prediction", () => {
     const inconclusive: LesionAnalysis = {
       ...analysis,
-      lesions: [{ bbox: null, detectorConfidence: null, classification: { predicted: null, confidence: 0, top: [] } }],
+      lesions: [{ bbox: null, detectorConfidence: null, localizationConfidence: 0.2, classification: { predicted: null, confidence: 0, top: [] } }],
     };
     render(<LesionResultView analysis={inconclusive} explanation={explanation} />);
     expect(screen.getByRole("heading", { name: /inconclusive/i })).toBeInTheDocument();
@@ -72,5 +73,27 @@ describe("LesionResultView", () => {
       />,
     );
     expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("shows a whole-photo caveat banner when the fallback was used", () => {
+    render(<LesionResultView analysis={analysis} explanation={explanation} />);
+    expect(screen.getByRole("status")).toHaveTextContent(/whole photo/i);
+  });
+
+  it("does not show the whole-photo caveat for a properly localized, high-confidence detection", () => {
+    const localized: LesionAnalysis = {
+      ...analysis,
+      wholeImageFallback: false,
+      lesions: [
+        {
+          bbox: [10, 10, 40, 40],
+          detectorConfidence: 0.9,
+          localizationConfidence: 0.9,
+          classification: analysis.lesions[0].classification,
+        },
+      ],
+    };
+    render(<LesionResultView analysis={localized} explanation={explanation} />);
+    expect(screen.queryByText(/whole photo/i)).toBeNull();
   });
 });
