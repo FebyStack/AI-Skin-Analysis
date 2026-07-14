@@ -9,7 +9,6 @@ import { requireAdmin } from "../middleware/require-admin";
 import { CaptureSessionStore } from "../modules/capture/store";
 import { createAuthRoutes } from "../modules/auth/routes";
 import { createPatientRoutes } from "../modules/patients/routes";
-import { createAnalysisRoutes } from "../modules/analysis/routes";
 import { createLesionRoutes } from "../modules/analysis/lesion-routes";
 import { createFaceScanRoutes } from "../modules/analysis/face-routes";
 import { createCaptureRoutes } from "../modules/capture/routes";
@@ -60,7 +59,6 @@ export function createApp(deps: AppDeps): Express {
 
   app.use(createAuthRoutes(deps));
   app.use(createPatientRoutes(deps, auth));
-  app.use(createAnalysisRoutes(deps, auth));
   app.use(createLesionRoutes(deps, auth));
   app.use(createFaceScanRoutes(deps, auth));
   app.use(createCaptureRoutes(captures, auth));
