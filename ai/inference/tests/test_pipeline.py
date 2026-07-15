@@ -7,6 +7,85 @@ def _img(w=64, h=64):
     return Image.new("RGB", (w, h), (150, 120, 110))
 
 
+# segment_fn: PIL.Image, bbox -> {"mask_bbox": [x1,y1,x2,y2], "iou": float} | None
+# iou is MobileSAM's own predicted mask quality (SamPredictor.predict()'s scores
+# output) — a real per-mask confidence, not a guess this pipeline invents.
+
+
+def test_without_segment_fn_behavior_is_unchanged():
+    # No segmentation configured (the default today) -> crops to the raw detector
+    # bbox exactly as before, no regression for anyone not opting in.
+    pipe = LesionPipeline(
+        detect_fn=lambda img: [{"bbox": [0, 0, 20, 20], "confidence": 0.9}],
+        classify_fn=lambda crop: {"MEL": 0.8, "NEV": 0.2},
+    )
+    out = pipe.analyze(_img())
+    assert out["lesions"][0]["bbox"] == [0, 0, 20, 20]
+    assert out["lesions"][0]["localization_confidence"] == 0.9
+
+
+def test_segment_fn_refines_the_crop_and_raises_localization_confidence():
+    # MobileSAM finds a tighter, high-confidence mask inside the detector's rough
+    # box -> classify on the refined crop, and trust localization MORE than the
+    # detector alone (a confirmed, precise region beats an unverified rectangle).
+    pipe = LesionPipeline(
+        detect_fn=lambda img: [{"bbox": [0, 0, 40, 40], "confidence": 0.6}],
+        segment_fn=lambda img, bbox: {"mask_bbox": [5, 5, 20, 20], "iou": 0.95},
+        classify_fn=lambda crop: {"MEL": 0.7, "NEV": 0.3},
+    )
+    out = pipe.analyze(_img())
+    lesion = out["lesions"][0]
+    assert lesion["bbox"] == [5, 5, 20, 20]  # refined, not the original rough box
+    assert lesion["localization_confidence"] > 0.6  # raised above the raw detector confidence
+    assert lesion["segmented"] is True
+
+
+def test_low_quality_mask_does_not_raise_confidence_or_replace_the_crop():
+    # A low predicted-IoU mask is a MobileSAM failure signal, not a refinement --
+    # keep the detector's own box and confidence rather than trust a bad mask.
+    pipe = LesionPipeline(
+        detect_fn=lambda img: [{"bbox": [0, 0, 40, 40], "confidence": 0.6}],
+        segment_fn=lambda img, bbox: {"mask_bbox": [1, 1, 39, 39], "iou": 0.2},
+        classify_fn=lambda crop: {"NEV": 0.9},
+    )
+    out = pipe.analyze(_img())
+    lesion = out["lesions"][0]
+    assert lesion["bbox"] == [0, 0, 40, 40]
+    assert lesion["localization_confidence"] == 0.6
+    assert lesion["segmented"] is False
+
+
+def test_segment_fn_is_never_called_on_whole_image_fallback():
+    # Nothing to refine when there's no detection to refine -- segmentation only
+    # ever runs on an already-detected box, never on the raw whole photo.
+    calls = []
+    pipe = LesionPipeline(
+        detect_fn=lambda img: [],
+        segment_fn=lambda img, bbox: calls.append(bbox) or {"mask_bbox": bbox, "iou": 0.9},
+        classify_fn=lambda crop: {"NEV": 0.5},
+    )
+    out = pipe.analyze(_img())
+    assert calls == []
+    assert out["whole_image_fallback"] is True
+    assert out["lesions"][0]["segmented"] is False
+
+
+def test_segment_fn_failure_falls_back_to_the_detector_box_without_crashing():
+    def boom(img, bbox):
+        raise RuntimeError("mobile_sam blew up")
+
+    pipe = LesionPipeline(
+        detect_fn=lambda img: [{"bbox": [0, 0, 20, 20], "confidence": 0.8}],
+        segment_fn=boom,
+        classify_fn=lambda crop: {"NEV": 0.5},
+    )
+    out = pipe.analyze(_img())
+    lesion = out["lesions"][0]
+    assert lesion["bbox"] == [0, 0, 20, 20]
+    assert lesion["localization_confidence"] == 0.8
+    assert lesion["segmented"] is False
+
+
 def test_summarize_picks_top_and_keeps_three():
     s = _summarize({"MEL": 0.6, "NEV": 0.3, "BCC": 0.08, "SCC": 0.02})
     assert s["predicted"] == "MEL"

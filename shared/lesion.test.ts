@@ -55,6 +55,47 @@ describe("validateLesionAnalysis", () => {
     }
   });
 
+  it("defaults segmented to false when absent — not a validation error", () => {
+    // The golden fixture predates the segmented field entirely; that must
+    // still validate as a normal, valid "not segmented" response, not fail.
+    const r = validateLesionAnalysis(golden);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.analysis.lesions[0].segmented).toBe(false);
+  });
+
+  it("normalizes a segmented detection with a segmenter model tag", () => {
+    const segmented = {
+      lesions: [
+        {
+          bbox: [5, 5, 20, 20],
+          detector_confidence: 0.6,
+          localization_confidence: 0.95,
+          segmented: true,
+          classification: { predicted: "MEL", confidence: 0.8, top: [{ label: "MEL", confidence: 0.8 }] },
+        },
+      ],
+      whole_image_fallback: false,
+      model: { classifier: "c", detector: "d", segmenter: "mobile_sam-vit_t" },
+    };
+    const r = validateLesionAnalysis(segmented);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.analysis.lesions[0].segmented).toBe(true);
+      expect(r.analysis.model.segmenter).toBe("mobile_sam-vit_t");
+    }
+  });
+
+  it("accepts a response with no model.segmenter at all (optional field)", () => {
+    const r = validateLesionAnalysis(golden);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.analysis.model.segmenter).toBeUndefined();
+  });
+
+  it("rejects a non-string model.segmenter", () => {
+    const bad = { ...golden, model: { ...golden.model, segmenter: 42 } };
+    expect(validateLesionAnalysis(bad).ok).toBe(false);
+  });
+
   it("rejects empty lesions", () => {
     expect(validateLesionAnalysis({ ...golden, lesions: [] }).ok).toBe(false);
   });

@@ -17,13 +17,18 @@ export interface LesionDetection {
   // below reads classification confidence directly for the mandatory-referral
   // safety check, and that must never be diluted by a localization caveat.
   localizationConfidence: number;
+  // Whether bbox came from MobileSAM refining the detector's box (a precise
+  // mask, gated on the mask's own predicted quality) vs. the raw detector
+  // rectangle. false whenever segmentation was unavailable, skipped (whole-
+  // image fallback), too low quality, or errored.
+  segmented: boolean;
   classification: LesionClassification;
 }
 
 export interface LesionAnalysis {
   lesions: LesionDetection[];
   wholeImageFallback: boolean;
-  model: { classifier: string; detector: string };
+  model: { classifier: string; detector: string; segmenter?: string };
 }
 
 // Malignant / concerning classes in the 6-class PAD-UFES/ISIC scheme.
@@ -114,6 +119,10 @@ export function validateLesionAnalysis(
         bbox: (bbox as LesionDetection["bbox"]) ?? null,
         detectorConfidence: typeof detConf === "number" ? detConf : null,
         localizationConfidence: in01(locConf) ? locConf : 0,
+        // Soft default, not a validation error: older service responses
+        // (before segmentation existed) simply won't have this field, and that
+        // should mean "not segmented", not "malformed response".
+        segmented: Boolean(l.segmented),
         classification: {
           predicted: (c.predicted as string | null) ?? null,
           confidence: (c.confidence as number) ?? 0,
@@ -125,6 +134,8 @@ export function validateLesionAnalysis(
 
   const model = r.model as Record<string, unknown> | undefined;
   if (typeof model?.classifier !== "string" || typeof model?.detector !== "string") errors.push("model malformed");
+  const segmenter = model?.segmenter;
+  if (segmenter !== undefined && typeof segmenter !== "string") errors.push("model.segmenter malformed");
 
   if (errors.length > 0) return { ok: false, errors };
   return {
@@ -132,7 +143,11 @@ export function validateLesionAnalysis(
     analysis: {
       lesions,
       wholeImageFallback: Boolean(r.whole_image_fallback ?? r.wholeImageFallback),
-      model: { classifier: String(model!.classifier), detector: String(model!.detector) },
+      model: {
+        classifier: String(model!.classifier),
+        detector: String(model!.detector),
+        ...(typeof segmenter === "string" ? { segmenter } : {}),
+      },
     },
   };
 }

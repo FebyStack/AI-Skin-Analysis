@@ -43,12 +43,24 @@ class ModelManager:
     def mobile_sam(self):
         if self._mobile_sam is None:
             print("Loading MobileSAM...")
-            # weights_only=True: refuse pickled code on load.
-            self._mobile_sam = torch.load(
-                BASE_DIR / "segmentation/mobile_sam.pt",
-                map_location=self.device,
-                weights_only=True,
-            )
+            # NOT plain torch.load — that returns a raw state dict, not something
+            # with .predict(). MobileSAM keeps the same interface as upstream SAM:
+            # build the architecture via sam_model_registry, load the checkpoint
+            # into it, then wrap it in SamPredictor to actually run inference.
+            # Requires the vendored MobileSAM/ clone importable (pip install -e .
+            # from that directory, or on PYTHONPATH) — see ai/models/README.md.
+            try:
+                from mobile_sam import sam_model_registry, SamPredictor
+            except ImportError as e:
+                raise ImportError(
+                    "mobile_sam is not importable. Install the vendored clone: "
+                    "cd MobileSAM && pip install -e .  (see ai/models/README.md)"
+                ) from e
+
+            sam = sam_model_registry["vit_t"](checkpoint=str(BASE_DIR / "segmentation/mobile_sam.pt"))
+            sam.to(device=self.device)
+            sam.eval()
+            self._mobile_sam = SamPredictor(sam)
         return self._mobile_sam
 
 

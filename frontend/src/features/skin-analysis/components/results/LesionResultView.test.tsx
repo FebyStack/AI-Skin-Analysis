@@ -9,6 +9,7 @@ const analysis: LesionAnalysis = {
       bbox: null,
       detectorConfidence: null,
       localizationConfidence: 0.2,
+      segmented: false,
       classification: {
         predicted: "MEL",
         confidence: 0.72,
@@ -59,7 +60,7 @@ describe("LesionResultView", () => {
   it("renders inconclusive headline when there is no prediction", () => {
     const inconclusive: LesionAnalysis = {
       ...analysis,
-      lesions: [{ bbox: null, detectorConfidence: null, localizationConfidence: 0.2, classification: { predicted: null, confidence: 0, top: [] } }],
+      lesions: [{ bbox: null, detectorConfidence: null, localizationConfidence: 0.2, segmented: false, classification: { predicted: null, confidence: 0, top: [] } }],
     };
     render(<LesionResultView analysis={inconclusive} explanation={explanation} />);
     expect(screen.getByRole("heading", { name: /inconclusive/i })).toBeInTheDocument();
@@ -89,6 +90,7 @@ describe("LesionResultView", () => {
           bbox: [10, 10, 40, 40],
           detectorConfidence: 0.9,
           localizationConfidence: 0.9,
+          segmented: true,
           classification: analysis.lesions[0].classification,
         },
       ],
