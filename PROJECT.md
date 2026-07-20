@@ -47,7 +47,7 @@ Plans 1–4 executed and merged. Plan 5 (results/report UI) + Plan 6 (patients/h
 
 ## Environment gotchas
 
-- Node 25.9.0 (homebrew). 2026-07-10: vitest 2.1.9 hung at startup (0% CPU, forks+threads, sandboxed+unsandboxed) — resolved by dropping `@vitejs/plugin-react` from `vitest.config.ts`. If vitest hangs again, suspect that plugin/Node-25 interaction first.
+- Node v22.23.1 (homebrew, switched from 25.9.0 on 2026-07-12; nvm has the same). **vitest 2.1.9 hangs are NOT a Node-version issue** — verified 2026-07-20: a single-file run hangs under the Claude-harness shell on node 22 while the same command runs green in a normal terminal. It's a harness-environment quirk (non-TTY stdout/injected env), intermittent, and node-version-independent. Rule: agents should rely on exit codes/user-run results for vitest; the user's terminal is the source of truth for suite status.
 - jsdom polyfills in `frontend/src/test/setup.ts` are load-bearing (broken localStorage, no Blob.text/Worker; `window` guard for node-env test files). Don't delete.
 - `vite.config.ts` `worker.format: "es"` is required by onnxruntime-web.
 - Docker: `Dockerfile.dockerignore` must exclude `.venv` (torch venv at repo root) and node_modules or `COPY . .` breaks native binaries; server bundle is CJS → `dist-server/index.cjs`; pg restore needs `--clean --if-exists` (schema self-applies on boot).
