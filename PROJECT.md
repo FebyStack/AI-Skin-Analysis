@@ -57,7 +57,7 @@ Plans 1–4 executed and merged. Plan 5 (results/report UI) + Plan 6 (patients/h
 
 Brainstorm → spec → writing-plans → subagent-driven execution with one final opus review before merge. Verify camera/browser changes live in the preview tool, not just unit tests. `git push` to `https://github.com/FebyStack/AI-Skin-Analysis.git` was configured via `gh auth git-credential` but never confirmed pushed.
 
-last Claude session: 2026-07-12 15:38
+last Claude session: 2026-07-20 10:45
 
 ## Recent updates (2026-07-12)
 
@@ -84,3 +84,11 @@ To push these commits from your environment:
   git push origin febystack-ubiquitous-disco
 
 If you'd like, I can push them now; otherwise run the command above to push.
+
+## Status audit 2026-07-15 (full-codebase analysis)
+
+Complete state audit filed in Obsidian: `Claude Code/AI Skin Analysis Status 2026-07-15.md`.
+Headlines: both AI branches functional (face on-device pipeline + lesion EfficientNet-B1 w/ MobileSAM refinement + localization confidence); model distribution platform + admin UI landed via PR #4.
+**Dormant/missing:** PWA icons never generated (`node scripts/generate-icons.mjs`); face-parsing ONNX never downloaded (`.venv/bin/python -m ai.models.fetch_models face-parsing`) so segmentation silently falls back to landmark polygons; MobileSAM real-weights path never run on an actual photo; upload→promote→download integration test missing; main 1 commit ahead of origin; stale `feat/face-analysis` branch to delete after confirming superseded.
+
+last Claude session: 2026-07-15 (status audit)
