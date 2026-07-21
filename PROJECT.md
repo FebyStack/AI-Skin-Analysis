@@ -92,3 +92,12 @@ Headlines: both AI branches functional (face on-device pipeline + lesion Efficie
 **Dormant/missing:** PWA icons never generated (`node scripts/generate-icons.mjs`); face-parsing ONNX never downloaded (`.venv/bin/python -m ai.models.fetch_models face-parsing`) so segmentation silently falls back to landmark polygons; MobileSAM real-weights path never run on an actual photo; upload→promote→download integration test missing; main 1 commit ahead of origin; stale `feat/face-analysis` branch to delete after confirming superseded.
 
 last Claude session: 2026-07-15 (status audit)
+
+## Progress 2026-07-21 (recommended-steps batch)
+
+Executed the next-steps batch from the Jul-15 audit. Full detail: `Claude Code/AI Skin Analysis Progress 2026-07-21.md`.
+**Done:** PWA icons generated (`scripts/generate-icons.mjs`); face-parsing ONNX downloaded (segmentation now live on next reload — upgrades all 11 face dimensions to real skin masks); pushed main to GitHub; deleted stale `feat/face-analysis`; added pg-gated upload→promote→download→rollback integration test (`backend/modules/models/models-flow.integration.test.ts`, `TEST_DATABASE_URL` only); installed MobileSAM (`cd MobileSAM && pip install -e .`); added `ai/inference/verify_sam.py` real-weights sanity script.
+**Unverified (harness can't `import torch` OR run vitest — env quirk, NOT code/node):** run `.venv/bin/python -m ai.inference.verify_sam` and the integration test in a normal terminal.
+**Next big rock (pick one):** lesion-trained detector · trained acne analyzer · patient management (kill walk-in hack).
+
+last Claude session: 2026-07-21 (recommended-steps batch)
