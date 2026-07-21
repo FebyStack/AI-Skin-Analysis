@@ -100,4 +100,14 @@ Executed the next-steps batch from the Jul-15 audit. Full detail: `Claude Code/A
 **Unverified (harness can't `import torch` OR run vitest — env quirk, NOT code/node):** run `.venv/bin/python -m ai.inference.verify_sam` and the integration test in a normal terminal.
 **Next big rock (pick one):** lesion-trained detector · trained acne analyzer · patient management (kill walk-in hack).
 
-last Claude session: 2026-07-21 (recommended-steps batch)
+## Progress 2026-07-21 (clinic tracks)
+
+3-track sequence for "real clinic tool + genuinely better AI":
+- **Track 1 — Patient management** (commit `c619e79`): real patients, walk-in resolves server-side, scans scoped by patientId, PatientBar UI. Done.
+- **Track 2 — Trainable acne analyzer** (commit `87740d1`): learned EfficientNet-B0 acne-severity model overriding only the `acne` face dimension (deterministic fallback when ONNX absent). Full improvement loop: `ai/training/acne` trains on external datasets AND exported app scans; `scan_labels` table + training routes + `AcneLabelControl` let a clinician grade a saved scan, and admin export writes labeled scans to `$DATASETS_DIR/acne/scans/<label>/` for retraining. Done — code + typecheck (FE/BE exit 0) + ingest tests (exit 0). **No model.onnx yet** → runs deterministic until first train+export.
+- **Track 3 — Lesion-trained detector:** not started.
+
+**Migration note:** `scan_labels` table added to `database/schema/schema.sql` (self-applied on boot). If running against an existing Postgres, the app applies schema on start; verify the table exists after next `dev:lite`/server boot.
+**Acne runbook:** `ai/training/acne/README.md`.
+
+last Claude session: 2026-07-21 (Track 2 acne)
