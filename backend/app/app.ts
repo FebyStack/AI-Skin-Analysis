@@ -13,6 +13,7 @@ import { createLesionRoutes } from "../modules/analysis/lesion-routes";
 import { createFaceScanRoutes } from "../modules/analysis/face-routes";
 import { createCaptureRoutes } from "../modules/capture/routes";
 import { createModelsRoutes } from "../modules/models/routes";
+import { createTrainingRoutes } from "../modules/training/routes";
 import { createModelUploadRouter } from "../modules/models/upload-route";
 
 const errMessage = (err: unknown): string =>
@@ -63,6 +64,7 @@ export function createApp(deps: AppDeps): Express {
   app.use(createFaceScanRoutes(deps, auth));
   app.use(createCaptureRoutes(captures, auth));
   app.use("/api/models", createModelsRoutes(deps, admin));
+  app.use(createTrainingRoutes(deps, auth, admin));
 
   try {
     app.use(

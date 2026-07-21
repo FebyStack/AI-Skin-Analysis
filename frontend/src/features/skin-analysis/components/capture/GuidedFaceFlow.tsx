@@ -5,7 +5,10 @@ import { makeAnalyzeFrame, FACE_MODEL_VERSIONS } from "./frame-adapter";
 import { FaceReportView } from "../results/FaceReportView";
 import { saveFaceScanWithFallback } from "../../pwa/save-flow";
 import { HistoryView } from "../history/HistoryView";
+import { AcneLabelControl } from "../patients/AcneLabelControl";
 import { scanPatientId } from "../../store/patient-store";
+import { refineAcneWithModel } from "@ai/face/analyzers/acne-model";
+import type { Pixels } from "@ai/face/types";
 import { FACE_ANGLES, type FaceReport, type FaceAngle } from "@shared/face";
 import type { CapturedAngle } from "../../api/face-client";
 
@@ -23,6 +26,23 @@ async function frameToJpeg(video: HTMLVideoElement | null): Promise<Blob | null>
   return new Promise((resolve) => canvas.toBlob((b) => resolve(b), "image/jpeg", 0.9));
 }
 
+// Decode a captured JPEG blob back to RGBA pixels for the learned acne model.
+async function blobToPixels(blob: Blob): Promise<Pixels | null> {
+  try {
+    const bmp = await createImageBitmap(blob);
+    const canvas = document.createElement("canvas");
+    canvas.width = bmp.width;
+    canvas.height = bmp.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.drawImage(bmp, 0, 0);
+    const { data, width, height } = ctx.getImageData(0, 0, bmp.width, bmp.height);
+    return { data, width, height };
+  } catch {
+    return null;
+  }
+}
+
 export function GuidedFaceFlow() {
   const camera = useCamera("face");
   const analyzeFrame = useMemo(() => makeAnalyzeFrame(() => camera.videoRef.current), [camera.videoRef]);
@@ -33,6 +53,7 @@ export function GuidedFaceFlow() {
   const capturedByAngle = useRef<Map<FaceAngle, Blob>>(new Map());
   const [view, setView] = useState<View>("capture");
   const [saved, setSaved] = useState<FaceReport | null>(null);
+  const [savedScanId, setSavedScanId] = useState<string | null>(null);
   const [offline, setOffline] = useState(false);
   const [error, setError] = useState<string>("");
 
@@ -58,14 +79,24 @@ export function GuidedFaceFlow() {
         const blob = capturedByAngle.current.get(a);
         if (blob) angles.push({ angle: a, blob, mime: "image/jpeg" });
       }
+      // Learned acne model refines the acne dimension when its ONNX is present
+      // (offline-safe: no model → deterministic report unchanged).
+      let report = scan.report as FaceReport;
+      const frontBlob = capturedByAngle.current.get("front");
+      if (frontBlob) {
+        const px = await blobToPixels(frontBlob);
+        if (px) report = await refineAcneWithModel(report, px);
+      }
+
       try {
-        const outcome = await saveFaceScanWithFallback(scan.report as FaceReport, angles, scanPatientId());
+        const outcome = await saveFaceScanWithFallback(report, angles, scanPatientId());
         setSaved(outcome.localReport);
+        setSavedScanId(outcome.scan?.id ?? null);
         setOffline(outcome.offline);
         setView("result");
       } catch (err) {
         setError(err instanceof Error ? err.message : "Save failed.");
-        setSaved(scan.report as FaceReport);
+        setSaved(report);
         setView("result");
       }
     })();
@@ -75,6 +106,7 @@ export function GuidedFaceFlow() {
     scan.reset();
     capturedByAngle.current = new Map();
     setSaved(null);
+    setSavedScanId(null);
     setOffline(false);
     setError("");
     setView("capture");
@@ -99,6 +131,7 @@ export function GuidedFaceFlow() {
           </p>
         )}
         <FaceReportView report={saved} />
+        {savedScanId && <AcneLabelControl scanId={savedScanId} />}
         <div className="mx-auto mt-4 flex max-w-3xl justify-center gap-3 px-4">
           <button onClick={reset} className="min-h-[44px] rounded-lg bg-clinical px-6 text-sm font-semibold text-white">
             New scan

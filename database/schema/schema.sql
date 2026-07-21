@@ -42,6 +42,18 @@ CREATE TABLE IF NOT EXISTS scan_images (
 );
 CREATE INDEX IF NOT EXISTS scan_images_scan ON scan_images (scan_id);
 
+-- Clinician-assigned labels on scans → training data for the learned analyzers.
+-- One label per (scan, dimension); upserted. dimension="acne" is the first user.
+CREATE TABLE IF NOT EXISTS scan_labels (
+  scan_id UUID NOT NULL REFERENCES scans(id) ON DELETE CASCADE,
+  dimension TEXT NOT NULL,
+  label TEXT NOT NULL,
+  labeled_by TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (scan_id, dimension)
+);
+CREATE INDEX IF NOT EXISTS scan_labels_dimension ON scan_labels (dimension);
+
 -- Model registry for versioning, distribution, and rollback (Plan 13 Task 1).
 CREATE TABLE IF NOT EXISTS model_registry (
   id TEXT PRIMARY KEY,

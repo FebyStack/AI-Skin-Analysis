@@ -49,6 +49,11 @@ export interface ScanRepo {
   addImages(scanId: string, imgs: Omit<FaceScanImage, "id" | "scanId" | "createdAt">[]): Promise<FaceScanImage[]>;
   listImages(scanId: string): Promise<Omit<FaceScanImage, "imageJpeg">[]>;
   getScanImage(scanId: string, angle: string): Promise<{ jpeg: Uint8Array } | null>;
+
+  // Clinician labels → training data for learned analyzers (Track 2).
+  setLabel(scanId: string, dimension: string, label: string, labeledBy?: string | null): Promise<boolean>;
+  getLabels(scanId: string): Promise<{ dimension: string; label: string }[]>;
+  listLabeled(dimension: string): Promise<{ scanId: string; label: string }[]>;
 }
 
 // ---------- In-memory (tests + lite mode) ----------
@@ -101,6 +106,26 @@ export class MemoryScanRepo implements ScanRepo {
   async getScanImage(scanId: string, angle: string): Promise<{ jpeg: Uint8Array } | null> {
     const hit = (this.imagesByScan.get(scanId) ?? []).find((i) => i.angle === angle);
     return hit ? { jpeg: hit.imageJpeg } : null;
+  }
+
+  private labels = new Map<string, Map<string, string>>(); // scanId → dimension → label
+  async setLabel(scanId: string, dimension: string, label: string): Promise<boolean> {
+    if (!this.rows.has(scanId)) return false;
+    const byDim = this.labels.get(scanId) ?? new Map<string, string>();
+    byDim.set(dimension, label);
+    this.labels.set(scanId, byDim);
+    return true;
+  }
+  async getLabels(scanId: string): Promise<{ dimension: string; label: string }[]> {
+    return [...(this.labels.get(scanId) ?? new Map()).entries()].map(([dimension, label]) => ({ dimension, label }));
+  }
+  async listLabeled(dimension: string): Promise<{ scanId: string; label: string }[]> {
+    const out: { scanId: string; label: string }[] = [];
+    for (const [scanId, byDim] of this.labels) {
+      const label = byDim.get(dimension);
+      if (label) out.push({ scanId, label });
+    }
+    return out;
   }
 }
 
@@ -237,5 +262,32 @@ export class PgScanRepo implements ScanRepo {
       [scanId, angle],
     );
     return rows[0] ? { jpeg: rows[0].image_jpeg as Uint8Array } : null;
+  }
+
+  async setLabel(scanId: string, dimension: string, label: string, labeledBy?: string | null): Promise<boolean> {
+    if (!isValidUuid(scanId)) return false;
+    const { rowCount } = await this.pool.query(
+      `INSERT INTO scan_labels (scan_id, dimension, label, labeled_by) VALUES ($1,$2,$3,$4)
+       ON CONFLICT (scan_id, dimension) DO UPDATE SET label = EXCLUDED.label, labeled_by = EXCLUDED.labeled_by, created_at = now()`,
+      [scanId, dimension, label, labeledBy ?? null],
+    );
+    return (rowCount ?? 0) > 0;
+  }
+
+  async getLabels(scanId: string): Promise<{ dimension: string; label: string }[]> {
+    if (!isValidUuid(scanId)) return [];
+    const { rows } = await this.pool.query(
+      `SELECT dimension, label FROM scan_labels WHERE scan_id = $1`,
+      [scanId],
+    );
+    return rows.map((r) => ({ dimension: String(r.dimension), label: String(r.label) }));
+  }
+
+  async listLabeled(dimension: string): Promise<{ scanId: string; label: string }[]> {
+    const { rows } = await this.pool.query(
+      `SELECT scan_id, label FROM scan_labels WHERE dimension = $1`,
+      [dimension],
+    );
+    return rows.map((r) => ({ scanId: String(r.scan_id), label: String(r.label) }));
   }
 }
