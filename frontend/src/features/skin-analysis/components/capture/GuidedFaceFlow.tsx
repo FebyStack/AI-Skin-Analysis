@@ -5,6 +5,7 @@ import { makeAnalyzeFrame, FACE_MODEL_VERSIONS } from "./frame-adapter";
 import { FaceReportView } from "../results/FaceReportView";
 import { saveFaceScanWithFallback } from "../../pwa/save-flow";
 import { HistoryView } from "../history/HistoryView";
+import { scanPatientId } from "../../store/patient-store";
 import { FACE_ANGLES, type FaceReport, type FaceAngle } from "@shared/face";
 import type { CapturedAngle } from "../../api/face-client";
 
@@ -58,7 +59,7 @@ export function GuidedFaceFlow() {
         if (blob) angles.push({ angle: a, blob, mime: "image/jpeg" });
       }
       try {
-        const outcome = await saveFaceScanWithFallback(scan.report as FaceReport, angles);
+        const outcome = await saveFaceScanWithFallback(scan.report as FaceReport, angles, scanPatientId());
         setSaved(outcome.localReport);
         setOffline(outcome.offline);
         setView("result");

@@ -19,6 +19,7 @@ export interface StoredScan {
   createdAt: number;
   report: unknown;           // FaceReport or LesionScanReport (structural, JSON-safe)
   synced: boolean;           // true = present in Postgres
+  patientId?: string;        // selected patient at scan time ("walk-in" if none)
 }
 
 export interface StoredImage {

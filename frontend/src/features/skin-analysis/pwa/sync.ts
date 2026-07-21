@@ -16,10 +16,12 @@ import {
 interface FaceQueuedPayload {
   report: FaceReport;
   angles: { angle: string; mime: string; quality?: { ok: boolean; issues: string[] } }[];
+  patientId?: string;
 }
 
 interface LesionQueuedPayload {
   mime: string;
+  patientId?: string;
 }
 
 async function syncOneFace(item: PendingScan): Promise<void> {
@@ -36,8 +38,8 @@ async function syncOneFace(item: PendingScan): Promise<void> {
       quality: a.quality,
     });
   }
-  const scan = await saveFaceScan(payload.report, angles);
-  await putScan({ id: scan.id, kind: "face", createdAt: scan.createdAt, report: scan.report, synced: true });
+  const scan = await saveFaceScan(payload.report, angles, payload.patientId ?? "walk-in");
+  await putScan({ id: scan.id, kind: "face", createdAt: scan.createdAt, report: scan.report, synced: true, patientId: payload.patientId ?? "walk-in" });
   // Re-key local images from tmp id → server id so getImage(scanId, angle) matches.
   for (const a of payload.angles) {
     const [scanId, angle] = a.angle.includes("::") ? a.angle.split("::") : [String(item.id), a.angle];
@@ -55,13 +57,14 @@ async function syncOneLesion(item: PendingScan): Promise<void> {
     : [String(item.id), "closeup"];
   const stored = await getImage(scanId, angle);
   if (!stored) throw new Error("missing local image for closeup");
-  const result = await analyzeLesion(stored.jpeg, payload.mime || "image/jpeg");
+  const result = await analyzeLesion(stored.jpeg, payload.mime || "image/jpeg", payload.patientId ?? "walk-in");
   await putScan({
     id: result.scan.id,
     kind: "lesion",
     createdAt: result.scan.createdAt,
     report: result.scan.report,
     synced: true,
+    patientId: payload.patientId ?? "walk-in",
   });
   if (scanId !== result.scan.id) {
     await putImage({ ...(stored as StoredImage), scanId: result.scan.id });

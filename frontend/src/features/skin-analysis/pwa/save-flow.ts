@@ -28,15 +28,20 @@ export interface LesionSaveOutcome {
   offline: boolean;
 }
 
-export async function saveLesionScan(blob: Blob, mime: string): Promise<LesionSaveOutcome> {
+export async function saveLesionScan(
+  blob: Blob,
+  mime: string,
+  patientId = "walk-in",
+): Promise<LesionSaveOutcome> {
   try {
-    const result = await analyzeLesion(blob, mime);
+    const result = await analyzeLesion(blob, mime, patientId);
     await putScan({
       id: result.scan.id,
       kind: "lesion",
       createdAt: result.scan.createdAt,
       report: result.scan.report,
       synced: true,
+      patientId,
     });
     await putImage({
       scanId: result.scan.id,
@@ -54,7 +59,7 @@ export async function saveLesionScan(blob: Blob, mime: string): Promise<LesionSa
       await enqueuePending({
         kind: "lesion",
         createdAt: Date.now(),
-        payload: { mime: mime || "image/jpeg" },
+        payload: { mime: mime || "image/jpeg", patientId },
         imageIds: [`${id}::closeup`],
       });
       return { result: null, offline: true };
@@ -74,17 +79,19 @@ export interface FaceSaveOutcome {
 export async function saveFaceScanWithFallback(
   report: FaceReport,
   angles: CapturedAngle[],
+  patientId = "walk-in",
 ): Promise<FaceSaveOutcome> {
   const localReport: FaceReport =
     report.explanation ? report : { ...report, explanation: builtinFaceExplanation(report) };
   try {
-    const scan = await saveFaceScan(localReport, angles);
+    const scan = await saveFaceScan(localReport, angles, patientId);
     await putScan({
       id: scan.id,
       kind: "face",
       createdAt: scan.createdAt,
       report: scan.report,
       synced: true,
+      patientId,
     });
     for (const a of angles) {
       await putImage({
@@ -107,12 +114,13 @@ export async function saveFaceScanWithFallback(
         createdAt: now,
         payload: {
           report: localReport,
+          patientId,
           angles: angles.map((a) => ({ angle: `${id}::${a.angle}`, mime: a.mime, quality: a.quality })),
         },
         imageIds: angles.map((a) => `${id}::${a.angle}`),
       });
       // Also cache the offline scan locally so history shows it right away.
-      await putScan({ id, kind: "face", createdAt: now, report: localReport, synced: false });
+      await putScan({ id, kind: "face", createdAt: now, report: localReport, synced: false, patientId });
       return { scan: null, offline: true, localReport };
     }
     throw err;

@@ -43,13 +43,18 @@ async function blobToBase64(blob: Blob): Promise<string> {
   return dataUrl.slice(dataUrl.indexOf(",") + 1);
 }
 
-export async function analyzeLesion(blob: Blob, mime: string, fetchFn: FetchFn = fetch): Promise<LesionResult> {
+export async function analyzeLesion(
+  blob: Blob,
+  mime: string,
+  patientId = "walk-in",
+  fetchFn: FetchFn = fetch,
+): Promise<LesionResult> {
   const image = await blobToBase64(blob);
   const res = await fetchFn("/api/lesion", {
     method: "POST",
     credentials: "include",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ image, mime }),
+    body: JSON.stringify({ image, mime, patientId }),
   });
   if (res.status === 401) throw new LesionAuthError();
   if (res.status === 503) throw new LesionFailedError("The analysis service is offline. Try again shortly.");
@@ -58,8 +63,11 @@ export async function analyzeLesion(blob: Blob, mime: string, fetchFn: FetchFn =
 }
 
 // History: walk-in's scans, filtered to lesion reports (newest first from the API).
-export async function listLesionScans(fetchFn: FetchFn = fetch): Promise<LesionScanWire[]> {
-  const res = await fetchFn("/api/patients/walk-in/scans", { credentials: "include" });
+export async function listLesionScans(
+  patientId = "walk-in",
+  fetchFn: FetchFn = fetch,
+): Promise<LesionScanWire[]> {
+  const res = await fetchFn(`/api/patients/${encodeURIComponent(patientId)}/scans`, { credentials: "include" });
   if (res.status === 401) throw new LesionAuthError();
   if (!res.ok) throw new LesionFailedError("Could not load history.");
   const data = (await res.json()) as { scans: LesionScanWire[] };

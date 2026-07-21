@@ -47,6 +47,7 @@ async function blobToBase64(blob: Blob): Promise<string> {
 export async function saveFaceScan(
   report: FaceReport,
   angles: CapturedAngle[],
+  patientId = "walk-in",
   fetchFn: FetchFn = fetch,
 ): Promise<FaceScanWire> {
   const images = await Promise.all(
@@ -61,15 +62,19 @@ export async function saveFaceScan(
     method: "POST",
     credentials: "include",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ report, images }),
+    body: JSON.stringify({ report, images, patientId }),
   });
   if (res.status === 401) throw new FaceAuthError();
   if (!res.ok) throw new FaceFailedError();
   return ((await res.json()) as { scan: FaceScanWire }).scan;
 }
 
-export async function listFaceScans(fetchFn: FetchFn = fetch): Promise<FaceScanWire[]> {
-  const res = await fetchFn("/api/face-scans", { credentials: "include" });
+export async function listFaceScans(
+  patientId = "walk-in",
+  fetchFn: FetchFn = fetch,
+): Promise<FaceScanWire[]> {
+  const q = patientId && patientId !== "walk-in" ? `?patientId=${encodeURIComponent(patientId)}` : "";
+  const res = await fetchFn(`/api/face-scans${q}`, { credentials: "include" });
   if (res.status === 401) throw new FaceAuthError();
   if (!res.ok) throw new FaceFailedError("Could not load history.");
   const data = (await res.json()) as { scans: FaceScanWire[] };

@@ -4,28 +4,20 @@ import type { LesionScanReport } from "../../../shared/lesion";
 import { LesionUnavailableError } from "./lesion-client";
 import { builtinLesionExplanation } from "../../../ai/llm/fallback/lesion-education";
 import { compressToJpeg } from "../../utils/image";
-
-// Resolve (or lazily create) the shared walk-in patient — mirrors /api/analyze.
-async function walkInPatient(deps: AppDeps) {
-  const list = await deps.patients.list();
-  return (
-    list.find((p) => p.externalRef === "walk-in") ??
-    (await deps.patients.create({
-      name: "Walk-in Patient",
-      externalRef: "walk-in",
-      notes: "Auto-created placeholder for walk-in scans",
-      consentVersion: 1,
-    }))
-  );
-}
+import { resolveScanPatient } from "../patients/resolve";
 
 export function createLesionRoutes(deps: AppDeps, auth: RequestHandler): Router {
   const router = Router();
 
   router.post("/api/lesion", auth, async (req, res) => {
-    const { image, mime } = req.body ?? {};
+    const { image, mime, patientId } = req.body ?? {};
     if (typeof image !== "string" || image.length === 0) {
       res.status(400).json({ error: "image (base64) is required" });
+      return;
+    }
+    const patient = await resolveScanPatient(deps, patientId);
+    if (!patient) {
+      res.status(404).json({ error: "patient not found" });
       return;
     }
 
@@ -46,7 +38,6 @@ export function createLesionRoutes(deps: AppDeps, auth: RequestHandler): Router 
 
     // Persist so it appears in history.
     const report: LesionScanReport = { kind: "lesion", analysis, explanation };
-    const patient = await walkInPatient(deps);
     const compressed = await compressToJpeg(Buffer.from(image, "base64"));
     const scan = await deps.scans.create({
       patientId: patient.id,

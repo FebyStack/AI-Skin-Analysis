@@ -3,19 +3,7 @@ import type { AppDeps } from "../../shared/deps";
 import { validateFaceReport, type FaceReport } from "../../../shared/face";
 import { builtinFaceExplanation } from "../../../ai/llm/fallback/face-education";
 import { compressToJpeg } from "../../utils/image";
-
-async function walkInPatient(deps: AppDeps) {
-  const list = await deps.patients.list();
-  return (
-    list.find((p) => p.externalRef === "walk-in") ??
-    (await deps.patients.create({
-      name: "Walk-in Patient",
-      externalRef: "walk-in",
-      notes: "Auto-created placeholder for walk-in scans",
-      consentVersion: 1,
-    }))
-  );
-}
+import { resolveScanPatient } from "../patients/resolve";
 
 interface IncomingImage {
   angle?: string;
@@ -32,7 +20,7 @@ export function createFaceScanRoutes(deps: AppDeps, auth: RequestHandler): Route
   // Persist a completed face scan (client-computed report + captured angle images).
   // Server re-validates the report before saving and re-checks safety invariants.
   router.post("/api/face-scans", auth, async (req, res) => {
-    const { report: reportBody, images } = req.body ?? {};
+    const { report: reportBody, images, patientId } = req.body ?? {};
 
     // Server never trusts the client — re-run the contract validator.
     const validated = validateFaceReport(reportBody);
@@ -67,7 +55,11 @@ export function createFaceScanRoutes(deps: AppDeps, auth: RequestHandler): Route
       report = { ...report, explanation: builtinFaceExplanation(report) };
     }
 
-    const patient = await walkInPatient(deps);
+    const patient = await resolveScanPatient(deps, patientId);
+    if (!patient) {
+      res.status(404).json({ error: "patient not found" });
+      return;
+    }
 
     // Compress the front angle (or first available) as the scan's headline image.
     const front =
@@ -115,15 +107,19 @@ export function createFaceScanRoutes(deps: AppDeps, auth: RequestHandler): Route
     res.json({ scan: { ...scanWire, report } });
   });
 
-  // History for a patient (walk-in alias resolves like /api/patients/:id/scans).
-  router.get("/api/face-scans", auth, async (_req, res) => {
-    const list = await deps.patients.list();
-    const walkIn = list.find((p) => p.externalRef === "walk-in");
-    if (!walkIn) {
+  // History for a patient. ?patientId=<id> scopes to that patient; omitted (or
+  // "walk-in") falls back to the shared walk-in patient for back-compat.
+  router.get("/api/face-scans", auth, async (req, res) => {
+    const q = req.query.patientId;
+    const patient =
+      typeof q === "string" && q.length > 0 && q !== "walk-in"
+        ? await deps.patients.get(q)
+        : (await deps.patients.list()).find((p) => p.externalRef === "walk-in") ?? null;
+    if (!patient) {
       res.json({ scans: [] });
       return;
     }
-    const scans = (await deps.scans.listByPatient(walkIn.id)).filter((s) => s.mode === "face");
+    const scans = (await deps.scans.listByPatient(patient.id)).filter((s) => s.mode === "face");
     res.json({ scans });
   });
 

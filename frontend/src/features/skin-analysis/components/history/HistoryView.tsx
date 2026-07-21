@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { listScans, type StoredScan } from "../../pwa/local-store";
 import { listFaceScans, type FaceScanWire } from "../../api/face-client";
 import { listLesionScans, type LesionScanWire } from "../../api/lesion-client";
+import { scanPatientId, usePatientStore } from "../../store/patient-store";
 
 interface HistoryRow {
   id: string;
@@ -24,22 +25,24 @@ function lesionHeadline(report: unknown): string {
   return `Lesion — ${label ?? "Inconclusive"}`;
 }
 
-async function loadFromDevice(): Promise<HistoryRow[]> {
+async function loadFromDevice(patientId: string): Promise<HistoryRow[]> {
   const scans: StoredScan[] = await listScans().catch(() => []);
-  return scans.map((s) => ({
-    id: s.id,
-    kind: s.kind,
-    createdAt: s.createdAt,
-    headline: s.kind === "face" ? faceHeadline(s.report) : lesionHeadline(s.report),
-    synced: s.synced,
-    source: "local",
-  }));
+  return scans
+    .filter((s) => (s.patientId ?? "walk-in") === patientId)
+    .map((s) => ({
+      id: s.id,
+      kind: s.kind,
+      createdAt: s.createdAt,
+      headline: s.kind === "face" ? faceHeadline(s.report) : lesionHeadline(s.report),
+      synced: s.synced,
+      source: "local",
+    }));
 }
 
-async function loadFromServer(): Promise<HistoryRow[]> {
+async function loadFromServer(patientId: string): Promise<HistoryRow[]> {
   const [face, lesion] = await Promise.all([
-    listFaceScans().catch(() => [] as FaceScanWire[]),
-    listLesionScans().catch(() => [] as LesionScanWire[]),
+    listFaceScans(patientId).catch(() => [] as FaceScanWire[]),
+    listLesionScans(patientId).catch(() => [] as LesionScanWire[]),
   ]);
   return [
     ...face.map<HistoryRow>((s) => ({
@@ -76,17 +79,23 @@ export function HistoryView({ onBack }: { onBack: () => void }) {
   const [rows, setRows] = useState<HistoryRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [note, setNote] = useState<string>("");
+  // Re-scope + reload whenever the selected patient changes.
+  const selectedName = usePatientStore((s) => s.selectedName);
+  const selectedId = usePatientStore((s) => s.selectedId);
 
   useEffect(() => {
     let alive = true;
+    setLoading(true);
+    setNote("");
+    const patientId = scanPatientId();
     (async () => {
       // Show device first for immediate feedback; layer server on top.
-      const local = await loadFromDevice();
+      const local = await loadFromDevice(patientId);
       if (!alive) return;
       setRows(local);
       setLoading(false);
       try {
-        const server = await loadFromServer();
+        const server = await loadFromServer(patientId);
         if (!alive) return;
         setRows(mergeById(server, local));
       } catch {
@@ -96,12 +105,15 @@ export function HistoryView({ onBack }: { onBack: () => void }) {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [selectedId]);
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-6">
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-stone-900">Scan history</h2>
+        <div>
+          <h2 className="text-lg font-semibold text-stone-900">Scan history</h2>
+          <p className="text-xs text-stone-500">{selectedName ?? "Walk-in (no patient selected)"}</p>
+        </div>
         <button
           onClick={onBack}
           className="min-h-[44px] rounded-lg bg-clinical px-4 text-sm font-semibold text-white"

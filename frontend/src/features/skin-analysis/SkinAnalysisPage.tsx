@@ -3,6 +3,7 @@ import { ConsentGate } from "./components/consent/ConsentGate";
 import { GuidedFaceFlow } from "./components/capture/GuidedFaceFlow";
 import { LesionScanFlow } from "./components/lesion/LesionScanFlow";
 import { HistoryView } from "./components/history/HistoryView";
+import { PatientBar } from "./components/patients/PatientBar";
 import { installOnlineSync, syncPending } from "./pwa/sync";
 import { requestPersistence } from "./pwa/local-store";
 import type { CaptureMode } from "./types";
@@ -28,7 +29,11 @@ export function SkinAnalysisPage() {
         A guide to whether you should see a professional — not a diagnosis.
       </p>
 
-      <div className="mt-4 flex justify-center gap-2">
+      <div className="mt-6">
+        <PatientBar />
+      </div>
+
+      <div className="mt-2 flex justify-center gap-2">
         {(["scan", "history"] as const).map((v) => (
           <button
             key={v}

@@ -8,6 +8,7 @@ import {
   type LesionScanWire,
 } from "../../api/lesion-client";
 import { saveLesionScan } from "../../pwa/save-flow";
+import { scanPatientId } from "../../store/patient-store";
 
 type View = "idle" | "analyzing" | "result" | "history" | "error";
 
@@ -21,7 +22,7 @@ export function LesionScanFlow() {
     setView("analyzing");
     setError("");
     try {
-      const outcome = await saveLesionScan(file, file.type || "image/jpeg");
+      const outcome = await saveLesionScan(file, file.type || "image/jpeg", scanPatientId());
       if (outcome.result) {
         setResult(outcome.result);
         setView("result");
@@ -43,7 +44,7 @@ export function LesionScanFlow() {
   const openHistory = useCallback(async () => {
     setView("analyzing");
     try {
-      setHistory(await listLesionScans());
+      setHistory(await listLesionScans(scanPatientId()));
       setView("history");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load history.");
