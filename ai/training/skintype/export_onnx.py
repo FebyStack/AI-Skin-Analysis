@@ -41,6 +41,7 @@ def main(argv: list[str] | None = None) -> int:
         output_names=["logits"],
         dynamic_axes={"input": {0: "batch"}, "logits": {0: "batch"}},
         opset_version=17,
+        dynamo=False,  # legacy TorchScript exporter: stable with dynamic_axes, no onnxscript path
     )
     (DEST_DIR / "model.json").write_text(json.dumps(meta, indent=2))
     print(f"exported {meta['version']} → {onnx_path} ({onnx_path.stat().st_size // 1_000_000} MB)")
