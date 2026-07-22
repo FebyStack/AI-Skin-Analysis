@@ -6,7 +6,7 @@ import { builtinFaceExplanation, BUILTIN_FACE_VERSION } from "./face-education";
 function report(base: number, overall: number, overrides: Partial<Record<FaceDimension, number>> = {}, skinType?: SkinType): FaceReport {
   const dimensions = Object.fromEntries(
     FACE_DIMENSIONS.map((d) => [d, { score: overrides[d] ?? base, confidence: 0.9, perZone: [], evidence: "test" }]),
-  ) as FaceReport["dimensions"];
+  ) as unknown as FaceReport["dimensions"];
   return {
     kind: "face-v2",
     overall: { score: overall, confidence: 0.9 },

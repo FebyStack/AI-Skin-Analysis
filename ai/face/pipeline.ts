@@ -11,6 +11,21 @@ import type { AnalyzedView, CapturedView } from "./types";
 export const PIPELINE_VERSION = 2;
 
 const MIN_PARSED_PIXELS = 50;
+// The 85MB SegFormer parser can be slow (or stall) under WASM. Bound it so a
+// capture never hangs on "Analyzing…" — on timeout we fall back to landmark
+// masks, which still yields a valid report. Override via VITE_PARSE_TIMEOUT_MS.
+const PARSE_TIMEOUT_MS = Number(import.meta.env?.VITE_PARSE_TIMEOUT_MS ?? "4000");
+
+// Resolve to `fallback` if `p` doesn't settle within `ms` (the slow work is
+// abandoned, not cancelled — onnxruntime can't be interrupted mid-run).
+function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
+    return new Promise((resolve) => {
+        let done = false;
+        const settle = (v: T) => { if (!done) { done = true; clearTimeout(timer); resolve(v); } };
+        const timer = setTimeout(() => settle(fallback), ms);
+        p.then(settle, () => settle(fallback));
+    });
+}
 
 export interface AnalyzeViewOptions {
     /** Inject a label map (tests) instead of running ONNX. */
@@ -77,7 +92,10 @@ export async function analyzeView(
     const quality = validateCapture(view.angle, view.pixels, view.geometry);
     let labelMap: LabelMap | null = null;
     if (view.geometry && !opts.skipParsing) {
-        labelMap = opts.labelMap !== undefined ? opts.labelMap : await parseFaceLabels(view.pixels);
+        labelMap =
+            opts.labelMap !== undefined
+                ? opts.labelMap
+                : await withTimeout(parseFaceLabels(view.pixels), PARSE_TIMEOUT_MS, null);
     }
     const { zones, maskSource, maskQuality } = buildZones(view, labelMap);
     return { angle: view.angle, quality, zones, maskSource, maskQuality };

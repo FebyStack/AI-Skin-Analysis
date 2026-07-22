@@ -165,6 +165,27 @@ export function GuidedFaceFlow() {
           muted
           className="h-full w-full object-cover scale-x-[-1]" /* selfie preview mirror */
         />
+        {/* Face-positioning guide: dim everything outside a centred oval + dashed outline. */}
+        {camera.status === "live" && (
+          <div className="pointer-events-none absolute inset-0">
+            <svg viewBox="0 0 100 133" preserveAspectRatio="none" className="h-full w-full text-gold">
+              <defs>
+                <mask id="faceHole">
+                  <rect width="100" height="133" fill="white" />
+                  <ellipse cx="50" cy="58" rx="29" ry="38" fill="black" />
+                </mask>
+              </defs>
+              <rect width="100" height="133" fill="rgba(0,0,0,0.5)" mask="url(#faceHole)" />
+              <ellipse
+                cx="50" cy="58" rx="29" ry="38"
+                fill="none" stroke="currentColor" strokeWidth="0.7" strokeDasharray="3 2"
+              />
+            </svg>
+            <p className="absolute inset-x-0 top-3 px-4 text-center text-xs font-medium text-white/90">
+              Center your face in the oval
+            </p>
+          </div>
+        )}
         {camera.status !== "live" && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/70 text-sm text-ink">
             {camera.status === "denied" && "Camera permission denied"}
