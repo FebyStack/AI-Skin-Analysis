@@ -19,6 +19,7 @@ from pathlib import Path
 from ai.training.acne.ingest import collect_all, label_counts
 from ai.training.acne.labels import ACNE_CLASSES
 from ai.training.build_master import split_rows
+from ai.training.dataset_guard import DatasetIntegrityError, preflight
 from ai.training.train import train_one
 
 CANDIDATE_DIR = Path("ai/models/acne/candidate")
@@ -30,6 +31,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--lr", type=float, default=1e-3)
     args = ap.parse_args(argv)
+
+    # Fail loudly on an iCloud-corrupted dataset (evicted stubs / conflicted copies)
+    # before spending hours training on a silently partial or duplicated set.
+    try:
+        preflight("acne")
+    except DatasetIntegrityError as e:
+        print(e)
+        return 1
 
     rows = collect_all()
     if not rows:
