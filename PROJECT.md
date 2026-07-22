@@ -57,7 +57,7 @@ Plans 1–4 executed and merged. Plan 5 (results/report UI) + Plan 6 (patients/h
 
 Brainstorm → spec → writing-plans → subagent-driven execution with one final opus review before merge. Verify camera/browser changes live in the preview tool, not just unit tests. `git push` to `https://github.com/FebyStack/AI-Skin-Analysis.git` was configured via `gh auth git-credential` but never confirmed pushed.
 
-last Claude session: 2026-07-20 10:45
+last Claude session: 2026-07-22 08:26
 
 ## Recent updates (2026-07-12)
 
@@ -91,7 +91,7 @@ Complete state audit filed in Obsidian: `Claude Code/AI Skin Analysis Status 202
 Headlines: both AI branches functional (face on-device pipeline + lesion EfficientNet-B1 w/ MobileSAM refinement + localization confidence); model distribution platform + admin UI landed via PR #4.
 **Dormant/missing:** PWA icons never generated (`node scripts/generate-icons.mjs`); face-parsing ONNX never downloaded (`.venv/bin/python -m ai.models.fetch_models face-parsing`) so segmentation silently falls back to landmark polygons; MobileSAM real-weights path never run on an actual photo; upload→promote→download integration test missing; main 1 commit ahead of origin; stale `feat/face-analysis` branch to delete after confirming superseded.
 
-last Claude session: 2026-07-15 (status audit)
+last Claude session: 2026-07-22 08:26
 
 ## Progress 2026-07-21 (recommended-steps batch)
 
@@ -105,9 +105,16 @@ Executed the next-steps batch from the Jul-15 audit. Full detail: `Claude Code/A
 3-track sequence for "real clinic tool + genuinely better AI":
 - **Track 1 — Patient management** (commit `c619e79`): real patients, walk-in resolves server-side, scans scoped by patientId, PatientBar UI. Done.
 - **Track 2 — Trainable acne analyzer** (commit `87740d1`): learned EfficientNet-B0 acne-severity model overriding only the `acne` face dimension (deterministic fallback when ONNX absent). Full improvement loop: `ai/training/acne` trains on external datasets AND exported app scans; `scan_labels` table + training routes + `AcneLabelControl` let a clinician grade a saved scan, and admin export writes labeled scans to `$DATASETS_DIR/acne/scans/<label>/` for retraining. Done — code + typecheck (FE/BE exit 0) + ingest tests (exit 0). **No model.onnx yet** → runs deterministic until first train+export.
-- **Track 3 — Lesion-trained detector:** not started.
+- **Track 2b — Trained skin-type dimension** (commit `c7d87ae`): NEW categorical facial signal (normal/oily/dry/combination), same optional-model slot as acne — fills `FaceReport.skinType` when `/models/skintype/model.onnx` is present, omitted otherwise (offline-safe; does NOT touch the 11 deterministic dimensions). `ai/training/skintype` (labels/ingest/train/export/eval/fetch_killa92/tests). `AcneLabelControl` generalized → `ScanLabelControl` (renders acne + skintype graders). Training routes now export by `:dimension`. Typecheck FE/BE exit 0, skintype ingest tests 8 passed. **No model.onnx yet.**
+- **Track 3 — Lesion-trained detector:** not started (ISIC 2019 download in progress, slow S3).
 
-**Migration note:** `scan_labels` table added to `database/schema/schema.sql` (self-applied on boot). If running against an existing Postgres, the app applies schema on start; verify the table exists after next `dev:lite`/server boot.
-**Acne runbook:** `ai/training/acne/README.md`.
+**Datasets installed** (in `ai/datasets/`, gitignored — user chose to keep in-project despite iCloud, see memory [[icloud-desktop-datasets]]). Kaggle CLI installed, `~/.kaggle/kaggle.json` in place.
+- acne (5-class): ACNE04 (HF, `fetch_acne04`) mild/moderate/severe/very-severe ~99 each + clear 150 (from killa92 normal faces). `.venv/bin/python -m ai.training.acne.{train_acne,evaluate,export_onnx}`.
+- skintype (4-class): killa92 (Kaggle, `fetch_killa92`) normal 1399 / oily 1150 / dry 1203 / combination 341. `.venv/bin/python -m ai.training.skintype.{train_skintype,evaluate,export_onnx}`.
+- HAM10000 present but iCloud-evicted (10,015 imgs); ISIC 2019 images downloading to `ai/datasets/raw/isic2019/`.
 
-last Claude session: 2026-07-21 (Track 2 acne)
+**Migration note:** `scan_labels` table added to `database/schema/schema.sql` (self-applied on boot). Verify it exists after next server boot.
+**Runbooks:** `ai/training/acne/README.md`, `ai/training/skintype/README.md`.
+**Both models await first train+export** (harness can't `import torch`; user runs training in their terminal).
+
+last Claude session: 2026-07-22 (skin-type dimension + datasets)
