@@ -14,6 +14,13 @@ interface IncomingImage {
 
 const VALID_ANGLES = new Set(["front", "left-45", "right-45", "left-profile", "right-profile", "forehead", "chin"]);
 
+// Operator toggle: keep the offline builtin explanation even when Gemini is
+// configured (privacy / no-cloud preference). Set PREFER_BUILTIN_EXPLANATION=1.
+function preferBuiltin(): boolean {
+  const v = process.env.PREFER_BUILTIN_EXPLANATION;
+  return v === "1" || v === "true";
+}
+
 export function createFaceScanRoutes(deps: AppDeps, auth: RequestHandler): Router {
   const router = Router();
 
@@ -93,8 +100,8 @@ export function createFaceScanRoutes(deps: AppDeps, auth: RequestHandler): Route
     await deps.scans.addImages(scan.id, scanImages);
 
     // Best-effort online enhancement (fire-and-forget-ish): try it, but if it
-    // fails, the builtin already saved.
-    if (deps.faceExplain) {
+    // fails, the builtin already saved. Skipped when the operator prefers builtin.
+    if (deps.faceExplain && !preferBuiltin()) {
       const online = await deps.faceExplain(report).catch(() => null);
       if (online) {
         const upgraded: FaceReport = { ...report, explanation: online };
@@ -158,6 +165,10 @@ export function createFaceScanRoutes(deps: AppDeps, auth: RequestHandler): Route
     const report = scan.report as FaceReport;
     if (report.explanation?.source === "gemini") {
       res.json({ explanation: report.explanation }); // already upgraded
+      return;
+    }
+    if (preferBuiltin()) {
+      res.json({ explanation: report.explanation }); // operator prefers builtin — no upgrade
       return;
     }
     if (!deps.faceExplain) {
