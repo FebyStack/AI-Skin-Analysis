@@ -57,7 +57,7 @@ Plans 1–4 executed and merged. Plan 5 (results/report UI) + Plan 6 (patients/h
 
 Brainstorm → spec → writing-plans → subagent-driven execution with one final opus review before merge. Verify camera/browser changes live in the preview tool, not just unit tests. `git push` to `https://github.com/FebyStack/AI-Skin-Analysis.git` was configured via `gh auth git-credential` but never confirmed pushed.
 
-last Claude session: 2026-07-22 08:26
+last Claude session: 2026-07-22 14:06
 
 ## Recent updates (2026-07-12)
 
@@ -91,7 +91,7 @@ Complete state audit filed in Obsidian: `Claude Code/AI Skin Analysis Status 202
 Headlines: both AI branches functional (face on-device pipeline + lesion EfficientNet-B1 w/ MobileSAM refinement + localization confidence); model distribution platform + admin UI landed via PR #4.
 **Dormant/missing:** PWA icons never generated (`node scripts/generate-icons.mjs`); face-parsing ONNX never downloaded (`.venv/bin/python -m ai.models.fetch_models face-parsing`) so segmentation silently falls back to landmark polygons; MobileSAM real-weights path never run on an actual photo; upload→promote→download integration test missing; main 1 commit ahead of origin; stale `feat/face-analysis` branch to delete after confirming superseded.
 
-last Claude session: 2026-07-22 08:26
+last Claude session: 2026-07-22 14:06
 
 ## Progress 2026-07-21 (recommended-steps batch)
 
@@ -115,6 +115,17 @@ Executed the next-steps batch from the Jul-15 audit. Full detail: `Claude Code/A
 
 **Migration note:** `scan_labels` table added to `database/schema/schema.sql` (self-applied on boot). Verify it exists after next server boot.
 **Runbooks:** `ai/training/acne/README.md`, `ai/training/skintype/README.md`.
-**Both models await first train+export** (harness can't `import torch`; user runs training in their terminal).
 
-last Claude session: 2026-07-22 (skin-type dimension + datasets)
+### Training results (2026-07-22, run by user on MPS)
+- **Transfer-learning fix** (commit `9028047`): `train_one` was random-init → near-random metrics. Now loads ImageNet-pretrained EfficientNet-B0 + fresh head. First run downloads ~20MB weights (cached).
+- **ONNX export fix** (commit `12b2520`): pin `dynamo=False` (legacy exporter) — newer torch defaults to dynamo which needs `onnxscript` (now installed) and warns/fails on `dynamic_axes`.
+- **Acne trained + exported**: val_macro_f1 0.777, eval macro_f1 0.711, ordinal MAE 0.282. `frontend/public/models/acne/model.onnx` (16MB) live → acne dimension now model-driven on app reload.
+- **Skin-type trained** (val_macro_f1 was 0.17 pre-fix; retrained after fix — user re-ran, eval ongoing). Export pending: `.venv/bin/python -m ai.training.skintype.export_onnx` → lights up the Skin Type card.
+
+### Gemini-independence (offline explanation)
+- **Stronger builtin** (commit `988edec`): `ai/llm/fallback/face-education.ts` rewritten — uses trained skinType, lists only prominent dims (≥0.4, top 2), dermatologist referral when overall≥0.5 or any dim≥0.7, tighter cosmetic language, no diagnosis words. Version 2. Test `face-education.test.ts` 5/5 pass.
+- **Prefer-builtin toggle** (commit `f0da46d`): `PREFER_BUILTIN_EXPLANATION=1` skips Gemini upgrade on save + makes `/enhance` a no-op. With it set (or GEMINI_API_KEY unset) the whole report runs local, no cloud. In `.env.example`.
+
+**Datasets on disk are large:** ISIC 9.1GB (Track 3, `ai/datasets/raw/isic2019/images/` 25,333 imgs); disk ~6GB free (iCloud Desktop). If tight, move datasets to external drive via `DATASETS_DIR` or remove ISIC until Track 3.
+
+last Claude session: 2026-07-22 (skintype trained, offline explanation, builtin toggle)
