@@ -1,25 +1,20 @@
 // Pre-authored offline face-report education. Cosmetic-educational language only —
-// no clinical claims, no treatment, no certainty. Same shape as the Gemini explanation.
-import { FACE_DIMENSIONS, type FaceDimension, type FaceExplanation, type FaceReport } from "../../../shared/face";
+// no clinical claims, no treatment, no certainty. Same shape as the Gemini
+// explanation, so the app reads well with Gemini turned off entirely.
+import {
+  FACE_DIMENSIONS,
+  type FaceDimension,
+  type FaceExplanation,
+  type FaceReport,
+  type SkinType,
+} from "../../../shared/face";
 
-export const BUILTIN_FACE_VERSION = 1;
+export const BUILTIN_FACE_VERSION = 2;
 
-const OVERALL_LOW = 0.25;
-const OVERALL_HIGH = 0.5;
-
-const DIMENSION_EDU: Record<FaceDimension, string> = {
-  acne: "Acne varies with hormones, sleep, and skincare consistency; a gentle, non-comedogenic routine and daily sunscreen usually help over weeks.",
-  pigmentation: "Uneven pigment often comes from cumulative sun exposure. The single most useful step is broad-spectrum sunscreen every day.",
-  redness: "Redness can stem from irritation, temperature, or vascular sensitivity. Fragrance-free products and avoiding very hot water often reduce it.",
-  texture: "Surface texture reflects turnover and hydration. Gentle exfoliation and consistent moisturizing can smooth it over time.",
-  pores: "Pore appearance is largely genetic; consistent cleansing and oil control help visibility.",
-  oiliness: "Sebum production varies through the day. A lightweight, oil-free moisturizer often works better than over-washing.",
-  dryness: "Dryness responds well to layering a richer moisturizer on damp skin and, in dry rooms, a humidifier.",
-  "fine-lines": "Fine lines are shaped by hydration and cumulative sun exposure. Hydration plus daily sunscreen slows their progression.",
-  wrinkles: "Deeper wrinkles reflect long-term skin history. Sun protection and consistent moisturizing matter most day to day.",
-  "under-eye": "Under-eye appearance is influenced by sleep, hydration, and thin skin over blood vessels. Rest and hydration help.",
-  "tone-consistency": "Uneven tone often traces back to sun exposure. Even, daily sunscreen application improves evenness over time.",
-};
+const CALM = 0.25;        // overall below this: skin looks calm
+const ATTENTION = 0.5;    // overall at/above this: suggest a professional read
+const PROMINENT = 0.4;    // a dimension at/above this counts as a signal
+const STRONG = 0.7;       // a single strong dimension also warrants a referral
 
 const DIMENSION_LABEL: Record<FaceDimension, string> = {
   acne: "acne",
@@ -35,30 +30,62 @@ const DIMENSION_LABEL: Record<FaceDimension, string> = {
   "tone-consistency": "tone consistency",
 };
 
-function summaryBand(overall: number): string {
-  if (overall < OVERALL_LOW) {
-    return "Overall your skin looks calm on this analysis — nothing here rises to a strong signal. Small routine tweaks may still be worthwhile.";
-  }
-  if (overall < OVERALL_HIGH) {
-    return "The analysis picked up a moderate signal across a few areas. Focused routine improvements over weeks are usually enough to see change.";
-  }
-  return "The analysis suggests several areas worth attention. A consistent, gentle routine tuned to those areas — and a professional's input if you want one — is a reasonable next step.";
+const DIMENSION_EDU: Record<FaceDimension, string> = {
+  acne: "Acne shifts with hormones, sleep, and routine. A gentle non-comedogenic routine plus daily sunscreen helps over weeks.",
+  pigmentation: "Uneven pigment traces back to sun exposure. Daily broad-spectrum sunscreen is the main lever.",
+  redness: "Redness follows irritation, heat, or sensitive skin. Fragrance-free products and cooler water settle it.",
+  texture: "Texture reflects turnover and hydration. Gentle exfoliation and steady moisturizing smooth it.",
+  pores: "Genetics set pore size. Consistent cleansing and oil control cut how much they show.",
+  oiliness: "Sebum rises and falls through the day. A light, oil-free moisturizer beats over-washing.",
+  dryness: "Dry skin drinks up a richer cream on damp skin. A humidifier helps dry rooms.",
+  "fine-lines": "Fine lines track hydration and sun history. Hydration plus daily sunscreen slows them.",
+  wrinkles: "Deeper wrinkles reflect years of sun and movement. Sun protection and moisturizing matter most.",
+  "under-eye": "Under-eye shadow follows sleep, hydration, and thin skin. Rest and water help.",
+  "tone-consistency": "Uneven tone starts with sun. Even, daily sunscreen builds evenness back.",
+};
+
+const SKINTYPE_EDU: Record<SkinType, string> = {
+  normal: "Balanced skin stays that way with a simple cleanse, moisturizer, and daily sunscreen.",
+  oily: "Oily skin does better with a light, oil-free moisturizer than with extra washing.",
+  dry: "Dry skin holds moisture when you layer a richer cream onto damp skin.",
+  combination: "Combination skin wants a lighter touch on the T-zone and richer care on the cheeks.",
+};
+
+function joinAreas(labels: string[]): string {
+  if (labels.length === 1) return `The clearest signal was ${labels[0]}.`;
+  return `The clearest signals were ${labels[0]} and ${labels[1]}.`;
 }
 
 export function builtinFaceExplanation(report: FaceReport): FaceExplanation {
-  const top3 = [...FACE_DIMENSIONS]
-    .sort((a, b) => report.dimensions[b].score - report.dimensions[a].score)
-    .slice(0, 3);
+  const overall = report.overall.score;
+  const ranked = [...FACE_DIMENSIONS].sort(
+    (a, b) => report.dimensions[b].score - report.dimensions[a].score,
+  );
+  const signals = ranked.filter((d) => report.dimensions[d].score >= PROMINENT).slice(0, 2);
+  const skin = report.skinType?.type ?? null;
 
-  const patientSummary = `${summaryBand(report.overall.score)} The most prominent areas from this scan were ${top3
-    .map((d) => DIMENSION_LABEL[d])
-    .join(", ")}.`;
+  const parts: string[] = [];
+  if (overall < CALM && signals.length === 0) {
+    parts.push("Your skin looks calm in this scan. No area stands out.");
+  } else if (overall < ATTENTION) {
+    parts.push("This scan flags a few areas to work on.");
+  } else {
+    parts.push("This scan flags several areas worth attention.");
+  }
+  if (signals.length > 0) parts.push(joinAreas(signals.map((d) => DIMENSION_LABEL[d])));
+  if (skin) parts.push(`Your skin reads as ${skin}.`);
 
-  const education = top3.map((d) => `${DIMENSION_LABEL[d]}: ${DIMENSION_EDU[d]}`).join(" ");
+  const needsReferral =
+    overall >= ATTENTION || ranked.some((d) => report.dimensions[d].score >= STRONG);
+  if (needsReferral) parts.push("For a professional read, see a dermatologist.");
+
+  const eduLines = signals.map((d) => DIMENSION_EDU[d]);
+  if (skin) eduLines.push(SKINTYPE_EDU[skin]);
+  if (eduLines.length === 0) eduLines.push(DIMENSION_EDU[ranked[0]]);
 
   return {
-    patientSummary,
-    education,
+    patientSummary: parts.join(" "),
+    education: eduLines.join(" "),
     source: "builtin",
     promptVersion: BUILTIN_FACE_VERSION,
   };
