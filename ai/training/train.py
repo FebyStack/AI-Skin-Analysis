@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
-from torchvision.models import efficientnet_b0
+from torchvision.models import efficientnet_b0, EfficientNet_B0_Weights
 from sklearn.metrics import f1_score
 from ai.training.dataset import LesionDataset
 
@@ -18,7 +18,14 @@ def train_one(train_rows, val_rows, classes, epochs=15, out_dir=Path("ai/models/
               seed=0, lr=1e-3, batch=32, version="candidate") -> dict:
     torch.manual_seed(seed)
     dev = _device()
-    net = efficientnet_b0(num_classes=len(classes)).to(dev)
+    # Transfer learning: ImageNet-pretrained backbone + a fresh head sized to our
+    # classes. Training from scratch on a few hundred images gives ~random results;
+    # fine-tuning a pretrained net converges in a few epochs. (~20MB weights are
+    # downloaded once and cached in ~/.cache/torch.) Same architecture as
+    # efficientnet_b0(num_classes=…), so export/evaluate load the state_dict as-is.
+    net = efficientnet_b0(weights=EfficientNet_B0_Weights.IMAGENET1K_V1)
+    net.classifier[1] = torch.nn.Linear(net.classifier[1].in_features, len(classes))
+    net = net.to(dev)
     # class weights fight imbalance (melanoma is rarer than nevi)
     counts = Counter(r["label"] for r in train_rows)
     w = torch.tensor([1.0 / max(counts.get(c, 1), 1) for c in classes], dtype=torch.float32, device=dev)
