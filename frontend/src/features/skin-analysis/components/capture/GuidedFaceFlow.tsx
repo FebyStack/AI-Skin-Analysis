@@ -127,12 +127,12 @@ export function GuidedFaceFlow() {
     return (
       <div className="w-full">
         {offline && (
-          <p className="mx-auto mb-3 max-w-3xl rounded-lg bg-stone-100 p-3 text-sm text-stone-600">
+          <p className="mx-auto mb-3 max-w-3xl rounded-xl border border-hairline bg-surface p-3 text-sm text-ink-secondary">
             You're offline — this scan is stored on-device and will sync when back online.
           </p>
         )}
         {error && (
-          <p className="mx-auto mb-3 max-w-3xl rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900" role="alert">
+          <p className="mx-auto mb-3 max-w-3xl rounded-xl border border-soon-edge bg-soon-surface p-3 text-sm text-soon" role="alert">
             {error}
           </p>
         )}
@@ -143,29 +143,22 @@ export function GuidedFaceFlow() {
             <ScanLabelControl scanId={savedScanId} dimension="skintype" title="Clinician skin type" labels={SKINTYPE_CLASSES} />
           </>
         )}
-        <div className="mx-auto mt-4 flex max-w-3xl justify-center gap-3 px-4">
-          <button onClick={reset} className="min-h-[44px] rounded-lg bg-clinical px-6 text-sm font-semibold text-white">
-            New scan
-          </button>
-          <button
-            onClick={() => setView("history")}
-            className="min-h-[44px] rounded-lg border border-stone-300 px-6 text-sm font-medium text-stone-700"
-          >
-            History
-          </button>
+        <div className="mx-auto mt-6 flex max-w-3xl justify-center gap-3 px-4">
+          <button onClick={reset} className="btn-primary px-6">New scan</button>
+          <button onClick={() => setView("history")} className="btn-secondary px-6">History</button>
         </div>
       </div>
     );
   }
 
   if (view === "saving") {
-    return <p className="py-8 text-center text-sm text-stone-500">Saving your scan…</p>;
+    return <p className="py-8 text-center text-sm text-ink-secondary">Saving your scan…</p>;
   }
 
   // Capture state
   return (
     <div className="flex w-full flex-col items-center gap-4">
-      <div className="relative aspect-[3/4] w-full max-w-sm overflow-hidden rounded-2xl bg-black shadow-inner">
+      <div className="relative aspect-[3/4] w-full max-w-sm overflow-hidden rounded-2xl border border-hairline bg-black shadow-card">
         <video
           ref={camera.videoRef}
           playsInline
@@ -173,7 +166,7 @@ export function GuidedFaceFlow() {
           className="h-full w-full object-cover scale-x-[-1]" /* selfie preview mirror */
         />
         {camera.status !== "live" && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-sm text-white">
+          <div className="absolute inset-0 flex items-center justify-center bg-black/70 text-sm text-ink">
             {camera.status === "denied" && "Camera permission denied"}
             {camera.status === "no-camera" && "No camera available"}
             {camera.status === "starting" && "Starting camera…"}
@@ -183,28 +176,26 @@ export function GuidedFaceFlow() {
       </div>
 
       <div className="flex flex-col items-center gap-1">
-        <div className="text-xs font-semibold text-stone-500">
+        <div className="text-xs font-semibold uppercase tracking-[0.1em] text-gold">
           Step {scan.stepIndex + 1} of {scan.totalSteps}
         </div>
-        <p className="max-w-sm text-center text-sm text-stone-800">{scan.instruction}</p>
+        <p className="max-w-sm text-center text-sm text-ink">{scan.instruction}</p>
         {scan.lastIssues.length > 0 && (
-          <p className="text-xs text-amber-700">
-            Please retake: {scan.lastIssues.join(", ")}
-          </p>
+          <p className="text-xs text-soon">Please retake: {scan.lastIssues.join(", ")}</p>
         )}
       </div>
 
       <button
         onClick={captureNow}
         disabled={camera.status !== "live" || scan.busy}
-        className="min-h-[44px] rounded-full bg-clinical px-8 py-2 text-sm font-semibold text-white shadow disabled:opacity-40"
+        className="btn-primary rounded-full px-8"
       >
         {scan.busy ? "Analyzing…" : "Capture"}
       </button>
 
       <button
         onClick={() => setView("history")}
-        className="text-sm font-medium text-clinical underline-offset-2 hover:underline"
+        className="text-sm font-medium text-gold-bright underline-offset-2 hover:underline"
       >
         View scan history
       </button>

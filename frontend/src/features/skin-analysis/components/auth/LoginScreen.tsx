@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { Wordmark } from "../brand/Wordmark";
 
 export function LoginScreen({
   onLogin,
@@ -19,48 +20,52 @@ export function LoginScreen({
   };
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-warm-bg px-4">
-      <form
-        onSubmit={handleSubmit}
-        className="w-full max-w-sm space-y-5 rounded-2xl border border-warm-border bg-warm-surface p-8 shadow-lg"
-      >
-        <div className="text-center">
-          <h1 className="text-xl font-bold text-stone-900">AI Skin Analysis</h1>
-          <p className="mt-1 text-sm text-stone-500">Enter the clinic password to continue</p>
+    <main className="flex min-h-[100dvh] items-center justify-center bg-canvas px-4">
+      <div className="w-full max-w-sm animate-rise">
+        <div className="mb-8 flex justify-center">
+          <Wordmark size="lg" />
         </div>
 
-        {error && (
-          <p className="rounded-lg bg-red-50 p-3 text-center text-sm text-red-700" role="alert">
-            {error}
+        <form onSubmit={handleSubmit} className="card space-y-5 p-8">
+          <div className="text-center">
+            <h1 className="text-[1.0625rem] font-semibold text-ink">Clinician sign-in</h1>
+            <p className="mt-1 text-[0.8125rem] text-ink-secondary">
+              Enter the clinic password to continue
+            </p>
+          </div>
+
+          {error && (
+            <p
+              className="rounded-xl border border-urgent-edge bg-urgent-surface p-3 text-center text-sm text-urgent"
+              role="alert"
+            >
+              {error}
+            </p>
+          )}
+
+          <label className="block space-y-1.5">
+            <span className="field-label">Password</span>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoFocus
+              required
+              minLength={8}
+              placeholder="Clinic password"
+              className="field"
+            />
+          </label>
+
+          <button type="submit" disabled={loading || password.length < 8} className="btn-primary w-full">
+            {loading ? "Signing in…" : "Sign in"}
+          </button>
+
+          <p className="text-center text-xs text-ink-tertiary">
+            First login sets the password for this device.
           </p>
-        )}
-
-        <label className="block">
-          <span className="text-sm font-medium text-stone-700">Password</span>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoFocus
-            required
-            minLength={8}
-            placeholder="Clinic password"
-            className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-clinical focus:ring-2 focus:ring-clinical/30"
-          />
-        </label>
-
-        <button
-          type="submit"
-          disabled={loading || password.length < 8}
-          className="w-full rounded-lg bg-clinical py-2.5 text-sm font-semibold text-white transition hover:bg-clinical/90 disabled:opacity-40"
-        >
-          {loading ? "Signing in…" : "Sign in"}
-        </button>
-
-        <p className="text-center text-xs text-stone-400">
-          First login sets the password for this device.
-        </p>
-      </form>
+        </form>
+      </div>
     </main>
   );
 }

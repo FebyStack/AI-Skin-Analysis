@@ -52,26 +52,28 @@ export function ScanLabelControl({
   };
 
   return (
-    <div className="mx-auto mt-4 max-w-3xl rounded-xl border border-stone-200 bg-stone-50 p-4">
-      <p className="text-sm font-semibold text-stone-700">{title} (trains the model)</p>
-      <p className="mt-0.5 text-xs text-stone-500">
+    <div className="card mx-auto mt-4 max-w-3xl p-4">
+      <p className="text-sm font-semibold text-ink">{title} <span className="font-normal text-gold">(trains the model)</span></p>
+      <p className="mt-0.5 text-xs text-ink-secondary">
         Your grading becomes training data. {current ? `Current: ${current}.` : "Not yet graded."}
       </p>
-      <div className="mt-2 flex flex-wrap gap-2">
+      <div className="mt-3 flex flex-wrap gap-2">
         {labels.map((l) => (
           <button
             key={l}
             onClick={() => assign(l)}
             disabled={saving !== null}
-            className={`min-h-[36px] rounded-full px-3 text-sm font-medium capitalize disabled:opacity-50 ${
-              current === l ? "bg-clinical text-white" : "bg-white text-clinical border border-clinical/40"
+            className={`min-h-[36px] rounded-full px-3 text-sm font-medium capitalize transition-colors disabled:opacity-50 ${
+              current === l
+                ? "bg-gold text-gold-ink"
+                : "border border-hairline-strong bg-surface-raised text-ink-secondary hover:text-ink"
             }`}
           >
             {saving === l ? "…" : l}
           </button>
         ))}
       </div>
-      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+      {error && <p className="mt-2 text-sm text-urgent">{error}</p>}
     </div>
   );
 }

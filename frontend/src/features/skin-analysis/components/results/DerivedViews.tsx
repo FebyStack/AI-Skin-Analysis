@@ -56,7 +56,7 @@ export function DerivedViews({ blob }: { blob: Blob }) {
       const views: [keyof typeof refs, MapFn, [number, number, number]][] = [
         ["pigmentation", (d) => pigmentationMap(d), [146, 64, 14]],
         ["redness", (d) => rednessMap(d), [220, 38, 38]],
-        ["texture", (d, ww, hh) => textureMap(d, ww, hh), [15, 118, 110]],
+        ["texture", (d, ww, hh) => textureMap(d, ww, hh), [201, 162, 75]],
       ];
       for (const [key, fn, hue] of views) {
         const c = refs[key].current;
@@ -78,17 +78,17 @@ export function DerivedViews({ blob }: { blob: Blob }) {
           <figure key={key}>
             <canvas
               ref={refs[key]}
-              className="w-full rounded-lg border border-stone-200 bg-stone-900"
+              className="w-full rounded-lg border border-hairline bg-black"
               aria-label={DERIVED_LABELS[key]}
             />
-            <figcaption className="mt-1 text-center text-xs text-stone-600">
+            <figcaption className="mt-1 text-center text-xs text-ink-secondary">
               {DERIVED_LABELS[key]}
             </figcaption>
           </figure>
         ))}
       </div>
-      <p className="mt-2 text-xs text-stone-500">
-        Pigmentation, redness, and texture are <strong>derived from the visible-light photo</strong> —
+      <p className="mt-2 text-xs text-ink-tertiary">
+        Pigmentation, redness, and texture are <strong className="text-ink-secondary">derived from the visible-light photo</strong> —
         not spectral, UV, or infrared imaging.
       </p>
     </div>

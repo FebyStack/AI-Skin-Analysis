@@ -2,6 +2,93 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+  html {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    @apply bg-canvas text-ink font-sans antialiased;
+  }
+  ::selection {
+    background: rgba(201, 162, 75, 0.28);
+  }
+  /* Accessibility: no rise/stagger/scale/shimmer for reduced-motion users (medical audience) */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+    }
+  }
+}
+
+@layer components {
+  /* Cards & sheets — DESIGN.md §4 */
+  .card {
+    @apply rounded-2xl border border-hairline bg-surface shadow-card;
+  }
+
+  /* Buttons */
+  .btn {
+    @apply inline-flex min-h-[44px] items-center justify-center rounded-xl px-4 text-sm font-semibold
+           transition duration-200 ease-spring active:scale-[0.98] active:translate-y-px
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-bright/60 focus-visible:ring-offset-2
+           focus-visible:ring-offset-canvas disabled:pointer-events-none disabled:opacity-40;
+  }
+  .btn-primary {
+    @apply btn bg-gold text-gold-ink hover:bg-gold-bright;
+  }
+  .btn-secondary {
+    @apply btn border border-hairline-strong bg-surface-raised text-ink hover:bg-surface-raised/80;
+  }
+  .btn-ghost {
+    @apply btn bg-transparent text-ink-secondary hover:text-ink;
+  }
+
+  /* Inputs */
+  .field {
+    @apply min-h-[44px] w-full rounded-xl border border-hairline-strong bg-surface px-4 text-sm
+           text-ink placeholder:text-ink-tertiary outline-none transition
+           focus:border-gold focus:ring-2 focus:ring-gold/30;
+  }
+  .field-label {
+    @apply block text-[0.8125rem] font-medium text-ink-secondary;
+  }
+
+  /* Segmented control — Apple sliding thumb */
+  .segmented {
+    @apply relative grid rounded-full bg-gold/[0.12] p-1;
+  }
+  .segmented-thumb {
+    @apply pointer-events-none absolute inset-y-1 rounded-full bg-surface-raised shadow-thumb
+           transition-transform duration-300 ease-spring;
+  }
+  .segmented-item {
+    @apply relative z-10 min-h-[36px] rounded-full px-4 text-sm font-medium transition-colors duration-200;
+  }
+
+  /* Brand — champagne→antique gold gradient text (sampled from the logo) */
+  .text-gold-gradient {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, #F3E3BE 0%, #D9B96A 42%, #B8893C 100%);
+  }
+  .gold-tile {
+    background-image: linear-gradient(155deg, #EAD6A0 0%, #C9A24B 45%, #A9772F 100%);
+  }
+
+  /* Skeleton shimmer */
+  .skeleton {
+    @apply rounded-lg;
+    background: linear-gradient(90deg, #161619 25%, #202024 37%, #161619 63%);
+    background-size: 200% 100%;
+    @apply animate-shimmer;
+  }
+}
+
 @media print {
   body * {
     visibility: hidden;

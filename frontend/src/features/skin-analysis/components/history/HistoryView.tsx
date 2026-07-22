@@ -108,43 +108,41 @@ export function HistoryView({ onBack }: { onBack: () => void }) {
   }, [selectedId]);
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-6">
-      <div className="mb-4 flex items-center justify-between">
+    <div className="mx-auto w-full max-w-3xl animate-rise px-4 py-6">
+      <div className="mb-5 flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-stone-900">Scan history</h2>
-          <p className="text-xs text-stone-500">{selectedName ?? "Walk-in (no patient selected)"}</p>
+          <h2 className="font-serif text-xl font-semibold tracking-tight text-ink">Scan history</h2>
+          <p className="mt-0.5 text-xs text-ink-secondary">{selectedName ?? "Walk-in (no patient selected)"}</p>
         </div>
-        <button
-          onClick={onBack}
-          className="min-h-[44px] rounded-lg bg-clinical px-4 text-sm font-semibold text-white"
-        >
-          Back
-        </button>
+        <button onClick={onBack} className="btn-secondary">Back</button>
       </div>
 
       {note && (
-        <p className="mb-3 rounded-lg bg-stone-100 p-3 text-sm text-stone-600">{note}</p>
+        <p className="mb-4 rounded-xl border border-hairline bg-surface p-3 text-sm text-ink-secondary">{note}</p>
       )}
 
       {loading ? (
-        <p className="py-8 text-center text-sm text-stone-500">Loading…</p>
+        <ul className="space-y-3" aria-hidden>
+          {[0, 1, 2].map((i) => (
+            <li key={i} className="skeleton h-[4.5rem]" />
+          ))}
+        </ul>
       ) : rows.length === 0 ? (
-        <p className="py-8 text-center text-sm text-stone-500">
-          No saved scans yet. Face scans and body/close-up scans will appear here.
-        </p>
+        <div className="card p-10 text-center">
+          <p className="text-sm text-ink-secondary">
+            No saved scans yet. Face scans and body/close-up scans will appear here.
+          </p>
+        </div>
       ) : (
         <ul className="space-y-3">
           {rows.map((r) => (
-            <li
-              key={r.id}
-              className="flex items-center justify-between rounded-xl border border-stone-200 p-4"
-            >
+            <li key={r.id} className="card flex items-center justify-between p-4">
               <div className="min-w-0">
-                <p className="truncate font-medium text-stone-800">{r.headline}</p>
-                <p className="text-xs text-stone-400">
-                  {new Date(r.createdAt).toLocaleString()} · {r.kind}
+                <p className="truncate font-medium text-ink">{r.headline}</p>
+                <p className="mt-0.5 flex items-center gap-2 text-xs text-ink-tertiary">
+                  <span className="font-mono">{new Date(r.createdAt).toLocaleString()}</span> · {r.kind}
                   {!r.synced && (
-                    <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-amber-800">pending sync</span>
+                    <span className="rounded-full border border-soon-edge bg-soon-surface px-2 py-0.5 text-soon">pending sync</span>
                   )}
                 </p>
               </div>

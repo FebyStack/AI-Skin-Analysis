@@ -22,22 +22,19 @@ export function DimensionGrid({ dimensions }: { dimensions: AnalysisReport["dime
         const d = dimensions[key];
         const isProxy = (PROXY_DIMENSIONS as readonly string[]).includes(key);
         return (
-          <div key={key} className="rounded-xl border border-stone-200 bg-white p-3">
+          <div key={key} className="card p-3">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-semibold text-stone-900">{LABELS[key]}</span>
+              <span className="text-sm font-semibold text-ink">{LABELS[key]}</span>
               {isProxy && (
-                <span className="rounded-full bg-clinical-soft px-2 py-0.5 text-[10px] font-semibold text-clinical">
+                <span className="rounded-full border border-gold/30 bg-gold/[0.12] px-2 py-0.5 text-[10px] font-semibold text-gold-bright">
                   visual proxy
                 </span>
               )}
             </div>
-            <div className="mt-2 h-1.5 rounded bg-stone-100">
-              <div
-                className="h-full rounded bg-clinical"
-                style={{ width: `${Math.round(d.score * 100)}%` }}
-              />
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.08]">
+              <div className="h-full rounded-full bg-gold" style={{ width: `${Math.round(d.score * 100)}%` }} />
             </div>
-            <p className="mt-2 text-xs leading-relaxed text-stone-600">{d.note}</p>
+            <p className="mt-2 text-xs leading-relaxed text-ink-secondary">{d.note}</p>
           </div>
         );
       })}

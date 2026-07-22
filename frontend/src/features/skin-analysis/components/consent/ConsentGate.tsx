@@ -19,17 +19,14 @@ export function ConsentGate({
   };
 
   return (
-    <div className="mx-auto max-w-md rounded-2xl border border-warm-border bg-warm-surface p-5">
-      <h2 className="text-lg font-bold text-stone-900">Before we scan</h2>
-      <ul className="mt-3 space-y-2 text-sm text-stone-600">
+    <div className="card mx-auto max-w-md animate-rise p-6">
+      <h2 className="font-serif text-xl font-semibold tracking-tight text-ink">Before we scan</h2>
+      <ul className="mt-4 space-y-2.5 text-sm leading-relaxed text-ink-secondary marker:text-gold [&>li]:list-disc [&>li]:ml-4">
         <li>Your photo is analyzed on your device; only an opt-in copy is sent to the AI service over a secure connection, and it is never stored.</li>
         <li>History, if you save it, stays on this device only.</li>
-        <li><strong>This is not a diagnosis.</strong> It helps you decide whether to see a professional.</li>
+        <li><strong className="font-semibold text-ink">This is not a diagnosis.</strong> It helps you decide whether to see a professional.</li>
       </ul>
-      <button
-        onClick={accept}
-        className="mt-4 w-full rounded-lg bg-clinical py-3 text-sm font-semibold text-white"
-      >
+      <button onClick={accept} className="btn-primary mt-5 w-full">
         I understand — continue
       </button>
     </div>

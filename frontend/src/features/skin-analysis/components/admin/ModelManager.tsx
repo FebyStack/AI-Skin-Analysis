@@ -45,35 +45,35 @@ export default function ModelManager({ apiBase = '' }: { apiBase?: string }) {
 
   return (
     <div className="p-4">
-      <h3 className="font-semibold mb-2">Model Manager</h3>
-      <div className="mb-3">
+      <h3 className="mb-3 font-serif text-lg font-semibold tracking-tight text-ink">Model Manager</h3>
+      <div className="mb-4">
         {authed ? (
-          <>
-            <input placeholder="model id" value={modelId} onChange={(e) => setModelId(e.target.value)} className="border p-1 mr-2" />
-            <input type="file" onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)} />
-            <input placeholder="version (optional)" value={version} onChange={(e) => setVersion(e.target.value)} className="border p-1 ml-2" />
-            <button onClick={upload} className="ml-2 bg-clinical text-white px-3 py-1 rounded">Upload & Promote</button>
-          </>
+          <div className="flex flex-wrap items-center gap-2">
+            <input placeholder="model id" value={modelId} onChange={(e) => setModelId(e.target.value)} className="field max-w-[10rem]" />
+            <input type="file" onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)} className="text-sm text-ink-secondary file:mr-3 file:rounded-lg file:border-0 file:bg-surface-raised file:px-3 file:py-1.5 file:text-sm file:text-ink" />
+            <input placeholder="version (optional)" value={version} onChange={(e) => setVersion(e.target.value)} className="field max-w-[12rem]" />
+            <button onClick={upload} className="btn-primary">Upload & Promote</button>
+          </div>
         ) : (
-          <div className="text-sm text-muted">Admin actions require login. Use /api/auth/login to authenticate.</div>
+          <div className="text-sm text-ink-secondary">Admin actions require login. Use /api/auth/login to authenticate.</div>
         )}
       </div>
-      <div className="mb-2">Status: {status}</div>
-      <div>
+      <div className="mb-3 text-sm text-ink-secondary">Status: <span className="text-ink">{status}</span></div>
+      <div className="space-y-3">
         {manifest.map((m) => (
-          <div key={m.id} className="mb-2 border p-2 rounded">
-            <div className="font-bold">{m.name} ({m.id})</div>
-            <div className="text-sm">Current: {m.currentVersion}</div>
-            <div className="mt-1 flex gap-2">
+          <div key={m.id} className="card p-3">
+            <div className="font-bold text-ink">{m.name} <span className="font-mono text-xs font-normal text-ink-tertiary">({m.id})</span></div>
+            <div className="text-sm text-ink-secondary">Current: <span className="font-mono">{m.currentVersion}</span></div>
+            <div className="mt-2 flex flex-wrap gap-2">
               {m.versions.map((v: any) => (
-                <div key={v.id} className="border p-1 rounded">
-                  <div className="text-xs">{v.version}</div>
-                  <div className="text-xs">{v.isCurrent ? 'current' : ''} {v.isStable ? 'stable' : ''}</div>
-                  <div className="mt-1">
+                <div key={v.id} className="rounded-lg border border-hairline bg-surface-raised p-2">
+                  <div className="font-mono text-xs text-ink">{v.version}</div>
+                  <div className="text-xs text-gold">{v.isCurrent ? 'current' : ''} {v.isStable ? 'stable' : ''}</div>
+                  <div className="mt-1 flex gap-2">
                     {!v.isCurrent && authed && (
-                      <button onClick={() => promote(m.id, v.id)} className="text-xs mr-2">Promote</button>
+                      <button onClick={() => promote(m.id, v.id)} className="text-xs font-medium text-gold-bright hover:underline">Promote</button>
                     )}
-                    {authed && <button onClick={() => rollback(m.id)} className="text-xs">Rollback</button>}
+                    {authed && <button onClick={() => rollback(m.id)} className="text-xs font-medium text-ink-secondary hover:text-ink">Rollback</button>}
                   </div>
                 </div>
               ))}

@@ -57,80 +57,73 @@ export function PatientBar() {
   };
 
   return (
-    <div className="mx-auto mb-4 w-full max-w-2xl">
-      <div className="flex items-center justify-between rounded-xl border border-stone-200 bg-white px-4 py-2">
+    <div className="mx-auto w-full max-w-2xl">
+      <div className="card flex items-center justify-between px-4 py-3">
         <div className="min-w-0">
-          <p className="text-xs uppercase tracking-wide text-stone-400">Patient</p>
-          <p className="truncate text-sm font-semibold text-stone-800">
+          <p className="text-[0.6875rem] uppercase tracking-[0.12em] text-ink-tertiary">Patient</p>
+          <p className="truncate text-sm font-semibold text-ink">
             {selectedName ?? "Walk-in (none selected)"}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           {selectedId && (
             <button
               onClick={clear}
-              className="text-xs font-medium text-stone-500 underline-offset-2 hover:underline"
+              className="text-xs font-medium text-ink-secondary underline-offset-2 hover:text-ink hover:underline"
             >
               Clear
             </button>
           )}
-          <button
-            onClick={() => setOpen((v) => !v)}
-            className="min-h-[36px] rounded-lg bg-clinical px-3 text-sm font-semibold text-white"
-          >
+          <button onClick={() => setOpen((v) => !v)} className="btn-primary min-h-[36px] px-4">
             {selectedId ? "Switch" : "Select"}
           </button>
         </div>
       </div>
 
       {open && (
-        <div className="mt-2 rounded-xl border border-stone-200 bg-white p-4 shadow-sm">
-          <label className="text-xs font-medium text-stone-600">Find a patient</label>
+        <div className="card mt-2 animate-rise p-4">
+          <label className="field-label">Find a patient</label>
           <input
             autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search by name…"
-            className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm"
+            className="field mt-1.5"
           />
 
           {results.length > 0 && (
-            <ul className="mt-2 max-h-48 divide-y divide-stone-100 overflow-y-auto rounded-lg border border-stone-100">
+            <ul className="mt-3 max-h-48 divide-y divide-hairline overflow-y-auto rounded-xl border border-hairline">
               {results.map((p) => (
                 <li key={p.id}>
                   <button
                     onClick={() => choose(p)}
-                    className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-stone-50"
+                    className="flex w-full items-center justify-between px-3 py-2.5 text-left text-sm text-ink transition-colors hover:bg-surface-raised"
                   >
-                    <span className="truncate text-stone-800">{p.name}</span>
-                    {p.externalRef && <span className="ml-2 shrink-0 text-xs text-stone-400">{p.externalRef}</span>}
+                    <span className="truncate">{p.name}</span>
+                    {p.externalRef && <span className="ml-2 shrink-0 text-xs text-ink-tertiary">{p.externalRef}</span>}
                   </button>
                 </li>
               ))}
             </ul>
           )}
 
-          <div className="mt-4 border-t border-stone-100 pt-3">
-            <label className="text-xs font-medium text-stone-600">Or add a new patient</label>
-            <div className="mt-1 flex gap-2">
+          <div className="mt-4 border-t border-hairline pt-4">
+            <label className="field-label">Or add a new patient</label>
+            <div className="mt-1.5 flex gap-2">
               <input
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && void create()}
                 placeholder="Full name"
-                className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm"
+                className="field"
               />
-              <button
-                onClick={create}
-                disabled={busy || !newName.trim()}
-                className="min-h-[40px] shrink-0 rounded-lg bg-clinical px-4 text-sm font-semibold text-white disabled:opacity-40"
-              >
+              <button onClick={create} disabled={busy || !newName.trim()} className="btn-primary shrink-0 px-5">
                 Add
               </button>
             </div>
           </div>
 
-          {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+          {error && <p className="mt-3 text-sm text-urgent">{error}</p>}
         </div>
       )}
     </div>

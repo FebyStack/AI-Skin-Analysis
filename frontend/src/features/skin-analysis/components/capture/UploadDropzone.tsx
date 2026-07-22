@@ -5,9 +5,9 @@ export function UploadDropzone({ onFile }: { onFile: (file: File) => void }) {
   };
 
   return (
-    <label className="flex min-h-40 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-warm-border bg-warm-surface p-6 text-center">
-      <span className="text-sm font-medium text-stone-700">Upload a photo</span>
-      <span className="mt-1 text-xs text-stone-500">or use your camera</span>
+    <label className="flex min-h-40 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-hairline-strong bg-surface p-6 text-center transition-colors hover:border-gold/50 hover:bg-surface-raised">
+      <span className="text-sm font-medium text-ink">Upload a photo</span>
+      <span className="mt-1 text-xs text-ink-tertiary">or use your camera</span>
       <input
         type="file"
         accept="image/*"

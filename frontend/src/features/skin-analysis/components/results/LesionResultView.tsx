@@ -6,9 +6,9 @@ interface Props {
 }
 
 const URGENCY_STYLES: Record<ReferralUrgency, string> = {
-  urgent: "bg-red-50 border-red-300 text-red-900",
-  soon: "bg-amber-50 border-amber-300 text-amber-900",
-  routine: "bg-stone-50 border-stone-300 text-stone-800",
+  urgent: "bg-urgent-surface border-urgent-edge text-urgent",
+  soon: "bg-soon-surface border-soon-edge text-soon",
+  routine: "bg-routine-surface border-routine-edge text-routine",
 };
 
 const pct = (n: number) => `${Math.round(n * 100)}%`;
@@ -24,18 +24,18 @@ export function LesionResultView({ analysis, explanation }: Props) {
   const lowLocalization = analysis.wholeImageFallback || localization < LOW_LOCALIZATION_THRESHOLD;
 
   return (
-    <section className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6">
+    <section className="mx-auto w-full max-w-3xl animate-rise space-y-6 px-4 py-6">
       <header className="text-center">
-        <h2 className="text-xl font-bold text-stone-900 sm:text-2xl">
+        <h2 className="font-serif text-[clamp(1.5rem,3vw,2rem)] font-semibold tracking-tight text-ink">
           {primary?.predicted ?? "Inconclusive analysis"}
         </h2>
-        <p className="mt-1 text-sm text-stone-500">
-          Automated visual assessment · model {analysis.model.classifier}
+        <p className="mt-1.5 text-sm text-ink-secondary">
+          Automated visual assessment · <span className="font-mono text-xs">{analysis.model.classifier}</span>
         </p>
       </header>
 
       {lowLocalization && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900" role="status">
+        <div className="rounded-2xl border border-soon-edge bg-soon-surface p-4 text-sm text-soon" role="status">
           <strong className="font-semibold">This result covers the whole photo</strong>, not a specific
           spot — we couldn't automatically identify a single lesion to focus on. For a more precise
           result, try a closer, well-lit photo centered on the area of concern.
@@ -44,7 +44,7 @@ export function LesionResultView({ analysis, explanation }: Props) {
 
       {explanation.referral.recommended && (
         <div
-          className={`rounded-xl border p-4 text-sm ${URGENCY_STYLES[explanation.referral.urgency]}`}
+          className={`rounded-2xl border p-4 text-sm ${URGENCY_STYLES[explanation.referral.urgency]}`}
           role="alert"
         >
           <strong className="font-semibold">Please see a professional</strong> — {explanation.referral.reason}
@@ -52,42 +52,42 @@ export function LesionResultView({ analysis, explanation }: Props) {
       )}
 
       {explanation.source === "builtin" && (
-        <div className="rounded-lg bg-stone-100 p-3 text-sm text-stone-600">
+        <div className="rounded-xl border border-hairline bg-surface p-3 text-sm text-ink-secondary">
           Showing built-in guidance — enhanced AI explanation is unavailable offline.
         </div>
       )}
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        <div>
-          <h3 className="text-sm font-semibold text-stone-700">Top matches</h3>
-          <ul className="mt-2 space-y-2">
+        <div className="card p-5">
+          <h3 className="text-[1.0625rem] font-semibold text-ink">Top matches</h3>
+          <ul className="mt-4 space-y-3">
             {(primary?.top ?? []).map((t) => (
               <li key={t.label}>
                 <div className="flex justify-between text-sm">
-                  <span className="text-stone-800">{t.label}</span>
-                  <span className="tabular-nums text-stone-500">{pct(t.confidence)}</span>
+                  <span className="text-ink">{t.label}</span>
+                  <span className="font-mono tabular-nums text-ink-secondary">{pct(t.confidence)}</span>
                 </div>
-                <div className="mt-1 h-2 w-full rounded-full bg-stone-200">
-                  <div className="h-2 rounded-full bg-clinical" style={{ width: pct(t.confidence) }} />
+                <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-white/[0.08]">
+                  <div className="h-full rounded-full bg-gold" style={{ width: pct(t.confidence) }} />
                 </div>
               </li>
             ))}
           </ul>
         </div>
 
-        <div className="space-y-4">
+        <div className="card space-y-4 p-5">
           <div>
-            <h3 className="text-sm font-semibold text-stone-700">What this means</h3>
-            <p className="mt-1 text-sm leading-relaxed text-stone-700">{explanation.patientSummary}</p>
+            <h3 className="text-[1.0625rem] font-semibold text-ink">What this means</h3>
+            <p className="mt-1.5 text-sm leading-relaxed text-ink-secondary">{explanation.patientSummary}</p>
           </div>
-          <div>
-            <h3 className="text-sm font-semibold text-stone-700">Learn more</h3>
-            <p className="mt-1 text-sm leading-relaxed text-stone-700">{explanation.education}</p>
+          <div className="border-t border-hairline pt-4">
+            <h3 className="text-[1.0625rem] font-semibold text-ink">Learn more</h3>
+            <p className="mt-1.5 text-sm leading-relaxed text-ink-secondary">{explanation.education}</p>
           </div>
         </div>
       </div>
 
-      <p className="border-t border-stone-200 pt-4 text-xs text-stone-400">{explanation.disclaimer}</p>
+      <p className="border-t border-hairline pt-4 text-xs leading-relaxed text-ink-tertiary">{explanation.disclaimer}</p>
     </section>
   );
 }

@@ -28,26 +28,13 @@ export function GuidedFaceScan({
         <div className="flex flex-col items-center gap-4">
 
             {/* Camera frame placeholder */}
-            <div
-                className="
-          aspect-[3/4]
-          max-h-[60vh]
-          w-full
-          rounded-3xl
-          border
-          flex
-          items-center
-          justify-center
-        "
-            >
-                <span>
-                    Camera preview
-                </span>
+            <div className="flex aspect-[3/4] max-h-[60vh] w-full items-center justify-center rounded-3xl border border-hairline bg-surface text-ink-tertiary">
+                <span>Camera preview</span>
             </div>
 
 
             {/* Progress */}
-            <div>
+            <div className="text-xs font-semibold uppercase tracking-[0.1em] text-gold">
                 Step {scan.stepIndex + 1} of {scan.totalSteps}
             </div>
 
@@ -55,17 +42,13 @@ export function GuidedFaceScan({
             {/* Guidance — doubles as the retake message when a capture fails */}
             <p
                 aria-live="polite"
-                className={hasIssue ? "rounded-lg bg-amber-50 px-4 py-2 text-amber-900 text-center" : "text-center"}
+                className={hasIssue ? "rounded-xl border border-soon-edge bg-soon-surface px-4 py-2 text-center text-soon" : "text-center text-ink"}
             >
                 {scan.instruction}
             </p>
 
 
-            <button
-                className="min-h-[44px] px-6 rounded-lg"
-                disabled={scan.busy || scan.done}
-                onClick={scan.captureCurrent}
-            >
+            <button className="btn-primary px-6" disabled={scan.busy || scan.done} onClick={scan.captureCurrent}>
                 Capture
             </button>
 

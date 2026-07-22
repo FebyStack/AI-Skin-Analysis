@@ -12,8 +12,8 @@ export default function App() {
 
   if (status === "unknown") {
     return (
-      <main className="flex min-h-screen items-center justify-center">
-        <p className="text-sm text-stone-400">Checking session…</p>
+      <main className="flex min-h-[100dvh] items-center justify-center bg-canvas">
+        <p className="text-sm text-ink-secondary">Checking session…</p>
       </main>
     );
   }
