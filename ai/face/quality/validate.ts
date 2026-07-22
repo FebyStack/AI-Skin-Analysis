@@ -8,9 +8,13 @@ export const LUMA_MIN = 0.15;
 export const LUMA_MAX = 0.9;
 export const BLUR_MIN_HF = 0.004;       // mean |luma - neighbour mean| over the whole frame
 export const FACE_MIN_FRACTION = 0.2;   // face bbox height / image height (plan said 0.18; fixture scale 0.08 spans 0.1934, tuned up)
+// yawDeg comes from asin(matrix[2]) → mathematically capped at ±90°, and MediaPipe's
+// estimate saturates before true profile, so the old [±65,±95] profile windows were
+// effectively unreachable (capture stuck on "wrong-orientation"). Profile now accepts
+// a strong reachable turn (≥45°); the side-cheek analysis is valid across 45–90°.
 export const ANGLE_YAW_WINDOWS: Record<FaceAngle, [number, number]> = {
   front: [-12, 12], "left-45": [-60, -30], "right-45": [30, 60],
-  "left-profile": [-95, -65], "right-profile": [65, 95],
+  "left-profile": [-90, -45], "right-profile": [45, 90],
 };
 
 function frameLumaStats(px: Pixels): { mean: number; hf: number } {

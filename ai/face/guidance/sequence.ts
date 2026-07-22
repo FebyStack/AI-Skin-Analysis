@@ -27,8 +27,8 @@ const ANGLE_INSTRUCTIONS: Record<FaceAngle, string> = {
     front: "Look straight ahead and position your face inside the frame.",
     "left-45": "Turn your head slightly to the left.",
     "right-45": "Turn your head slightly to the right.",
-    "left-profile": "Turn fully to the left so we see your profile.",
-    "right-profile": "Turn fully to the right so we see your profile.",
+    "left-profile": "Turn further left to show your left side — keep both eyes visible.",
+    "right-profile": "Turn further right to show your right side — keep both eyes visible.",
 };
 
 const ISSUE_INSTRUCTIONS: Record<string, string> = {
