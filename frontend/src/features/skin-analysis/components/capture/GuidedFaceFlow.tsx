@@ -155,7 +155,15 @@ export function GuidedFaceFlow() {
     return <p className="py-8 text-center text-sm text-ink-secondary">Saving your scan…</p>;
   }
 
-  // Capture state
+  // Capture state — per-step guidance derived from the angle being captured.
+  const currentAngle = scan.currentAngle as FaceAngle;
+  const turnDir: "left" | "right" | "none" = currentAngle?.startsWith("left")
+    ? "left"
+    : currentAngle?.startsWith("right")
+      ? "right"
+      : "none";
+  const positionCue =
+    turnDir === "none" ? "Center your face in the oval" : `Turn ${turnDir} — keep your face in the oval`;
   return (
     <div className="flex w-full flex-col items-center gap-4">
       <div className="relative aspect-[3/4] w-full max-w-sm overflow-hidden rounded-2xl border border-hairline bg-black shadow-card">
@@ -181,8 +189,18 @@ export function GuidedFaceFlow() {
                 fill="none" stroke="currentColor" strokeWidth="0.7" strokeDasharray="3 2"
               />
             </svg>
+            {/* Directional chevron for the current step (front shows none). */}
+            {turnDir !== "none" && (
+              <div
+                className={`absolute top-1/2 -translate-y-1/2 animate-pulse text-gold ${turnDir === "left" ? "left-2" : "right-2"}`}
+              >
+                <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  {turnDir === "left" ? <polyline points="15 18 9 12 15 6" /> : <polyline points="9 18 15 12 9 6" />}
+                </svg>
+              </div>
+            )}
             <p className="absolute inset-x-0 top-3 px-4 text-center text-xs font-medium text-white/90">
-              Center your face in the oval
+              {positionCue}
             </p>
           </div>
         )}
@@ -196,7 +214,18 @@ export function GuidedFaceFlow() {
         )}
       </div>
 
-      <div className="flex flex-col items-center gap-1">
+      <div className="flex flex-col items-center gap-2">
+        {/* Per-step progress: one segment per angle (done / current / pending). */}
+        <div className="flex items-center gap-1.5">
+          {FACE_ANGLES.map((a, i) => (
+            <span
+              key={a}
+              className={`h-1.5 rounded-full transition-all ${
+                i < scan.stepIndex ? "w-4 bg-gold" : i === scan.stepIndex ? "w-6 bg-gold-bright" : "w-4 bg-hairline"
+              }`}
+            />
+          ))}
+        </div>
         <div className="text-xs font-semibold uppercase tracking-[0.1em] text-gold">
           Step {scan.stepIndex + 1} of {scan.totalSteps}
         </div>
