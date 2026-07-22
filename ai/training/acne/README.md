@@ -26,8 +26,9 @@ Folder names accept aliases (`0..4`, `comedonal`, `nodulocystic`, …) — see l
 
 **Quick start dataset:** `.venv/bin/python -m ai.training.acne.fetch_acne04` pulls
 the public ACNE04 mirror (~394 balanced images, no login) into
-`acne/acne04/{mild,moderate,severe,very-severe}/`. ACNE04 has no `clear` class —
-those come from clinician-labeled app scans via the export loop below.
+`acne/acne04/{mild,moderate,severe,very-severe}/`. ACNE04 has no `clear` class;
+`.venv/bin/python -m ai.training.skintype.fetch_killa92` seeds one into
+`acne/clearskin/clear/` from clear-skin faces (and more come from labeled app scans).
 
 ## The improvement loop
 

@@ -5,9 +5,12 @@ import { makeAnalyzeFrame, FACE_MODEL_VERSIONS } from "./frame-adapter";
 import { FaceReportView } from "../results/FaceReportView";
 import { saveFaceScanWithFallback } from "../../pwa/save-flow";
 import { HistoryView } from "../history/HistoryView";
-import { AcneLabelControl } from "../patients/AcneLabelControl";
+import { ScanLabelControl } from "../patients/ScanLabelControl";
+import { ACNE_CLASSES } from "@ai/face/analyzers/acne-model";
+import { SKINTYPE_CLASSES } from "@ai/face/analyzers/skintype-model";
 import { scanPatientId } from "../../store/patient-store";
 import { refineAcneWithModel } from "@ai/face/analyzers/acne-model";
+import { refineSkinTypeWithModel } from "@ai/face/analyzers/skintype-model";
 import type { Pixels } from "@ai/face/types";
 import { FACE_ANGLES, type FaceReport, type FaceAngle } from "@shared/face";
 import type { CapturedAngle } from "../../api/face-client";
@@ -85,7 +88,10 @@ export function GuidedFaceFlow() {
       const frontBlob = capturedByAngle.current.get("front");
       if (frontBlob) {
         const px = await blobToPixels(frontBlob);
-        if (px) report = await refineAcneWithModel(report, px);
+        if (px) {
+          report = await refineAcneWithModel(report, px);
+          report = await refineSkinTypeWithModel(report, px);
+        }
       }
 
       try {
@@ -131,7 +137,12 @@ export function GuidedFaceFlow() {
           </p>
         )}
         <FaceReportView report={saved} />
-        {savedScanId && <AcneLabelControl scanId={savedScanId} />}
+        {savedScanId && (
+          <>
+            <ScanLabelControl scanId={savedScanId} dimension="acne" title="Clinician acne grade" labels={ACNE_CLASSES} />
+            <ScanLabelControl scanId={savedScanId} dimension="skintype" title="Clinician skin type" labels={SKINTYPE_CLASSES} />
+          </>
+        )}
         <div className="mx-auto mt-4 flex max-w-3xl justify-center gap-3 px-4">
           <button onClick={reset} className="min-h-[44px] rounded-lg bg-clinical px-6 text-sm font-semibold text-white">
             New scan

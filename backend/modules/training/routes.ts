@@ -5,7 +5,11 @@ import type { AppDeps } from "../../shared/deps";
 
 // Labels a clinician can assign per dimension → training data for learned analyzers.
 const ACNE_LABELS = new Set(["clear", "mild", "moderate", "severe", "very-severe"]);
-const LABELS_BY_DIMENSION: Record<string, Set<string>> = { acne: ACNE_LABELS };
+const SKINTYPE_LABELS = new Set(["normal", "oily", "dry", "combination"]);
+const LABELS_BY_DIMENSION: Record<string, Set<string>> = {
+  acne: ACNE_LABELS,
+  skintype: SKINTYPE_LABELS,
+};
 
 // Export lands where the Python trainer reads it ($DATASETS_DIR/acne/scans/...).
 // Backend runs from repo root, so ai/datasets is relative to cwd (mirrors schema read).
@@ -41,12 +45,17 @@ export function createTrainingRoutes(deps: AppDeps, auth: RequestHandler, admin:
     res.json({ labels: await deps.scans.getLabels(req.params.id) });
   });
 
-  // Export every acne-labeled scan's image into the training folder layout
-  // ($DATASETS_DIR/acne/scans/<label>/<scanId>.jpg) that ai.training.acne reads.
+  // Export every labeled scan's image into the training folder layout
+  // ($DATASETS_DIR/<dimension>/scans/<label>/<scanId>.jpg) that the trainer reads.
   // Admin-only: it writes to disk and exposes patient imagery as training data.
-  router.post("/api/training/acne/export", admin, async (_req, res) => {
-    const labeled = await deps.scans.listLabeled("acne");
-    const outBase = path.join(datasetsDir(), "acne", "scans");
+  router.post("/api/training/:dimension/export", admin, async (req, res) => {
+    const dimension = req.params.dimension;
+    if (!LABELS_BY_DIMENSION[dimension]) {
+      res.status(400).json({ error: `unknown dimension: ${dimension}` });
+      return;
+    }
+    const labeled = await deps.scans.listLabeled(dimension);
+    const outBase = path.join(datasetsDir(), dimension, "scans");
     let written = 0;
     const missing: string[] = [];
     for (const { scanId, label } of labeled) {

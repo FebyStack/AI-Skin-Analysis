@@ -1,10 +1,19 @@
 import { useEffect, useState } from "react";
 
-const ACNE_LABELS = ["clear", "mild", "moderate", "severe", "very-severe"] as const;
-
-// Clinician grades the acne severity of a saved scan → training data for the
-// learned acne model (POST /api/scans/:id/label). Shown on saved (online) scans.
-export function AcneLabelControl({ scanId }: { scanId: string }) {
+// Clinician grades a saved scan on one dimension → training data for that learned
+// model (POST /api/scans/:id/label). Generic over dimension so acne, skin-type,
+// and future trained dimensions all reuse it. Shown on saved (online) scans.
+export function ScanLabelControl({
+  scanId,
+  dimension,
+  title,
+  labels,
+}: {
+  scanId: string;
+  dimension: string;
+  title: string;
+  labels: readonly string[];
+}) {
   const [current, setCurrent] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -15,13 +24,13 @@ export function AcneLabelControl({ scanId }: { scanId: string }) {
       .then((r) => (r.ok ? r.json() : { labels: [] }))
       .then((d: { labels?: { dimension: string; label: string }[] }) => {
         if (!alive) return;
-        setCurrent(d.labels?.find((l) => l.dimension === "acne")?.label ?? null);
+        setCurrent(d.labels?.find((l) => l.dimension === dimension)?.label ?? null);
       })
       .catch(() => undefined);
     return () => {
       alive = false;
     };
-  }, [scanId]);
+  }, [scanId, dimension]);
 
   const assign = async (label: string) => {
     setSaving(label);
@@ -31,7 +40,7 @@ export function AcneLabelControl({ scanId }: { scanId: string }) {
         method: "POST",
         credentials: "include",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ dimension: "acne", label }),
+        body: JSON.stringify({ dimension, label }),
       });
       if (!res.ok) throw new Error("Could not save label.");
       setCurrent(label);
@@ -44,17 +53,17 @@ export function AcneLabelControl({ scanId }: { scanId: string }) {
 
   return (
     <div className="mx-auto mt-4 max-w-3xl rounded-xl border border-stone-200 bg-stone-50 p-4">
-      <p className="text-sm font-semibold text-stone-700">Clinician acne grade (trains the model)</p>
+      <p className="text-sm font-semibold text-stone-700">{title} (trains the model)</p>
       <p className="mt-0.5 text-xs text-stone-500">
         Your grading becomes training data. {current ? `Current: ${current}.` : "Not yet graded."}
       </p>
       <div className="mt-2 flex flex-wrap gap-2">
-        {ACNE_LABELS.map((l) => (
+        {labels.map((l) => (
           <button
             key={l}
             onClick={() => assign(l)}
             disabled={saving !== null}
-            className={`min-h-[36px] rounded-full px-3 text-sm font-medium disabled:opacity-50 ${
+            className={`min-h-[36px] rounded-full px-3 text-sm font-medium capitalize disabled:opacity-50 ${
               current === l ? "bg-clinical text-white" : "bg-white text-clinical border border-clinical/40"
             }`}
           >

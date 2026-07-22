@@ -23,6 +23,16 @@ export interface DimensionScore {
   evidence: string;     // camera-honest: names the pixel metric used
 }
 
+// Skin type is categorical (no severity order) → a separate report field, not a
+// 0..1 FaceDimension. Optional: absent when no trained skintype model is present.
+export const SKIN_TYPES = ["normal", "oily", "dry", "combination"] as const;
+export type SkinType = (typeof SKIN_TYPES)[number];
+export interface SkinTypeResult {
+  type: SkinType;
+  confidence: number;   // 0..1, top-class probability
+  evidence: string;     // names the model/version behind it
+}
+
 export interface AngleQuality { ok: boolean; issues: string[] }
 
 export interface FaceExplanation {
@@ -49,6 +59,7 @@ export interface FaceReport {
   kind: "face-v2";
   overall: { score: number; confidence: number };
   dimensions: Record<FaceDimension, DimensionScore>;
+  skinType?: SkinTypeResult | null;   // filled by the trained skintype model when present
   capture: { angles: { angle: string; quality: AngleQuality }[] };
   recommendations: { skincare: string[]; treatments: string[] };
   explanation: FaceExplanation | null;   // filled in Phase C
@@ -82,5 +93,9 @@ export function validateFaceReport(x: unknown): { ok: true; report: FaceReport }
   if (typeof r.disclaimer !== "string" || r.disclaimer.length === 0) errors.push("disclaimer missing");
   if (typeof r.pipelineVersion !== "number") errors.push("pipelineVersion missing");
   if (typeof r.modelVersions !== "object" || r.modelVersions === null) errors.push("modelVersions missing");
+  if (r.skinType != null) {
+    const st = r.skinType as Record<string, unknown>;
+    if (!SKIN_TYPES.includes(st.type as SkinType) || !in01(st.confidence)) errors.push("skinType malformed");
+  }
   return errors.length === 0 ? { ok: true, report: x as FaceReport } : { ok: false, errors };
 }
