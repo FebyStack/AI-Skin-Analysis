@@ -42,3 +42,9 @@ __pycache__/
 *.task
 ai/datasets/
 ai/models/**/*.pt
+
+# Kept off iCloud via .nosync suffix; `node_modules`/`.venv` are symlinks into these.
+node_modules
+node_modules.nosync/
+.venv
+.venv.nosync/
