@@ -144,8 +144,10 @@ export function HistoryView({ onBack }: { onBack: () => void }) {
           {rows.map((r, i) => {
             const open = openId === r.id;
             // "Before" = this patient's next-older face scan (list is newest-first).
+            // ONLY for a real selected patient: walk-in is a shared bucket holding
+            // unrelated people, so comparing across it would mix different faces.
             const previous =
-              r.kind === "face"
+              r.kind === "face" && selectedId != null
                 ? (rows.slice(i + 1).find((p) => p.kind === "face") as HistoryRef | undefined) ?? null
                 : null;
             return (
