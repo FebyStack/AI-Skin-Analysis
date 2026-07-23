@@ -136,4 +136,6 @@ Executed the next-steps batch from the Jul-15 audit. Full detail: `Claude Code/A
 
 - Also `495ad47`: phone-camera augmentation in shared train transforms (JPEG/noise/blur/exposure — retrain to adapt models to phone/iPad quality); history rows expandable (angle images from pg bytea or IndexedDB + 11 dim scores + skinType); before/after front-vs-front with overall delta per patient. `a9dab4f`: training export needs session auth only (admin_enabled was never on).
 
-last Claude session: 2026-07-23 (multi-angle, auto-capture, flywheel, history before/after)
+- `679c809`: results Summary now DISPLAYED in FaceReportView (was computed, never shown); Gemini prompt v2 includes skinType + enforces short 8th-grade summaries (length guardrail). `2b39692`: before/after gated to real patients only (walk-in is a shared bucket → was pairing different people, read as "same as last scan"). `426d3c3`: confidence-gate learned models — acne overrides only when top prob ≥ VITE_ACNE_MIN_CONF (0.40); skinType set only when ≥ VITE_SKINTYPE_MIN_CONF (0.45), else unset (honest on OOD faces like children).
+
+last Claude session: 2026-07-23 (summary display, walk-in fix, confidence gating)
