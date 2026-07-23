@@ -6,16 +6,45 @@ import { FaceReportView } from "../results/FaceReportView";
 import { saveFaceScanWithFallback } from "../../pwa/save-flow";
 import { HistoryView } from "../history/HistoryView";
 import { ScanLabelControl } from "../patients/ScanLabelControl";
+import { TrainingExport } from "../admin/TrainingExport";
 import { ACNE_CLASSES } from "@ai/face/analyzers/acne-model";
 import { SKINTYPE_CLASSES } from "@ai/face/analyzers/skintype-model";
 import { scanPatientId } from "../../store/patient-store";
 import { refineAcneWithModel } from "@ai/face/analyzers/acne-model";
 import { refineSkinTypeWithModel } from "@ai/face/analyzers/skintype-model";
-import type { Pixels } from "@ai/face/types";
+import { detectGeometry } from "@ai/face/landmarks/mediapipe";
+import { ANGLE_YAW_WINDOWS } from "@ai/face/quality/validate";
+import type { FaceGeometry, Pixels } from "@ai/face/types";
 import { FACE_ANGLES, type FaceReport, type FaceAngle } from "@shared/face";
 import type { CapturedAngle } from "../../api/face-client";
 
 type View = "capture" | "saving" | "result" | "history";
+
+// Auto-capture: this many consecutive good pose checks (at CHECK_MS apart)
+// triggers the shot — roughly a one-second steady hold.
+const HOLD_CHECKS = 3;
+const CHECK_MS = 350;
+
+// Face bbox (pixel coords, 15% margin) from normalized MediaPipe landmarks.
+function faceRect(g: FaceGeometry, w: number, h: number) {
+  let minX = 1, minY = 1, maxX = 0, maxY = 0;
+  for (const l of g.landmarks) {
+    if (l.x < minX) minX = l.x;
+    if (l.y < minY) minY = l.y;
+    if (l.x > maxX) maxX = l.x;
+    if (l.y > maxY) maxY = l.y;
+  }
+  const mx = (maxX - minX) * 0.15;
+  const my = (maxY - minY) * 0.15;
+  const x = Math.max(0, Math.floor((minX - mx) * w));
+  const y = Math.max(0, Math.floor((minY - my) * h));
+  return {
+    x,
+    y,
+    w: Math.min(w, Math.ceil((maxX + mx) * w)) - x,
+    h: Math.min(h, Math.ceil((maxY + my) * h)) - y,
+  };
+}
 
 // Grab the current video frame as a JPEG blob (persisted to Postgres + IndexedDB).
 async function frameToJpeg(video: HTMLVideoElement | null): Promise<Blob | null> {
@@ -29,8 +58,9 @@ async function frameToJpeg(video: HTMLVideoElement | null): Promise<Blob | null>
   return new Promise((resolve) => canvas.toBlob((b) => resolve(b), "image/jpeg", 0.9));
 }
 
-// Decode a captured JPEG blob back to RGBA pixels for the learned acne model.
-async function blobToPixels(blob: Blob): Promise<Pixels | null> {
+// Decode a captured JPEG blob back to RGBA pixels for the learned models,
+// cropped to the face bbox when geometry is known (less background noise).
+async function blobToPixels(blob: Blob, geometry: FaceGeometry | null): Promise<Pixels | null> {
   try {
     const bmp = await createImageBitmap(blob);
     const canvas = document.createElement("canvas");
@@ -39,7 +69,10 @@ async function blobToPixels(blob: Blob): Promise<Pixels | null> {
     const ctx = canvas.getContext("2d");
     if (!ctx) return null;
     ctx.drawImage(bmp, 0, 0);
-    const { data, width, height } = ctx.getImageData(0, 0, bmp.width, bmp.height);
+    const full = { x: 0, y: 0, w: bmp.width, h: bmp.height };
+    let rect = geometry ? faceRect(geometry, bmp.width, bmp.height) : full;
+    if (rect.w < 32 || rect.h < 32) rect = full; // degenerate bbox — use whole frame
+    const { data, width, height } = ctx.getImageData(rect.x, rect.y, rect.w, rect.h);
     return { data, width, height };
   } catch {
     return null;
@@ -48,7 +81,19 @@ async function blobToPixels(blob: Blob): Promise<Pixels | null> {
 
 export function GuidedFaceFlow() {
   const camera = useCamera("face");
-  const analyzeFrame = useMemo(() => makeAnalyzeFrame(() => camera.videoRef.current), [camera.videoRef]);
+  // Face geometry per captured angle — used to crop saved frames to the face
+  // bbox before the learned models see them.
+  const geometryByAngle = useRef<Map<FaceAngle, FaceGeometry>>(new Map());
+  const analyzeFrame = useMemo(
+    () =>
+      makeAnalyzeFrame(
+        () => camera.videoRef.current,
+        (angle, g) => {
+          if (g) geometryByAngle.current.set(angle, g);
+        },
+      ),
+    [camera.videoRef],
+  );
   const scan = useFaceScan({ analyzeFrame, modelVersions: FACE_MODEL_VERSIONS });
   // Keyed by angle so retakes overwrite the failed frame instead of stacking up.
   // Only the *last* frame for each angle survives — and since the sequence
@@ -72,6 +117,42 @@ export function GuidedFaceFlow() {
     await scan.captureCurrent();
   }, [camera.videoRef, scan]);
 
+  // Auto-capture: poll the pose cheaply (landmarks only, no full analysis) and
+  // shoot after HOLD_CHECKS consecutive in-window frames — "just turn your
+  // head". The Capture button stays as a manual fallback.
+  const [holdStreak, setHoldStreak] = useState(0);
+  const poseCheckBusy = useRef(false);
+  useEffect(() => setHoldStreak(0), [scan.stepIndex]); // new step → re-arm
+  useEffect(() => {
+    if (view !== "capture" || camera.status !== "live") return;
+    const id = setInterval(async () => {
+      // Never overlap with a capture in flight or a previous check.
+      if (poseCheckBusy.current || scan.busy || scan.done) return;
+      const el = camera.videoRef.current;
+      const angle = scan.currentAngle as FaceAngle | undefined;
+      if (!el || !el.videoWidth || !angle) return;
+      poseCheckBusy.current = true;
+      try {
+        const g = await detectGeometry(el, performance.now());
+        const [lo, hi] = ANGLE_YAW_WINDOWS[angle];
+        const good = g !== null && g.yawDeg >= lo && g.yawDeg <= hi;
+        setHoldStreak((s) => (good ? s + 1 : 0));
+      } catch {
+        setHoldStreak(0);
+      } finally {
+        poseCheckBusy.current = false;
+      }
+    }, CHECK_MS);
+    return () => clearInterval(id);
+  }, [view, camera.status, camera.videoRef, scan.busy, scan.done, scan.currentAngle]);
+
+  useEffect(() => {
+    if (holdStreak >= HOLD_CHECKS && view === "capture" && !scan.busy) {
+      setHoldStreak(0);
+      void captureNow();
+    }
+  }, [holdStreak, view, scan.busy, captureNow]);
+
   // When the pipeline finishes, save (local + server) and switch to result view.
   useEffect(() => {
     if (!scan.report || view !== "capture") return;
@@ -82,16 +163,21 @@ export function GuidedFaceFlow() {
         const blob = capturedByAngle.current.get(a);
         if (blob) angles.push({ angle: a, blob, mime: "image/jpeg" });
       }
-      // Learned acne model refines the acne dimension when its ONNX is present
-      // (offline-safe: no model → deterministic report unchanged).
+      // Learned models refine acne + skin type when their ONNX is present
+      // (offline-safe: no model → deterministic report unchanged). Every
+      // captured angle contributes: each frame is cropped to its face bbox and
+      // the models average class probabilities across views.
       let report = scan.report as FaceReport;
-      const frontBlob = capturedByAngle.current.get("front");
-      if (frontBlob) {
-        const px = await blobToPixels(frontBlob);
-        if (px) {
-          report = await refineAcneWithModel(report, px);
-          report = await refineSkinTypeWithModel(report, px);
-        }
+      const views: Pixels[] = [];
+      for (const a of FACE_ANGLES) {
+        const blob = capturedByAngle.current.get(a);
+        if (!blob) continue;
+        const px = await blobToPixels(blob, geometryByAngle.current.get(a) ?? null);
+        if (px) views.push(px);
+      }
+      if (views.length > 0) {
+        report = await refineAcneWithModel(report, views);
+        report = await refineSkinTypeWithModel(report, views);
       }
 
       try {
@@ -111,6 +197,7 @@ export function GuidedFaceFlow() {
   const reset = useCallback(() => {
     scan.reset();
     capturedByAngle.current = new Map();
+    geometryByAngle.current = new Map();
     setSaved(null);
     setSavedScanId(null);
     setOffline(false);
@@ -141,6 +228,7 @@ export function GuidedFaceFlow() {
           <>
             <ScanLabelControl scanId={savedScanId} dimension="acne" title="Clinician acne grade" labels={ACNE_CLASSES} />
             <ScanLabelControl scanId={savedScanId} dimension="skintype" title="Clinician skin type" labels={SKINTYPE_CLASSES} />
+            <TrainingExport />
           </>
         )}
         <div className="mx-auto mt-6 flex max-w-3xl justify-center gap-3 px-4">
@@ -162,8 +250,12 @@ export function GuidedFaceFlow() {
     : currentAngle?.startsWith("right")
       ? "right"
       : "none";
-  const positionCue =
-    turnDir === "none" ? "Center your face in the oval" : `Turn ${turnDir} — keep your face in the oval`;
+  const holding = holdStreak > 0;
+  const positionCue = holding
+    ? "Hold still…"
+    : turnDir === "none"
+      ? "Center your face in the oval"
+      : `Turn ${turnDir} — keep your face in the oval`;
   return (
     <div className="flex w-full flex-col items-center gap-4">
       <div className="relative aspect-[3/4] w-full max-w-sm overflow-hidden rounded-2xl border border-hairline bg-black shadow-card">
@@ -186,7 +278,9 @@ export function GuidedFaceFlow() {
               <rect width="100" height="133" fill="rgba(0,0,0,0.5)" mask="url(#faceHole)" />
               <ellipse
                 cx="50" cy="58" rx="29" ry="38"
-                fill="none" stroke="currentColor" strokeWidth="0.7" strokeDasharray="3 2"
+                fill="none" stroke="currentColor"
+                strokeWidth={holding ? 1.4 : 0.7}
+                strokeDasharray={holding ? undefined : "3 2"}
               />
             </svg>
             {/* Directional chevron for the current step (front shows none). */}

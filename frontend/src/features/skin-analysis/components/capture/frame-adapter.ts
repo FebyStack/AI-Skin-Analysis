@@ -2,9 +2,14 @@ import type { FaceAngle } from "@shared/face";
 import { detectGeometry } from "@ai/face/landmarks/mediapipe";
 import { analyzeView } from "@ai/face/pipeline";
 import { ensureFaceParser, FACE_PARSING_VERSION } from "@ai/face/segmentation/parser";
-import type { AnalyzedView, Pixels } from "@ai/face/types";
+import type { AnalyzedView, FaceGeometry, Pixels } from "@ai/face/types";
 
-export function makeAnalyzeFrame(video: () => HTMLVideoElement | null) {
+export function makeAnalyzeFrame(
+    video: () => HTMLVideoElement | null,
+    // Tap: lets the capture flow keep the face geometry per angle (e.g. to crop
+    // saved frames to the face bbox before the learned models see them).
+    onGeometry?: (angle: FaceAngle, geometry: FaceGeometry | null) => void,
+) {
     void ensureFaceParser();
     return async (angle: FaceAngle): Promise<AnalyzedView> => {
         const el = video();
@@ -16,6 +21,7 @@ export function makeAnalyzeFrame(video: () => HTMLVideoElement | null) {
         const { data, width, height } = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const pixels: Pixels = { data, width, height };
         const geometry = await detectGeometry(el, performance.now());
+        onGeometry?.(angle, geometry);
         return analyzeView({ angle, pixels, geometry });
     };
 }

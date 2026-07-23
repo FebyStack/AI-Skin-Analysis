@@ -79,36 +79,45 @@ function softmax(logits: Float32Array | number[]): number[] {
   return exps.map((e) => e / sum);
 }
 
-// Run the model on a full-face crop → acne DimensionScore, or null if no model.
-export async function analyzeAcneFromPixels(px: Pixels): Promise<DimensionScore | null> {
-  const session = await ensureAcneModel();
-  if (!session) return null;
+// Class probabilities for one face crop, or null if no model.
+async function classProbs(session: OrtSession, px: Pixels): Promise<number[] | null> {
   try {
     const ort = await import("onnxruntime-web");
     const tensor = new ort.Tensor("float32", preprocess(px), [1, 3, INPUT, INPUT]);
-    const feeds = { [session.inputNames[0]]: tensor };
-    const output = await session.run(feeds);
-    const logits = output[session.outputNames[0]].data as Float32Array;
-    const probs = softmax(logits);
-    // Expected severity (ordinal) → 0..1 score; confidence = top probability.
-    const expected = probs.reduce((a, p, i) => a + p * i, 0) / (ACNE_CLASSES.length - 1);
-    const confidence = Math.max(...probs);
-    const predicted = ACNE_CLASSES[probs.indexOf(confidence)];
-    return {
-      score: Math.max(0, Math.min(1, expected)),
-      confidence,
-      perZone: [],
-      evidence: `learned acne-severity model (${ACNE_MODEL_VERSION}) — predicted "${predicted}"`,
-    };
+    const output = await session.run({ [session.inputNames[0]]: tensor });
+    return softmax(output[session.outputNames[0]].data as Float32Array);
   } catch {
     return null;
   }
 }
 
+// Run the model on one or more face crops (multi-angle: front + 45s + profiles)
+// and average the class probabilities → acne DimensionScore, or null if no model.
+export async function analyzeAcneFromPixels(views: Pixels | Pixels[]): Promise<DimensionScore | null> {
+  const session = await ensureAcneModel();
+  if (!session) return null;
+  const list = Array.isArray(views) ? views : [views];
+  const all = (await Promise.all(list.map((px) => classProbs(session, px)))).filter(
+    (p): p is number[] => p !== null,
+  );
+  if (all.length === 0) return null;
+  const probs = all[0].map((_, c) => all.reduce((a, p) => a + p[c], 0) / all.length);
+  // Expected severity (ordinal) → 0..1 score; confidence = top probability.
+  const expected = probs.reduce((a, p, i) => a + p * i, 0) / (ACNE_CLASSES.length - 1);
+  const confidence = Math.max(...probs);
+  const predicted = ACNE_CLASSES[probs.indexOf(confidence)];
+  return {
+    score: Math.max(0, Math.min(1, expected)),
+    confidence,
+    perZone: [],
+    evidence: `learned acne-severity model (${ACNE_MODEL_VERSION}) — predicted "${predicted}" across ${all.length} view(s)`,
+  };
+}
+
 // Override the acne dimension with the model's result when available; otherwise
 // leave the deterministic report untouched. Records the model version used.
-export async function refineAcneWithModel(report: FaceReport, frontPixels: Pixels): Promise<FaceReport> {
-  const learned = await analyzeAcneFromPixels(frontPixels);
+export async function refineAcneWithModel(report: FaceReport, views: Pixels | Pixels[]): Promise<FaceReport> {
+  const learned = await analyzeAcneFromPixels(views);
   if (!learned) return report;
   return {
     ...report,

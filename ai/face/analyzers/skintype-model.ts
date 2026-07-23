@@ -77,32 +77,42 @@ function softmax(logits: Float32Array | number[]): number[] {
   return exps.map((e) => e / sum);
 }
 
-// Run the model on a full-face crop → SkinTypeResult, or null if no model.
-export async function analyzeSkinTypeFromPixels(px: Pixels): Promise<SkinTypeResult | null> {
-  const session = await ensureSkinTypeModel();
-  if (!session) return null;
+// Class probabilities for one face crop, or null on inference failure.
+async function classProbs(session: OrtSession, px: Pixels): Promise<number[] | null> {
   try {
     const ort = await import("onnxruntime-web");
     const tensor = new ort.Tensor("float32", preprocess(px), [1, 3, INPUT, INPUT]);
     const output = await session.run({ [session.inputNames[0]]: tensor });
-    const logits = output[session.outputNames[0]].data as Float32Array;
-    const probs = softmax(logits);
-    const confidence = Math.max(...probs);
-    const type = SKINTYPE_CLASSES[probs.indexOf(confidence)] ?? "normal";
-    return {
-      type,
-      confidence,
-      evidence: `learned skin-type model (${SKINTYPE_MODEL_VERSION})`,
-    };
+    return softmax(output[session.outputNames[0]].data as Float32Array);
   } catch {
     return null;
   }
 }
 
+// Run the model on one or more face crops (multi-angle) and average class
+// probabilities → SkinTypeResult, or null if no model.
+export async function analyzeSkinTypeFromPixels(views: Pixels | Pixels[]): Promise<SkinTypeResult | null> {
+  const session = await ensureSkinTypeModel();
+  if (!session) return null;
+  const list = Array.isArray(views) ? views : [views];
+  const all = (await Promise.all(list.map((px) => classProbs(session, px)))).filter(
+    (p): p is number[] => p !== null,
+  );
+  if (all.length === 0) return null;
+  const probs = all[0].map((_, c) => all.reduce((a, p) => a + p[c], 0) / all.length);
+  const confidence = Math.max(...probs);
+  const type = SKINTYPE_CLASSES[probs.indexOf(confidence)] ?? "normal";
+  return {
+    type,
+    confidence,
+    evidence: `learned skin-type model (${SKINTYPE_MODEL_VERSION}) across ${all.length} view(s)`,
+  };
+}
+
 // Fill in report.skinType from the model when available; otherwise leave the
 // report untouched (skinType stays undefined). Records the model version used.
-export async function refineSkinTypeWithModel(report: FaceReport, frontPixels: Pixels): Promise<FaceReport> {
-  const learned = await analyzeSkinTypeFromPixels(frontPixels);
+export async function refineSkinTypeWithModel(report: FaceReport, views: Pixels | Pixels[]): Promise<FaceReport> {
+  const learned = await analyzeSkinTypeFromPixels(views);
   if (!learned) return report;
   return {
     ...report,
