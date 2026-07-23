@@ -17,7 +17,7 @@ function datasetsDir(): string {
   return process.env.DATASETS_DIR ?? path.resolve(process.cwd(), "ai/datasets");
 }
 
-export function createTrainingRoutes(deps: AppDeps, auth: RequestHandler, admin: RequestHandler): Router {
+export function createTrainingRoutes(deps: AppDeps, auth: RequestHandler): Router {
   const router = Router();
 
   // Assign / update a clinician label on a scan (session auth — any clinician).
@@ -47,8 +47,9 @@ export function createTrainingRoutes(deps: AppDeps, auth: RequestHandler, admin:
 
   // Export every labeled scan's image into the training folder layout
   // ($DATASETS_DIR/<dimension>/scans/<label>/<scanId>.jpg) that the trainer reads.
-  // Admin-only: it writes to disk and exposes patient imagery as training data.
-  router.post("/api/training/:dimension/export", admin, async (req, res) => {
+  // Session auth (any clinician): writes to LOCAL disk only, same machine that
+  // already stores + displays the scans, so it's no new exposure.
+  router.post("/api/training/:dimension/export", auth, async (req, res) => {
     const dimension = req.params.dimension;
     if (!LABELS_BY_DIMENSION[dimension]) {
       res.status(400).json({ error: `unknown dimension: ${dimension}` });

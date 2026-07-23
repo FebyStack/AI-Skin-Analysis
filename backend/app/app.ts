@@ -64,7 +64,7 @@ export function createApp(deps: AppDeps): Express {
   app.use(createFaceScanRoutes(deps, auth));
   app.use(createCaptureRoutes(captures, auth));
   app.use("/api/models", createModelsRoutes(deps, admin));
-  app.use(createTrainingRoutes(deps, auth, admin));
+  app.use(createTrainingRoutes(deps, auth));
 
   try {
     app.use(
