@@ -14,6 +14,10 @@ export const ACNE_MODEL_URL =
   import.meta.env?.VITE_ACNE_MODEL_URL ?? "/models/acne/model.onnx";
 export const ACNE_MODEL_VERSION = "efficientnet-b0-acne";
 export const ACNE_CLASSES = ["clear", "mild", "moderate", "severe", "very-severe"];
+// Below this top-class probability the model is treated as unsure (e.g. an
+// out-of-distribution face like a child) and we KEEP the deterministic analyzer
+// rather than override it with a shaky guess. Override via VITE_ACNE_MIN_CONF.
+const ACNE_MIN_CONFIDENCE = Number(import.meta.env?.VITE_ACNE_MIN_CONF ?? "0.40");
 
 const INPUT = 224;
 const MEAN = [0.485, 0.456, 0.406];
@@ -118,7 +122,7 @@ export async function analyzeAcneFromPixels(views: Pixels | Pixels[]): Promise<D
 // leave the deterministic report untouched. Records the model version used.
 export async function refineAcneWithModel(report: FaceReport, views: Pixels | Pixels[]): Promise<FaceReport> {
   const learned = await analyzeAcneFromPixels(views);
-  if (!learned) return report;
+  if (!learned || learned.confidence < ACNE_MIN_CONFIDENCE) return report; // unsure → keep deterministic
   return {
     ...report,
     dimensions: { ...report.dimensions, acne: learned },

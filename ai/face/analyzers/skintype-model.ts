@@ -12,6 +12,10 @@ export const SKINTYPE_MODEL_URL =
 export const SKINTYPE_MODEL_VERSION = "efficientnet-b0-skintype";
 // Class order MUST match ai/training/skintype/labels.py SKIN_TYPE_CLASSES.
 export const SKINTYPE_CLASSES: SkinType[] = [...SKIN_TYPES];
+// Below this top-class probability the model is unsure (e.g. an out-of-distribution
+// face) — leave skinType unset rather than assert a shaky type. Override via
+// VITE_SKINTYPE_MIN_CONF.
+const SKINTYPE_MIN_CONFIDENCE = Number(import.meta.env?.VITE_SKINTYPE_MIN_CONF ?? "0.45");
 
 const INPUT = 224;
 const MEAN = [0.485, 0.456, 0.406];
@@ -113,7 +117,7 @@ export async function analyzeSkinTypeFromPixels(views: Pixels | Pixels[]): Promi
 // report untouched (skinType stays undefined). Records the model version used.
 export async function refineSkinTypeWithModel(report: FaceReport, views: Pixels | Pixels[]): Promise<FaceReport> {
   const learned = await analyzeSkinTypeFromPixels(views);
-  if (!learned) return report;
+  if (!learned || learned.confidence < SKINTYPE_MIN_CONFIDENCE) return report; // unsure → no skin type
   return {
     ...report,
     skinType: learned,
