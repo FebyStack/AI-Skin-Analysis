@@ -134,4 +134,6 @@ Executed the next-steps batch from the Jul-15 audit. Full detail: `Claude Code/A
 - TrainingExport button on result view = one-click graded-scan export (flywheel: grade → export → `make retrain`).
 - **Env critical:** `node_modules` is a symlink to `/Users/febrielotud/skin-analysis-deps/node_modules` (no-space, non-iCloud — in-project or `.nosync` paths break vitest with "No test suite found" via %20 realpath). `.venv` → `.venv.nosync`. Never recreate a real in-project node_modules.
 
-last Claude session: 2026-07-23 (multi-angle + auto-capture + flywheel button)
+- Also `495ad47`: phone-camera augmentation in shared train transforms (JPEG/noise/blur/exposure — retrain to adapt models to phone/iPad quality); history rows expandable (angle images from pg bytea or IndexedDB + 11 dim scores + skinType); before/after front-vs-front with overall delta per patient. `a9dab4f`: training export needs session auth only (admin_enabled was never on).
+
+last Claude session: 2026-07-23 (multi-angle, auto-capture, flywheel, history before/after)
