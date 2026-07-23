@@ -19,6 +19,14 @@ def train_transforms() -> A.Compose:
         A.HorizontalFlip(p=0.5),
         A.VerticalFlip(p=0.5),
         A.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.1, hue=0.02, p=0.5),
+        # Phone/iPad camera simulation: the app's real inputs are handheld webcam
+        # frames re-encoded to JPEG, not clean dataset photos. Teach the model that
+        # distribution — compression artifacts, sensor noise, slight motion blur,
+        # exposure swings — so scans from phone/tablet cameras score reliably.
+        A.ImageCompression(quality_range=(35, 90), p=0.5),
+        A.GaussNoise(std_range=(0.02, 0.08), p=0.3),
+        A.MotionBlur(blur_limit=(3, 7), p=0.2),
+        A.RandomBrightnessContrast(brightness_limit=0.25, contrast_limit=0.25, p=0.5),
         A.Normalize(**NORM),
         ToTensorV2(),
     ])

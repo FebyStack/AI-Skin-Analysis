@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { listScans, type StoredScan } from "../../pwa/local-store";
+import { FaceHistoryDetail, type HistoryRef } from "./FaceHistoryDetail";
 import { listFaceScans, type FaceScanWire } from "../../api/face-client";
 import { listLesionScans, type LesionScanWire } from "../../api/lesion-client";
 import { scanPatientId, usePatientStore } from "../../store/patient-store";
@@ -11,6 +12,7 @@ interface HistoryRow {
   headline: string;
   synced: boolean;
   source: "local" | "server";
+  report: unknown; // stored FaceReport / lesion report — powers the expanded detail
 }
 
 function faceHeadline(report: unknown): string {
@@ -36,6 +38,7 @@ async function loadFromDevice(patientId: string): Promise<HistoryRow[]> {
       headline: s.kind === "face" ? faceHeadline(s.report) : lesionHeadline(s.report),
       synced: s.synced,
       source: "local",
+      report: s.report,
     }));
 }
 
@@ -52,6 +55,7 @@ async function loadFromServer(patientId: string): Promise<HistoryRow[]> {
       headline: faceHeadline(s.report),
       synced: true,
       source: "server",
+      report: s.report,
     })),
     ...lesion.map<HistoryRow>((s) => ({
       id: s.id,
@@ -60,6 +64,7 @@ async function loadFromServer(patientId: string): Promise<HistoryRow[]> {
       headline: lesionHeadline(s.report),
       synced: true,
       source: "server",
+      report: s.report,
     })),
   ];
 }
@@ -79,6 +84,7 @@ export function HistoryView({ onBack }: { onBack: () => void }) {
   const [rows, setRows] = useState<HistoryRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [note, setNote] = useState<string>("");
+  const [openId, setOpenId] = useState<string | null>(null);
   // Re-scope + reload whenever the selected patient changes.
   const selectedName = usePatientStore((s) => s.selectedName);
   const selectedId = usePatientStore((s) => s.selectedId);
@@ -135,19 +141,43 @@ export function HistoryView({ onBack }: { onBack: () => void }) {
         </div>
       ) : (
         <ul className="space-y-3">
-          {rows.map((r) => (
-            <li key={r.id} className="card flex items-center justify-between p-4">
-              <div className="min-w-0">
-                <p className="truncate font-medium text-ink">{r.headline}</p>
-                <p className="mt-0.5 flex items-center gap-2 text-xs text-ink-tertiary">
-                  <span className="font-mono">{new Date(r.createdAt).toLocaleString()}</span> · {r.kind}
-                  {!r.synced && (
-                    <span className="rounded-full border border-soon-edge bg-soon-surface px-2 py-0.5 text-soon">pending sync</span>
+          {rows.map((r, i) => {
+            const open = openId === r.id;
+            // "Before" = this patient's next-older face scan (list is newest-first).
+            const previous =
+              r.kind === "face"
+                ? (rows.slice(i + 1).find((p) => p.kind === "face") as HistoryRef | undefined) ?? null
+                : null;
+            return (
+              <li key={r.id} className="card overflow-hidden">
+                <button
+                  onClick={() => r.kind === "face" && setOpenId(open ? null : r.id)}
+                  aria-expanded={open}
+                  className="flex w-full items-center justify-between p-4 text-left"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-ink">{r.headline}</p>
+                    <p className="mt-0.5 flex items-center gap-2 text-xs text-ink-tertiary">
+                      <span className="font-mono">{new Date(r.createdAt).toLocaleString()}</span> · {r.kind}
+                      {!r.synced && (
+                        <span className="rounded-full border border-soon-edge bg-soon-surface px-2 py-0.5 text-soon">pending sync</span>
+                      )}
+                    </p>
+                  </div>
+                  {r.kind === "face" && (
+                    <svg
+                      width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                      className={`shrink-0 text-ink-tertiary transition-transform ${open ? "rotate-180" : ""}`}
+                    >
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
                   )}
-                </p>
-              </div>
-            </li>
-          ))}
+                </button>
+                {open && r.kind === "face" && <FaceHistoryDetail scan={r} previous={previous} />}
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
