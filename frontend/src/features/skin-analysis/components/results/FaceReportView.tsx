@@ -19,6 +19,22 @@ export function FaceReportView({ report }: Props) {
         </p>
       </section>
 
+      {/* Plain-language summary (Gemini when online, deterministic builtin offline) */}
+      {report.explanation && (
+        <section className="card p-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-[1.0625rem] font-semibold text-ink">Summary</h2>
+            <span className="text-[10px] uppercase tracking-[0.1em] text-ink-tertiary">
+              {report.explanation.source === "gemini" ? "AI summary" : "On-device"}
+            </span>
+          </div>
+          <p className="mt-2 text-[0.95rem] leading-relaxed text-ink">{report.explanation.patientSummary}</p>
+          {report.explanation.education && (
+            <p className="mt-3 text-sm leading-relaxed text-ink-secondary">{report.explanation.education}</p>
+          )}
+        </section>
+      )}
+
       {/* Skin type — only when the trained skintype model produced it */}
       {report.skinType && (
         <section className="card p-6 text-center">

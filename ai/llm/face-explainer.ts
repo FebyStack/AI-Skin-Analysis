@@ -8,18 +8,21 @@ import {
   type FaceReport,
 } from "../../shared/face";
 
-export const FACE_EXPLAIN_PROMPT_VERSION = 1;
+export const FACE_EXPLAIN_PROMPT_VERSION = 2;
 
 const CERTAINTY = /\b(definitely|certainly|without a doubt|you have|diagnos)\b/i;
 const TREATMENT = /\b(prescri|dosage|\d+\s*mg|apply\s+\w+\s+cream)\b/i;
+// Brevity caps — verbose output is rejected and retried, keeping summaries short.
+const SUMMARY_MAX = 420;
+const EDUCATION_MAX = 520;
 
 export function buildFacePrompt(report: FaceReport): string {
-  // Include the dimensions + overall + recommendations. No image, ever.
+  // Include overall, skin type, dimensions, recommendations. No image, ever.
   const trimmed = {
     overall: report.overall,
+    skinType: report.skinType ?? null,
     dimensions: report.dimensions,
     recommendations: report.recommendations,
-    disclaimer: report.disclaimer,
   };
   return [
     "You are a careful cosmetic-communication assistant for a skin-analysis tool.",
@@ -29,6 +32,10 @@ export function buildFacePrompt(report: FaceReport): string {
     "```",
     "Write a JSON object with exactly these fields:",
     `{"patientSummary": string, "education": string, "source": "gemini", "promptVersion": ${FACE_EXPLAIN_PROMPT_VERSION}}`,
+    "Style — write for a patient with no skincare background:",
+    "- patientSummary: 2-3 short sentences. Name the 1-2 most notable areas and the skin type if given, then one practical next step.",
+    "- education: 2-3 short sentences on what those areas mean and simple daily care. No lists.",
+    "- Plain, warm, everyday words at an 8th-grade reading level. Keep the whole thing under ~90 words total.",
     "Hard rules — do not violate any:",
     "- Rephrase and personalize the report ONLY; do not add new clinical claims or invent findings.",
     "- Do NOT diagnose, do NOT claim certainty, do NOT prescribe medications or dosages.",
@@ -46,6 +53,8 @@ export function checkFaceExplanationGuardrails(
   if (TREATMENT.test(text)) violations.push("treatment advice");
   if (explanation.patientSummary.length < 10) violations.push("summary too short");
   if (explanation.education.length < 10) violations.push("education too short");
+  if (explanation.patientSummary.length > SUMMARY_MAX) violations.push("summary too long");
+  if (explanation.education.length > EDUCATION_MAX) violations.push("education too long");
   return { ok: violations.length === 0, violations };
 }
 
