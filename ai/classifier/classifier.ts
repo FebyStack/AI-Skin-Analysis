@@ -30,6 +30,20 @@ export function pickExecutionProviders(hasWebGpu: boolean): string[] {
   return hasWebGpu ? ["webgpu", "wasm"] : ["wasm"];
 }
 
+// onnxruntime-web can't locate its own .wasm under Vite (the request 404s to the
+// SPA index.html → "Unexpected response MIME type. Expected 'application/wasm'"),
+// so every ONNX model silently failed to its fallback. Point wasm loading at the
+// CDN for the pinned version — same approach MediaPipe already uses. Call once
+// before any InferenceSession.create. Override with VITE_ORT_WASM_PATHS (e.g. a
+// self-hosted "/ort/" for full offline). Update the version on ort upgrades.
+let ortConfigured = false;
+export function configureOrt(ort: typeof import("onnxruntime-web")): void {
+  if (ortConfigured) return;
+  ortConfigured = true;
+  ort.env.wasm.wasmPaths =
+    import.meta.env?.VITE_ORT_WASM_PATHS ?? "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.27.0/dist/";
+}
+
 // --- Real ONNX session wrapper (integration; not unit-tested) ---
 
 export interface InferenceFn {
@@ -62,6 +76,7 @@ export async function createOnnxInference(modelUrl?: string): Promise<InferenceF
   }
 
   const ort = await import("onnxruntime-web");
+  configureOrt(ort);
   const hasWebGpu = typeof navigator !== "undefined" && "gpu" in navigator;
   const session = await ort.InferenceSession.create(url, {
     executionProviders: pickExecutionProviders(hasWebGpu),

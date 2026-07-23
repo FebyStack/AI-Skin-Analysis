@@ -5,7 +5,7 @@
 // Trainable improvement loop: retrain on datasets + labeled app scans, export a
 // new /models/acne/model.onnx, and this picks it up on next load. Only ever
 // overrides the `acne` dimension — the other 10 analyzers are untouched.
-import { pickExecutionProviders } from "../../classifier/classifier";
+import { pickExecutionProviders, configureOrt } from "../../classifier/classifier";
 import { resolveModelSource, type ModelCacheProvider } from "../models/cached-blob";
 import type { DimensionScore, FaceReport } from "../../../shared/face";
 import type { Pixels } from "../types";
@@ -48,6 +48,7 @@ async function loadSession(): Promise<OrtSession | null> {
       }
     }
     const ort = await import("onnxruntime-web");
+    configureOrt(ort);
     const hasWebGpu = typeof navigator !== "undefined" && "gpu" in navigator;
     return await ort.InferenceSession.create(source.url, {
       executionProviders: pickExecutionProviders(hasWebGpu),

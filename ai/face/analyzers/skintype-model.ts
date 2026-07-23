@@ -2,7 +2,7 @@
 // by ai/training/skintype; when the model file is absent it returns null and the
 // report simply omits skinType (offline-safe, never blocks). Categorical, so it
 // fills FaceReport.skinType rather than overriding a 0..1 dimension.
-import { pickExecutionProviders } from "../../classifier/classifier";
+import { pickExecutionProviders, configureOrt } from "../../classifier/classifier";
 import { resolveModelSource, type ModelCacheProvider } from "../models/cached-blob";
 import { SKIN_TYPES, type SkinType, type SkinTypeResult, type FaceReport } from "../../../shared/face";
 import type { Pixels } from "../types";
@@ -46,6 +46,7 @@ async function loadSession(): Promise<OrtSession | null> {
       }
     }
     const ort = await import("onnxruntime-web");
+    configureOrt(ort);
     const hasWebGpu = typeof navigator !== "undefined" && "gpu" in navigator;
     return await ort.InferenceSession.create(source.url, {
       executionProviders: pickExecutionProviders(hasWebGpu),

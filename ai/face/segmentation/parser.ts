@@ -1,4 +1,4 @@
-import { pickExecutionProviders } from "../../classifier/classifier";
+import { pickExecutionProviders, configureOrt } from "../../classifier/classifier";
 import { NUM_PARSE_CLASSES } from "./labels";
 import { argmaxLogits, upscaleLabelMap, type LabelMap } from "./masks";
 import { resolveModelSource, type ModelCacheProvider } from "../models/cached-blob";
@@ -59,6 +59,7 @@ async function loadSession(): Promise<OrtSession | null> {
         }
 
         const ort = await import("onnxruntime-web");
+        configureOrt(ort);
         const hasWebGpu = typeof navigator !== "undefined" && "gpu" in navigator;
         const session = await ort.InferenceSession.create(source.url, {
             executionProviders: pickExecutionProviders(hasWebGpu),
