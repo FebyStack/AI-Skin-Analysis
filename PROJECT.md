@@ -128,4 +128,10 @@ Executed the next-steps batch from the Jul-15 audit. Full detail: `Claude Code/A
 
 **Datasets on disk are large:** ISIC 9.1GB (Track 3, `ai/datasets/raw/isic2019/images/` 25,333 imgs); disk ~6GB free (iCloud Desktop). If tight, move datasets to external drive via `DATASETS_DIR` or remove ISIC until Track 3.
 
-last Claude session: 2026-07-22 (skintype trained, offline explanation, builtin toggle)
+### Capture upgrades (2026-07-23, commit `1632242` + fixes `aa6f1e1`/`5fde53c`/`501a8cf`)
+- Multi-angle inference: acne/skintype average probs across ALL captured angles, each cropped to its MediaPipe face bbox (geometry tapped in frame-adapter).
+- Auto-capture: 350ms landmark-only pose poll, ~1s steady in-window yaw → shoots; oval guide + chevron + progress bar; parse timeout (VITE_PARSE_TIMEOUT_MS, 4s) stops "Analyzing…" hangs; profile yaw windows relaxed to ±[45,90] (asin cap made ±[65,95] unreachable).
+- TrainingExport button on result view = one-click graded-scan export (flywheel: grade → export → `make retrain`).
+- **Env critical:** `node_modules` is a symlink to `/Users/febrielotud/skin-analysis-deps/node_modules` (no-space, non-iCloud — in-project or `.nosync` paths break vitest with "No test suite found" via %20 realpath). `.venv` → `.venv.nosync`. Never recreate a real in-project node_modules.
+
+last Claude session: 2026-07-23 (multi-angle + auto-capture + flywheel button)
