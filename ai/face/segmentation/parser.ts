@@ -63,6 +63,7 @@ async function loadSession(): Promise<OrtSession | null> {
         const hasWebGpu = typeof navigator !== "undefined" && "gpu" in navigator;
         const session = await ort.InferenceSession.create(source.url, {
             executionProviders: pickExecutionProviders(hasWebGpu),
+            logSeverityLevel: 3, // errors only — hides benign EP-assignment warnings
         });
         return session;
     } catch {
