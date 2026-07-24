@@ -42,6 +42,9 @@ export function configureOrt(ort: typeof import("onnxruntime-web")): void {
   ortConfigured = true;
   ort.env.wasm.wasmPaths =
     import.meta.env?.VITE_ORT_WASM_PATHS ?? "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.27.0/dist/";
+  // Silence benign W-level notes (e.g. "some nodes not assigned to preferred EP"
+  // when ORT puts shape ops on CPU) — they surface as red console errors.
+  ort.env.logLevel = "error";
 }
 
 // --- Real ONNX session wrapper (integration; not unit-tested) ---
