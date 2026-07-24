@@ -57,7 +57,7 @@ Plans 1–4 executed and merged. Plan 5 (results/report UI) + Plan 6 (patients/h
 
 Brainstorm → spec → writing-plans → subagent-driven execution with one final opus review before merge. Verify camera/browser changes live in the preview tool, not just unit tests. `git push` to `https://github.com/FebyStack/AI-Skin-Analysis.git` was configured via `gh auth git-credential` but never confirmed pushed.
 
-last Claude session: 2026-07-22 14:06
+last Claude session: 2026-07-24 21:29
 
 ## Recent updates (2026-07-12)
 
@@ -91,7 +91,7 @@ Complete state audit filed in Obsidian: `Claude Code/AI Skin Analysis Status 202
 Headlines: both AI branches functional (face on-device pipeline + lesion EfficientNet-B1 w/ MobileSAM refinement + localization confidence); model distribution platform + admin UI landed via PR #4.
 **Dormant/missing:** PWA icons never generated (`node scripts/generate-icons.mjs`); face-parsing ONNX never downloaded (`.venv/bin/python -m ai.models.fetch_models face-parsing`) so segmentation silently falls back to landmark polygons; MobileSAM real-weights path never run on an actual photo; upload→promote→download integration test missing; main 1 commit ahead of origin; stale `feat/face-analysis` branch to delete after confirming superseded.
 
-last Claude session: 2026-07-22 14:06
+last Claude session: 2026-07-24 21:29
 
 ## Progress 2026-07-21 (recommended-steps batch)
 
@@ -138,4 +138,8 @@ Executed the next-steps batch from the Jul-15 audit. Full detail: `Claude Code/A
 
 - `679c809`: results Summary now DISPLAYED in FaceReportView (was computed, never shown); Gemini prompt v2 includes skinType + enforces short 8th-grade summaries (length guardrail). `2b39692`: before/after gated to real patients only (walk-in is a shared bucket → was pairing different people, read as "same as last scan"). `426d3c3`: confidence-gate learned models — acne overrides only when top prob ≥ VITE_ACNE_MIN_CONF (0.40); skinType set only when ≥ VITE_SKINTYPE_MIN_CONF (0.45), else unset (honest on OOD faces like children).
 
-last Claude session: 2026-07-23 (summary display, walk-in fix, confidence gating)
+### Data + training viz (2026-07-24)
+- Acne data ~2.4x: added Kaggle `rutviklathiyateksun/acne-grading` (49MB, Level_0/1/2→mild/moderate/severe, stem-deduped) → 1311 imgs; retrain eval macro-F1 0.711→0.771. very-severe still weak (96); full 1.1GB ACNE04 drops on slow links. See `ai/datasets/README.md`.
+- **Training visualization** (commit `8193cc5`): `train_one` logs per-epoch loss + val macro-F1 to TensorBoard (`ai/models/runs/`, `tensorboard --logdir ai/models/runs`) AND writes `ai/models/<dim>/candidate/progress.json` per epoch; `evaluate.py` appends each run to `ai/models/<dim>/history.jsonl` (`ai/training/history.py`). Backend `GET /api/training/<dim>/{progress,history}`. Frontend **Training tab** (`components/training/TrainingDashboard.tsx`): live epoch progress + before/after macro-F1 per model. train_one now validates each epoch. progress/history/runs gitignored (per-machine).
+
+last Claude session: 2026-07-24 (data boost + training dashboard)
