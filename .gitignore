@@ -48,3 +48,8 @@ node_modules
 node_modules.nosync/
 .venv
 .venv.nosync/
+
+# Training run artifacts (per-machine; the dashboard reads them from disk)
+ai/models/**/progress.json
+ai/models/**/history.jsonl
+ai/models/runs/
