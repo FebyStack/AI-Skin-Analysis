@@ -18,10 +18,11 @@ from torch.utils.data import DataLoader
 from torchvision.models import efficientnet_b0
 from sklearn.metrics import f1_score
 
-from ai.training.skintype.ingest import collect_all
+from ai.training.skintype.ingest import collect_all, label_counts
 from ai.training.skintype.labels import SKIN_TYPE_CLASSES
 from ai.training.build_master import split_rows
 from ai.training.dataset import LesionDataset  # generic (path,label) image dataset
+from ai.training.history import append_run
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -36,7 +37,8 @@ def main(argv: list[str] | None = None) -> int:
     net.load_state_dict(torch.load(args.model_dir / "current.pt", map_location="cpu", weights_only=True))
     net.eval()
 
-    _train, _val, test_rows = split_rows(collect_all(), seed=args.seed)
+    all_rows = collect_all()
+    _train, _val, test_rows = split_rows(all_rows, seed=args.seed)
     if not test_rows:
         print("No test rows — need more data to evaluate.")
         return 1
@@ -54,6 +56,7 @@ def main(argv: list[str] | None = None) -> int:
 
     meta["metrics"] = {**(meta.get("metrics") or {}), **metrics}
     (args.model_dir / "model.json").write_text(json.dumps(meta, indent=2))
+    append_run(args.model_dir.parent, meta.get("version", "candidate"), metrics, label_counts(all_rows))
     print(f"skin-type eval: macro_f1={macro_f1:.3f}  accuracy={accuracy:.3f}  (n={len(gts)})")
     print(f"classes: {SKIN_TYPE_CLASSES}")
     return 0

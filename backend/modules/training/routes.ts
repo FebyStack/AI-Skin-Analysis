@@ -1,5 +1,5 @@
 import { Router, type RequestHandler } from "express";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import path from "node:path";
 import type { AppDeps } from "../../shared/deps";
 
@@ -17,8 +17,45 @@ function datasetsDir(): string {
   return process.env.DATASETS_DIR ?? path.resolve(process.cwd(), "ai/datasets");
 }
 
+// Trained models + their live progress/history live here (ai/models/<dim>/...).
+function modelsDir(): string {
+  return process.env.MODELS_DIR ?? path.resolve(process.cwd(), "ai/models");
+}
+
 export function createTrainingRoutes(deps: AppDeps, auth: RequestHandler): Router {
   const router = Router();
+
+  // Live training progress the dashboard polls: the trainer writes
+  // ai/models/<dim>/candidate/progress.json each epoch. null = no run yet.
+  router.get("/api/training/:dimension/progress", auth, (req, res) => {
+    const dim = req.params.dimension;
+    if (!LABELS_BY_DIMENSION[dim]) {
+      res.status(400).json({ error: `unknown dimension: ${dim}` });
+      return;
+    }
+    try {
+      const raw = readFileSync(path.join(modelsDir(), dim, "candidate", "progress.json"), "utf8");
+      res.json(JSON.parse(raw));
+    } catch {
+      res.json(null);
+    }
+  });
+
+  // Before/after model history: one record per evaluated retrain.
+  router.get("/api/training/:dimension/history", auth, (req, res) => {
+    const dim = req.params.dimension;
+    if (!LABELS_BY_DIMENSION[dim]) {
+      res.status(400).json({ error: `unknown dimension: ${dim}` });
+      return;
+    }
+    try {
+      const raw = readFileSync(path.join(modelsDir(), dim, "history.jsonl"), "utf8");
+      const runs = raw.split("\n").filter(Boolean).map((l) => JSON.parse(l));
+      res.json({ runs });
+    } catch {
+      res.json({ runs: [] });
+    }
+  });
 
   // Assign / update a clinician label on a scan (session auth — any clinician).
   router.post("/api/scans/:id/label", auth, async (req, res) => {
