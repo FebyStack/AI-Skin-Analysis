@@ -59,24 +59,33 @@ async function frameToJpeg(video: HTMLVideoElement | null): Promise<Blob | null>
   return new Promise((resolve) => canvas.toBlob((b) => resolve(b), "image/jpeg", 0.9));
 }
 
-// Decode a captured JPEG blob back to RGBA pixels for the learned models,
-// cropped to the face bbox when geometry is known (less background noise).
+// Decode a captured JPEG blob to RGBA pixels for the learned models, cropped to
+// the face bbox (less background noise) AND scaled straight down to the models'
+// input size. The models resize to 224 internally anyway, so keeping full-res
+// buffers for all 5 angles just burned ~40x the memory — enough to get the tab
+// OOM-killed on iOS Safari. Browser scaling is also better than our nearest-
+// neighbour resample.
+const MODEL_INPUT = 224;
+
 async function blobToPixels(blob: Blob, geometry: FaceGeometry | null): Promise<Pixels | null> {
+  let bmp: ImageBitmap | null = null;
   try {
-    const bmp = await createImageBitmap(blob);
+    bmp = await createImageBitmap(blob);
     const canvas = document.createElement("canvas");
-    canvas.width = bmp.width;
-    canvas.height = bmp.height;
+    canvas.width = MODEL_INPUT;
+    canvas.height = MODEL_INPUT;
     const ctx = canvas.getContext("2d");
     if (!ctx) return null;
-    ctx.drawImage(bmp, 0, 0);
     const full = { x: 0, y: 0, w: bmp.width, h: bmp.height };
     let rect = geometry ? faceRect(geometry, bmp.width, bmp.height) : full;
     if (rect.w < 32 || rect.h < 32) rect = full; // degenerate bbox — use whole frame
-    const { data, width, height } = ctx.getImageData(rect.x, rect.y, rect.w, rect.h);
+    ctx.drawImage(bmp, rect.x, rect.y, rect.w, rect.h, 0, 0, MODEL_INPUT, MODEL_INPUT);
+    const { data, width, height } = ctx.getImageData(0, 0, MODEL_INPUT, MODEL_INPUT);
     return { data, width, height };
   } catch {
     return null;
+  } finally {
+    bmp?.close(); // release the decoded frame promptly
   }
 }
 

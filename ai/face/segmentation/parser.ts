@@ -29,6 +29,23 @@ export function setFaceParsingCacheProvider(provider: ModelCacheProvider | null)
     cacheProvider = provider;
 }
 
+/**
+ * The parser weights are ~85MB — by far the largest thing the app loads. On
+ * memory-capped devices (iOS Safari kills tabs well before desktop limits) that
+ * alone can OOM the page, and on those devices inference usually exceeds the
+ * parse timeout and falls back to landmark masks anyway. So skip it there and go
+ * straight to the fallback. Force it on with VITE_FORCE_FACE_PARSING=1.
+ */
+export function isMemoryConstrained(): boolean {
+    if (import.meta.env?.VITE_FORCE_FACE_PARSING === "1") return false;
+    if (typeof navigator === "undefined") return false;
+    const mem = (navigator as { deviceMemory?: number }).deviceMemory;
+    if (typeof mem === "number" && mem < 4) return true;
+    // iPadOS reports a Mac user-agent, so detect it by touch points instead.
+    const touch = navigator.maxTouchPoints ?? 0;
+    return /iPhone|iPad|iPod/.test(navigator.userAgent) || (touch > 1 && /Mac/.test(navigator.platform ?? ""));
+}
+
 /** Preload ONNX session; returns null when model file is absent (offline / dev without weights). */
 export function ensureFaceParser(): Promise<OrtSession | null> {
     sessionPromise ??= loadSession();
@@ -36,6 +53,7 @@ export function ensureFaceParser(): Promise<OrtSession | null> {
 }
 
 async function loadSession(): Promise<OrtSession | null> {
+    if (isMemoryConstrained()) return null; // skip the 85MB download entirely
     const source = await resolveModelSource(
         "face-parsing",
         FACE_PARSING_MODEL_URL,
