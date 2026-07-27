@@ -54,6 +54,21 @@ CREATE TABLE IF NOT EXISTS scan_labels (
 );
 CREATE INDEX IF NOT EXISTS scan_labels_dimension ON scan_labels (dimension);
 
+-- Training Queue: review state for every completed scan. The AI prediction is
+-- NOT copied here — it already lives immutably in scans.report, and the
+-- human-verified labels live in scan_labels, so the two can never overwrite
+-- each other. This table only tracks where a sample is in review.
+CREATE TABLE IF NOT EXISTS training_queue (
+  scan_id UUID PRIMARY KEY REFERENCES scans(id) ON DELETE CASCADE,
+  status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'approved', 'rejected', 'needs_expert')),
+  note TEXT,
+  reviewed_by TEXT,
+  reviewed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS training_queue_status ON training_queue (status, created_at DESC);
+
 -- Model registry for versioning, distribution, and rollback (Plan 13 Task 1).
 CREATE TABLE IF NOT EXISTS model_registry (
   id TEXT PRIMARY KEY,

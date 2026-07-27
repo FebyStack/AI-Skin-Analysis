@@ -4,6 +4,7 @@ import { GuidedFaceFlow } from "./components/capture/GuidedFaceFlow";
 import { LesionScanFlow } from "./components/lesion/LesionScanFlow";
 import { HistoryView } from "./components/history/HistoryView";
 import { TrainingDashboard } from "./components/training/TrainingDashboard";
+import { TrainingQueue } from "./components/queue/TrainingQueue";
 import { PatientBar } from "./components/patients/PatientBar";
 import { Wordmark } from "./components/brand/Wordmark";
 import { Segmented } from "./components/ui/Segmented";
@@ -11,7 +12,7 @@ import { installOnlineSync, syncPending } from "./pwa/sync";
 import { requestPersistence } from "./pwa/local-store";
 import type { CaptureMode } from "./types";
 
-type View = "scan" | "history" | "training";
+type View = "scan" | "history" | "queue" | "training";
 
 export function SkinAnalysisPage() {
   const [mode, setMode] = useState<CaptureMode>("face");
@@ -53,6 +54,7 @@ export function SkinAnalysisPage() {
             options={[
               { value: "scan", label: "Scan" },
               { value: "history", label: "History" },
+              { value: "queue", label: "Queue" },
               { value: "training", label: "Training" },
             ]}
           />
@@ -61,6 +63,8 @@ export function SkinAnalysisPage() {
         <div className="mt-8 animate-rise">
           {view === "history" ? (
             <HistoryView onBack={() => setView("scan")} />
+          ) : view === "queue" ? (
+            <TrainingQueue />
           ) : view === "training" ? (
             <TrainingDashboard />
           ) : (

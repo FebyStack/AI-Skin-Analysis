@@ -54,6 +54,40 @@ export interface ScanRepo {
   setLabel(scanId: string, dimension: string, label: string, labeledBy?: string | null): Promise<boolean>;
   getLabels(scanId: string): Promise<{ dimension: string; label: string }[]>;
   listLabeled(dimension: string): Promise<{ scanId: string; label: string }[]>;
+
+  // Training Queue — review state only; the AI prediction stays in scans.report
+  // and the human labels in scan_labels, so neither can overwrite the other.
+  enqueueForReview(scanId: string): Promise<void>;
+  listQueue(filter: QueueFilter): Promise<QueueRow[]>;
+  queueStats(): Promise<Record<string, number>>;
+  getQueueEntry(scanId: string): Promise<QueueRow | null>;
+  setQueueStatus(
+    scanId: string,
+    status: string,
+    reviewedBy?: string | null,
+    note?: string | null,
+  ): Promise<boolean>;
+}
+
+export interface QueueFilter {
+  status?: string;
+  /** Free text matched against patient id / name. */
+  q?: string;
+  /** Inclusive ISO dates (YYYY-MM-DD) on scan creation. */
+  from?: string;
+  to?: string;
+}
+
+export interface QueueRow {
+  scanId: string;
+  patientId: string;
+  patientName: string | null;
+  createdAt: number;
+  status: string;
+  reviewedBy: string | null;
+  reviewedAt: number | null;
+  note: string | null;
+  labeledCount: number;
 }
 
 // ---------- In-memory (tests + lite mode) ----------
@@ -127,6 +161,59 @@ export class MemoryScanRepo implements ScanRepo {
     }
     return out;
   }
+
+  private queue = new Map<string, Omit<QueueRow, "patientName" | "labeledCount">>();
+  async enqueueForReview(scanId: string): Promise<void> {
+    const scan = this.rows.get(scanId);
+    if (!scan || this.queue.has(scanId)) return; // idempotent
+    this.queue.set(scanId, {
+      scanId,
+      patientId: scan.patientId,
+      createdAt: scan.createdAt,
+      status: "pending",
+      reviewedBy: null,
+      reviewedAt: null,
+      note: null,
+    });
+  }
+  private toQueueRow(e: Omit<QueueRow, "patientName" | "labeledCount">): QueueRow {
+    return { ...e, patientName: null, labeledCount: (this.labels.get(e.scanId) ?? new Map()).size };
+  }
+  async listQueue(filter: QueueFilter): Promise<QueueRow[]> {
+    return [...this.queue.values()]
+      .filter((e) => !filter.status || e.status === filter.status)
+      .filter((e) => !filter.q || e.patientId.includes(filter.q))
+      .filter((e) => !filter.from || e.createdAt >= Date.parse(`${filter.from}T00:00:00`))
+      .filter((e) => !filter.to || e.createdAt <= Date.parse(`${filter.to}T23:59:59`))
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .map((e) => this.toQueueRow(e));
+  }
+  async queueStats(): Promise<Record<string, number>> {
+    const stats: Record<string, number> = {};
+    for (const e of this.queue.values()) stats[e.status] = (stats[e.status] ?? 0) + 1;
+    return stats;
+  }
+  async getQueueEntry(scanId: string): Promise<QueueRow | null> {
+    const e = this.queue.get(scanId);
+    return e ? this.toQueueRow(e) : null;
+  }
+  async setQueueStatus(
+    scanId: string,
+    status: string,
+    reviewedBy?: string | null,
+    note?: string | null,
+  ): Promise<boolean> {
+    const e = this.queue.get(scanId);
+    if (!e) return false;
+    this.queue.set(scanId, {
+      ...e,
+      status,
+      reviewedBy: reviewedBy ?? null,
+      reviewedAt: Date.now(),
+      note: note ?? e.note,
+    });
+    return true;
+  }
 }
 
 // ---------- PostgreSQL ----------
@@ -144,6 +231,20 @@ function rowToScan(r: Record<string, unknown>): ScanRecord {
     partial: Boolean(r.partial),
     classifierFindings: (r.classifier_findings as unknown[]) ?? [],
     promptVersion: (r.prompt_version as number | null) ?? null,
+  };
+}
+
+function rowToQueue(r: Record<string, unknown>): QueueRow {
+  return {
+    scanId: String(r.scan_id),
+    patientId: String(r.patient_id),
+    patientName: (r.patient_name as string | null) ?? null,
+    createdAt: new Date(r.created_at as string).getTime(),
+    status: String(r.status),
+    reviewedBy: (r.reviewed_by as string | null) ?? null,
+    reviewedAt: r.reviewed_at ? new Date(r.reviewed_at as string).getTime() : null,
+    note: (r.note as string | null) ?? null,
+    labeledCount: Number(r.labeled_count ?? 0),
   };
 }
 
@@ -289,5 +390,87 @@ export class PgScanRepo implements ScanRepo {
       [dimension],
     );
     return rows.map((r) => ({ scanId: String(r.scan_id), label: String(r.label) }));
+  }
+
+  // ----- Training Queue -----
+
+  async enqueueForReview(scanId: string): Promise<void> {
+    if (!isValidUuid(scanId)) return;
+    await this.pool.query(
+      `INSERT INTO training_queue (scan_id) VALUES ($1) ON CONFLICT (scan_id) DO NOTHING`,
+      [scanId],
+    );
+  }
+
+  async listQueue(filter: QueueFilter): Promise<QueueRow[]> {
+    const where: string[] = [];
+    const params: unknown[] = [];
+    const add = (clause: string, value: unknown) => {
+      params.push(value);
+      where.push(clause.replace("?", `$${params.length}`));
+    };
+    if (filter.status) add("q.status = ?", filter.status);
+    // Search matches patient name or either id (so a pasted scan id works too) —
+    // one bound param referenced three times.
+    if (filter.q) {
+      params.push(`%${filter.q}%`);
+      const i = `$${params.length}`;
+      where.push(`(p.name ILIKE ${i} OR p.id::text ILIKE ${i} OR s.id::text ILIKE ${i})`);
+    }
+    if (filter.from) add("s.created_at >= ?::date", filter.from);
+    if (filter.to) add("s.created_at < (?::date + INTERVAL '1 day')", filter.to);
+
+    const { rows } = await this.pool.query(
+      `SELECT q.scan_id, q.status, q.note, q.reviewed_by, q.reviewed_at,
+              s.patient_id, s.created_at, p.name AS patient_name,
+              (SELECT count(*) FROM scan_labels l WHERE l.scan_id = q.scan_id) AS labeled_count
+         FROM training_queue q
+         JOIN scans s ON s.id = q.scan_id
+         LEFT JOIN patients p ON p.id = s.patient_id
+        ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
+        ORDER BY s.created_at DESC
+        LIMIT 500`,
+      params,
+    );
+    return rows.map(rowToQueue);
+  }
+
+  async queueStats(): Promise<Record<string, number>> {
+    const { rows } = await this.pool.query(
+      `SELECT status, count(*)::int AS n FROM training_queue GROUP BY status`,
+    );
+    return Object.fromEntries(rows.map((r) => [String(r.status), Number(r.n)]));
+  }
+
+  async getQueueEntry(scanId: string): Promise<QueueRow | null> {
+    if (!isValidUuid(scanId)) return null;
+    const { rows } = await this.pool.query(
+      `SELECT q.scan_id, q.status, q.note, q.reviewed_by, q.reviewed_at,
+              s.patient_id, s.created_at, p.name AS patient_name,
+              (SELECT count(*) FROM scan_labels l WHERE l.scan_id = q.scan_id) AS labeled_count
+         FROM training_queue q
+         JOIN scans s ON s.id = q.scan_id
+         LEFT JOIN patients p ON p.id = s.patient_id
+        WHERE q.scan_id = $1`,
+      [scanId],
+    );
+    return rows[0] ? rowToQueue(rows[0]) : null;
+  }
+
+  async setQueueStatus(
+    scanId: string,
+    status: string,
+    reviewedBy?: string | null,
+    note?: string | null,
+  ): Promise<boolean> {
+    if (!isValidUuid(scanId)) return false;
+    const { rowCount } = await this.pool.query(
+      `UPDATE training_queue
+          SET status = $2, reviewed_by = $3, reviewed_at = now(),
+              note = COALESCE($4, note)
+        WHERE scan_id = $1`,
+      [scanId, status, reviewedBy ?? null, note ?? null],
+    );
+    return (rowCount ?? 0) > 0;
   }
 }

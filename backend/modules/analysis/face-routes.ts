@@ -99,6 +99,10 @@ export function createFaceScanRoutes(deps: AppDeps, auth: RequestHandler): Route
     }
     await deps.scans.addImages(scan.id, scanImages);
 
+    // Every completed scan enters the Training Queue for human review. Idempotent,
+    // and never blocks the save if it fails.
+    await deps.scans.enqueueForReview(scan.id).catch(() => undefined);
+
     // Best-effort online enhancement (fire-and-forget-ish): try it, but if it
     // fails, the builtin already saved. Skipped when the operator prefers builtin.
     if (deps.faceExplain && !preferBuiltin()) {
