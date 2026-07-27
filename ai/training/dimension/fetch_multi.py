@@ -1,5 +1,16 @@
 """Seed per-dimension training data from the multi-condition facial dataset.
 
+!! DO NOT SHIP MODELS TRAINED FROM THIS SOURCE (verified 2026-07-27) !!
+Inspecting the images shows each condition folder has its own photographic style:
+`pores` are macro skin patches on a black octagonal mask (not faces), `wrinkles`
+are elderly outdoor stock portraits, `pigmentation` are tight studio half-face
+crops, `Redness` are young indoor selfies. A classifier scores 0.96-0.99 by
+reading framing/age/background, never the skin — and that cue is absent on the
+app's real input (one camera, consistent full-face framing), so predictions there
+are unreliable. Re-balancing negatives does NOT fix it; the labels are confounded
+with photo style inside the dataset. Trustworthy per-dimension models need the
+clinician grading loop on real scans. Kept only for experimentation.
+
 Source: Kaggle shijo96john/facial-skin-acne-pigmentation-pores-wrinkles, already
 extracted to ai/datasets/raw/_multi/dataset/<condition>/ (see ai/datasets/README.md).
 

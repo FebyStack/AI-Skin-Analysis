@@ -30,6 +30,8 @@ retrain-dim:
 	-$(PY) -m ai.training.dimension.evaluate --dim $(DIM)
 	$(PY) -m ai.training.dimension.export_onnx --dim $(DIM)
 
+# WARNING: models from the multi-condition dataset are confounded (see
+# ai/training/dimension/fetch_multi.py) — do not ship their exports.
 retrain-dims:
 	@for d in redness wrinkles pores pigmentation; do $(MAKE) retrain-dim DIM=$$d || exit 1; done
 

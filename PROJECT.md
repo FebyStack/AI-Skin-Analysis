@@ -57,7 +57,7 @@ Plans 1–4 executed and merged. Plan 5 (results/report UI) + Plan 6 (patients/h
 
 Brainstorm → spec → writing-plans → subagent-driven execution with one final opus review before merge. Verify camera/browser changes live in the preview tool, not just unit tests. `git push` to `https://github.com/FebyStack/AI-Skin-Analysis.git` was configured via `gh auth git-credential` but never confirmed pushed.
 
-last Claude session: 2026-07-27 11:44
+last Claude session: 2026-07-27 14:38
 
 ## Recent updates (2026-07-12)
 
@@ -91,7 +91,7 @@ Complete state audit filed in Obsidian: `Claude Code/AI Skin Analysis Status 202
 Headlines: both AI branches functional (face on-device pipeline + lesion EfficientNet-B1 w/ MobileSAM refinement + localization confidence); model distribution platform + admin UI landed via PR #4.
 **Dormant/missing:** PWA icons never generated (`node scripts/generate-icons.mjs`); face-parsing ONNX never downloaded (`.venv/bin/python -m ai.models.fetch_models face-parsing`) so segmentation silently falls back to landmark polygons; MobileSAM real-weights path never run on an actual photo; upload→promote→download integration test missing; main 1 commit ahead of origin; stale `feat/face-analysis` branch to delete after confirming superseded.
 
-last Claude session: 2026-07-27 11:44
+last Claude session: 2026-07-27 14:38
 
 ## Progress 2026-07-21 (recommended-steps batch)
 
@@ -146,4 +146,28 @@ Executed the next-steps batch from the Jul-15 audit. Full detail: `Claude Code/A
 - **Skin-type regression solved** (commit `4d9f286`): eval macro-F1 0.686 → 0.558 (bad aug) → **0.773** (fixed). Causes: `VerticalFlip` is wrong for upright faces, and the phone-camera aug was too strong. `train_transforms(face=True)` for acne/skintype/dimensions; lesion keeps vertical flip. **Retrain acne too** — same penalty, masked there by its 2.4x data.
 - **4 new trainable dimensions** (commit `05cc1ec`): redness/wrinkles/pores/pigmentation via generic `ai/training/dimension/` (registry in `labels.py` → adding a dimension is one entry). Data seeded from Kaggle `shijo96john/...` (present) + killa92 clear faces (absent), balanced 600/600 (pigmentation 1218/1218). Browser: `ai/face/analyzers/dimension-model.ts`, binary score = P(present), confidence-gated `VITE_DIMENSION_MIN_CONF` 0.55. `make retrain-dim DIM=redness` / `make retrain-dims`. Clinicians grade these absent/present → export → retrain.
 
-last Claude session: 2026-07-27 (aug fix validated, 4 new dimensions)
+### ⚠️ The 4 dimension models were confounded — removed (2026-07-27)
+
+**Do not retrain redness/wrinkles/pores/pigmentation from the Kaggle multi-condition
+dataset and ship it.** They evaluated at 0.96–0.99 macro-F1, which is not skill —
+inspecting the images showed each condition folder has its own photographic style:
+`pores` = macro skin patches on a black octagonal mask (not faces), `wrinkles` =
+elderly outdoor stock portraits, `pigmentation` = tight studio half-face crops,
+`Redness` = young indoor selfies. The classifier reads framing/age/background, never
+the skin. That cue is absent on the app's real input (one camera, consistent
+full-face framing), so predictions there are unreliable — and the 0.55 confidence
+gate can't catch a confidently-wrong model.
+
+Re-balancing negatives (70% same-source, commit `f650d44`) did NOT lower the scores:
+the labels are confounded with photo style *inside* the dataset. Exports deleted from
+`frontend/public/models/{redness,wrinkles,pores,pigmentation}/`, so the browser 404s
+and the honest deterministic pixel-math analyzers keep those 4 dimensions. Pipeline +
+staged data kept for experimentation only; warnings in `fetch_multi.py` and the
+Makefile. **Trustworthy per-dimension models need the clinician grading loop on real
+scans** (same camera/framing), not another public dataset.
+
+**Shipping models (trustworthy):** acne eval macro-F1 **0.767** / ordinal MAE 0.254
+(n=232 — bigger, harder test set than the earlier 0.817 at n=188, which had fewer
+very-severe cases; val_macro_f1 rose 0.760→0.846); skintype **0.773** / acc 0.792.
+
+last Claude session: 2026-07-27 (dimension models pulled as confounded)
