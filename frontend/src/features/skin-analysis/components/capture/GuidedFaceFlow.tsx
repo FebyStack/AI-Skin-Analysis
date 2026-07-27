@@ -7,12 +7,12 @@ import { saveFaceScanWithFallback } from "../../pwa/save-flow";
 import { HistoryView } from "../history/HistoryView";
 import { ScanLabelControl } from "../patients/ScanLabelControl";
 import { TrainingExport } from "../admin/TrainingExport";
-import { ACNE_CLASSES } from "@ai/face/analyzers/acne-model";
+import { ACNE_CLASSES } from "@ai/face/analyzers/face-model";
 import { SKINTYPE_CLASSES } from "@ai/face/analyzers/skintype-model";
 import { scanPatientId } from "../../store/patient-store";
 import { refineAcneWithModel } from "@ai/face/analyzers/acne-model";
 import { refineSkinTypeWithModel } from "@ai/face/analyzers/skintype-model";
-import { refineDimensionsWithModels } from "@ai/face/analyzers/dimension-model";
+import { ensureFaceModel, refineFaceWithModel } from "@ai/face/analyzers/face-model";
 import { detectGeometry } from "@ai/face/landmarks/mediapipe";
 import { ANGLE_YAW_WINDOWS } from "@ai/face/quality/validate";
 import type { FaceGeometry, Pixels } from "@ai/face/types";
@@ -66,6 +66,25 @@ async function frameToJpeg(video: HTMLVideoElement | null): Promise<Blob | null>
 // OOM-killed on iOS Safari. Browser scaling is also better than our nearest-
 // neighbour resample.
 const MODEL_INPUT = 224;
+
+// Learned-model refinement must never block saving: on a phone the ONNX loads +
+// inferences can be very slow, and a stall left the UI stuck on "Saving your
+// scan…". Cap it and save the deterministic report instead.
+const REFINE_TIMEOUT_MS = Number(import.meta.env?.VITE_REFINE_TIMEOUT_MS ?? "20000");
+
+function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return new Promise((resolve) => {
+    let done = false;
+    const settle = (v: T) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      resolve(v);
+    };
+    const timer = setTimeout(() => settle(fallback), ms);
+    p.then(settle, () => settle(fallback));
+  });
+}
 
 async function blobToPixels(blob: Blob, geometry: FaceGeometry | null): Promise<Pixels | null> {
   let bmp: ImageBitmap | null = null;
@@ -186,11 +205,19 @@ export function GuidedFaceFlow() {
         if (px) views.push(px);
       }
       if (views.length > 0) {
-        report = await refineAcneWithModel(report, views);
-        report = await refineSkinTypeWithModel(report, views);
-        // redness / wrinkles / pores / pigmentation — each overrides only if a
-        // trained model exists for it and clears the confidence gate.
-        report = await refineDimensionsWithModels(report, views);
+        const base = report;
+        report = await withTimeout(
+          (async () => {
+            // Preferred: ONE multi-head model — a single download and a single
+            // forward pass per view for every task. Falls back to the older
+            // per-task models until `make retrain-face` has been run.
+            if (await ensureFaceModel()) return refineFaceWithModel(base, views);
+            let r = await refineAcneWithModel(base, views);
+            return refineSkinTypeWithModel(r, views);
+          })(),
+          REFINE_TIMEOUT_MS,
+          base, // too slow → save the deterministic report rather than hang
+        );
       }
 
       try {

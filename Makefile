@@ -1,4 +1,4 @@
-.PHONY: up down lan build backup restore retrain retrain-acne retrain-skintype retrain-dim retrain-dims
+.PHONY: up down lan build backup restore retrain retrain-acne retrain-skintype retrain-dim retrain-dims retrain-face
 
 # Compose lives in infrastructure/docker/; --env-file keeps root .env interpolation working.
 COMPOSE = docker compose -f infrastructure/docker/docker-compose.yml --env-file .env
@@ -35,7 +35,14 @@ retrain-dim:
 retrain-dims:
 	@for d in redness wrinkles pores pigmentation; do $(MAKE) retrain-dim DIM=$$d || exit 1; done
 
-retrain: retrain-acne retrain-skintype
+# Preferred: ONE multi-head model (acne + skin type) for the PWA — a single
+# ~15MB download and one forward pass per view instead of one model per task.
+retrain-face:
+	$(PY) -m ai.training.multi.train_multi --epochs $(EPOCHS)
+	-$(PY) -m ai.training.multi.evaluate
+	$(PY) -m ai.training.multi.export_onnx
+
+retrain: retrain-face
 
 up:
 	$(COMPOSE) up -d
