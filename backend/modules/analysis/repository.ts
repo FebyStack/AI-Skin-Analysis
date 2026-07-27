@@ -4,6 +4,7 @@ import type { AnalysisReport } from "../../../shared/contract";
 import type { LesionScanReport } from "../../../shared/lesion";
 import type { FaceReport } from "../../../shared/face";
 import { isValidUuid } from "../../shared/pg";
+import { hashSimilarity } from "../../utils/image-hash";
 
 // A stored report is a face v1 AnalysisReport, a face v3 FaceReport, or a lesion
 // report. JSONB is shape-agnostic; each report's `kind` (or absence for v1)
@@ -57,16 +58,25 @@ export interface ScanRepo {
 
   // Training Queue — review state only; the AI prediction stays in scans.report
   // and the human labels in scan_labels, so neither can overwrite the other.
-  enqueueForReview(scanId: string): Promise<void>;
+  /** Idempotent; also fingerprints the front image and flags near-duplicates. */
+  enqueueForReview(scanId: string, imageHash?: string | null): Promise<void>;
   listQueue(filter: QueueFilter): Promise<QueueRow[]>;
   queueStats(): Promise<Record<string, number>>;
   getQueueEntry(scanId: string): Promise<QueueRow | null>;
-  setQueueStatus(
-    scanId: string,
-    status: string,
-    reviewedBy?: string | null,
-    note?: string | null,
-  ): Promise<boolean>;
+  /** Save Draft / Approve / Reject / Needs Expert — any subset of fields. */
+  updateReview(scanId: string, patch: ReviewPatch): Promise<boolean>;
+  /** Labels eligible for training: approved, not skipped. */
+  listTrainable(dimension: string): Promise<{ scanId: string; label: string }[]>;
+  markExported(scanIds: string[]): Promise<void>;
+  /** Remove one angle; the rest of the scan survives. */
+  deleteImage(scanId: string, angle: string): Promise<boolean>;
+}
+
+export interface ReviewPatch {
+  status?: string;
+  note?: string | null;
+  reviewerName?: string | null;
+  skipTraining?: boolean;
 }
 
 export interface QueueFilter {
@@ -86,7 +96,12 @@ export interface QueueRow {
   status: string;
   reviewedBy: string | null;
   reviewedAt: number | null;
+  updatedAt: number | null;
   note: string | null;
+  skipTraining: boolean;
+  duplicateOf: string | null;
+  similarity: number | null;
+  exportedAt: number | null;
   labeledCount: number;
 }
 
@@ -163,9 +178,24 @@ export class MemoryScanRepo implements ScanRepo {
   }
 
   private queue = new Map<string, Omit<QueueRow, "patientName" | "labeledCount">>();
-  async enqueueForReview(scanId: string): Promise<void> {
+  private hashes = new Map<string, string>(); // scanId → dHash
+  async enqueueForReview(scanId: string, imageHash?: string | null): Promise<void> {
     const scan = this.rows.get(scanId);
     if (!scan || this.queue.has(scanId)) return; // idempotent
+    let duplicateOf: string | null = null;
+    let similarity: number | null = null;
+    if (imageHash) {
+      this.hashes.set(scanId, imageHash);
+      for (const [otherId, otherHash] of this.hashes) {
+        if (otherId === scanId) continue;
+        if (this.rows.get(otherId)?.patientId !== scan.patientId) continue;
+        const s = hashSimilarity(imageHash, otherHash);
+        if (s > (similarity ?? 0)) {
+          similarity = s;
+          duplicateOf = otherId;
+        }
+      }
+    }
     this.queue.set(scanId, {
       scanId,
       patientId: scan.patientId,
@@ -173,7 +203,12 @@ export class MemoryScanRepo implements ScanRepo {
       status: "pending",
       reviewedBy: null,
       reviewedAt: null,
+      updatedAt: null,
       note: null,
+      skipTraining: false,
+      duplicateOf,
+      similarity,
+      exportedAt: null,
     });
   }
   private toQueueRow(e: Omit<QueueRow, "patientName" | "labeledCount">): QueueRow {
@@ -197,21 +232,43 @@ export class MemoryScanRepo implements ScanRepo {
     const e = this.queue.get(scanId);
     return e ? this.toQueueRow(e) : null;
   }
-  async setQueueStatus(
-    scanId: string,
-    status: string,
-    reviewedBy?: string | null,
-    note?: string | null,
-  ): Promise<boolean> {
+  async updateReview(scanId: string, patch: ReviewPatch): Promise<boolean> {
     const e = this.queue.get(scanId);
     if (!e) return false;
     this.queue.set(scanId, {
       ...e,
-      status,
-      reviewedBy: reviewedBy ?? null,
-      reviewedAt: Date.now(),
-      note: note ?? e.note,
+      status: patch.status ?? e.status,
+      note: patch.note !== undefined ? patch.note : e.note,
+      reviewedBy: patch.reviewerName !== undefined ? patch.reviewerName : e.reviewedBy,
+      skipTraining: patch.skipTraining ?? e.skipTraining,
+      // reviewedAt marks a review decision; updatedAt marks any edit (incl. drafts).
+      reviewedAt: patch.status && patch.status !== "pending" ? Date.now() : e.reviewedAt,
+      updatedAt: Date.now(),
     });
+    return true;
+  }
+  async listTrainable(dimension: string): Promise<{ scanId: string; label: string }[]> {
+    const out: { scanId: string; label: string }[] = [];
+    for (const [scanId, byDim] of this.labels) {
+      const e = this.queue.get(scanId);
+      if (!e || e.status !== "approved" || e.skipTraining) continue;
+      const label = byDim.get(dimension);
+      if (label) out.push({ scanId, label });
+    }
+    return out;
+  }
+  async markExported(scanIds: string[]): Promise<void> {
+    for (const id of scanIds) {
+      const e = this.queue.get(id);
+      if (e) this.queue.set(id, { ...e, exportedAt: Date.now() });
+    }
+  }
+  async deleteImage(scanId: string, angle: string): Promise<boolean> {
+    const imgs = this.imagesByScan.get(scanId);
+    if (!imgs) return false;
+    const next = imgs.filter((i) => i.angle !== angle);
+    if (next.length === imgs.length) return false;
+    this.imagesByScan.set(scanId, next);
     return true;
   }
 }
@@ -243,7 +300,12 @@ function rowToQueue(r: Record<string, unknown>): QueueRow {
     status: String(r.status),
     reviewedBy: (r.reviewed_by as string | null) ?? null,
     reviewedAt: r.reviewed_at ? new Date(r.reviewed_at as string).getTime() : null,
+    updatedAt: r.updated_at ? new Date(r.updated_at as string).getTime() : null,
     note: (r.note as string | null) ?? null,
+    skipTraining: Boolean(r.skip_training),
+    duplicateOf: (r.duplicate_of as string | null) ?? null,
+    similarity: r.similarity === null || r.similarity === undefined ? null : Number(r.similarity),
+    exportedAt: r.exported_at ? new Date(r.exported_at as string).getTime() : null,
     labeledCount: Number(r.labeled_count ?? 0),
   };
 }
@@ -394,11 +456,33 @@ export class PgScanRepo implements ScanRepo {
 
   // ----- Training Queue -----
 
-  async enqueueForReview(scanId: string): Promise<void> {
+  async enqueueForReview(scanId: string, imageHash?: string | null): Promise<void> {
     if (!isValidUuid(scanId)) return;
+    // Closest earlier scan of the same patient, by perceptual hash.
+    let duplicateOf: string | null = null;
+    let similarity: number | null = null;
+    if (imageHash) {
+      const { rows } = await this.pool.query(
+        `SELECT q.scan_id, q.image_hash
+           FROM training_queue q
+           JOIN scans s ON s.id = q.scan_id
+          WHERE q.image_hash IS NOT NULL
+            AND q.scan_id <> $1
+            AND s.patient_id = (SELECT patient_id FROM scans WHERE id = $1)`,
+        [scanId],
+      );
+      for (const r of rows) {
+        const s = hashSimilarity(imageHash, String(r.image_hash));
+        if (s > (similarity ?? 0)) {
+          similarity = s;
+          duplicateOf = String(r.scan_id);
+        }
+      }
+    }
     await this.pool.query(
-      `INSERT INTO training_queue (scan_id) VALUES ($1) ON CONFLICT (scan_id) DO NOTHING`,
-      [scanId],
+      `INSERT INTO training_queue (scan_id, image_hash, duplicate_of, similarity)
+       VALUES ($1,$2,$3,$4) ON CONFLICT (scan_id) DO NOTHING`,
+      [scanId, imageHash ?? null, duplicateOf, similarity],
     );
   }
 
@@ -421,7 +505,8 @@ export class PgScanRepo implements ScanRepo {
     if (filter.to) add("s.created_at < (?::date + INTERVAL '1 day')", filter.to);
 
     const { rows } = await this.pool.query(
-      `SELECT q.scan_id, q.status, q.note, q.reviewed_by, q.reviewed_at,
+      `SELECT q.scan_id, q.status, q.note, q.reviewed_by, q.reviewed_at, q.updated_at,
+              q.skip_training, q.duplicate_of, q.similarity, q.exported_at,
               s.patient_id, s.created_at, p.name AS patient_name,
               (SELECT count(*) FROM scan_labels l WHERE l.scan_id = q.scan_id) AS labeled_count
          FROM training_queue q
@@ -445,7 +530,8 @@ export class PgScanRepo implements ScanRepo {
   async getQueueEntry(scanId: string): Promise<QueueRow | null> {
     if (!isValidUuid(scanId)) return null;
     const { rows } = await this.pool.query(
-      `SELECT q.scan_id, q.status, q.note, q.reviewed_by, q.reviewed_at,
+      `SELECT q.scan_id, q.status, q.note, q.reviewed_by, q.reviewed_at, q.updated_at,
+              q.skip_training, q.duplicate_of, q.similarity, q.exported_at,
               s.patient_id, s.created_at, p.name AS patient_name,
               (SELECT count(*) FROM scan_labels l WHERE l.scan_id = q.scan_id) AS labeled_count
          FROM training_queue q
@@ -457,19 +543,55 @@ export class PgScanRepo implements ScanRepo {
     return rows[0] ? rowToQueue(rows[0]) : null;
   }
 
-  async setQueueStatus(
-    scanId: string,
-    status: string,
-    reviewedBy?: string | null,
-    note?: string | null,
-  ): Promise<boolean> {
+  async updateReview(scanId: string, patch: ReviewPatch): Promise<boolean> {
     if (!isValidUuid(scanId)) return false;
     const { rowCount } = await this.pool.query(
       `UPDATE training_queue
-          SET status = $2, reviewed_by = $3, reviewed_at = now(),
-              note = COALESCE($4, note)
+          SET status        = COALESCE($2, status),
+              note          = COALESCE($3, note),
+              reviewed_by   = COALESCE($4, reviewed_by),
+              skip_training = COALESCE($5, skip_training),
+              -- reviewedAt marks a decision; updatedAt marks any edit (incl. drafts)
+              reviewed_at   = CASE WHEN $2 IS NOT NULL AND $2 <> 'pending'
+                                   THEN now() ELSE reviewed_at END,
+              updated_at    = now()
         WHERE scan_id = $1`,
-      [scanId, status, reviewedBy ?? null, note ?? null],
+      [
+        scanId,
+        patch.status ?? null,
+        patch.note ?? null,
+        patch.reviewerName ?? null,
+        patch.skipTraining ?? null,
+      ],
+    );
+    return (rowCount ?? 0) > 0;
+  }
+
+  async listTrainable(dimension: string): Promise<{ scanId: string; label: string }[]> {
+    const { rows } = await this.pool.query(
+      `SELECT l.scan_id, l.label
+         FROM scan_labels l
+         JOIN training_queue q ON q.scan_id = l.scan_id
+        WHERE l.dimension = $1 AND q.status = 'approved' AND q.skip_training = false`,
+      [dimension],
+    );
+    return rows.map((r) => ({ scanId: String(r.scan_id), label: String(r.label) }));
+  }
+
+  async markExported(scanIds: string[]): Promise<void> {
+    const ids = scanIds.filter(isValidUuid);
+    if (ids.length === 0) return;
+    await this.pool.query(
+      `UPDATE training_queue SET exported_at = now() WHERE scan_id = ANY($1::uuid[])`,
+      [ids],
+    );
+  }
+
+  async deleteImage(scanId: string, angle: string): Promise<boolean> {
+    if (!isValidUuid(scanId)) return false;
+    const { rowCount } = await this.pool.query(
+      `DELETE FROM scan_images WHERE scan_id = $1 AND angle = $2`,
+      [scanId, angle],
     );
     return (rowCount ?? 0) > 0;
   }

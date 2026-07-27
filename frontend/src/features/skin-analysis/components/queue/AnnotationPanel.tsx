@@ -2,14 +2,16 @@ import { useEffect, useMemo, useState } from "react";
 import type { FaceDimension, FaceReport } from "@shared/face";
 import {
   ANNOTATION_FIELDS,
-  QUEUE_STATUSES,
   QUEUE_STATUS_LABEL,
   scoreToAcneLevel,
   scoreToSeverity,
   type QueueStatus,
 } from "@shared/training-queue";
-import { queueDetail, saveLabel, setQueueStatus, type QueueDetail } from "../../api/queue-client";
+import { deleteScan, queueDetail, saveLabel, saveReview, type QueueDetail } from "../../api/queue-client";
 import { ConfidenceBadge } from "./ConfidenceBadge";
+import { ImageManager } from "./ImageManager";
+import { ConfirmDialog } from "./ConfirmDialog";
+import { DUPLICATE_THRESHOLD } from "@shared/training-queue";
 
 /** The AI's suggested label + its confidence for one field. Never written to. */
 function aiPrediction(report: FaceReport | null, key: string): { value: string | null; confidence: number | null } {
@@ -33,7 +35,11 @@ export function AnnotationPanel({ scanId, onClose }: { scanId: string; onClose: 
   const [saving, setSaving] = useState<string | null>(null);
   const [status, setStatus] = useState<QueueStatus>("pending");
   const [note, setNote] = useState("");
+  const [reviewer, setReviewer] = useState("");
   const [msg, setMsg] = useState("");
+  const [dupDismissed, setDupDismissed] = useState(false);
+  const [angles, setAngles] = useState<QueueDetail["angles"]>([]);
+  const [confirmDeleteDup, setConfirmDeleteDup] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -45,6 +51,8 @@ export function AnnotationPanel({ scanId, onClose }: { scanId: string; onClose: 
       if (!d) return;
       setStatus(d.entry.status);
       setNote(d.entry.note ?? "");
+      setReviewer(d.entry.reviewedBy ?? "");
+      setAngles(d.angles);
       // Pre-populate every field from the AI prediction; an existing human label wins.
       const saved = Object.fromEntries(d.labels.map((l) => [l.dimension, l.label]));
       setVerified(
@@ -79,16 +87,26 @@ export function AnnotationPanel({ scanId, onClose }: { scanId: string; onClose: 
     if (!ok) setMsg(`Could not save ${key}.`);
   };
 
-  const applyStatus = async (next: QueueStatus) => {
-    // Persist every field first so an approval always has a complete label set.
+  /** Save Draft (no status) or a review decision. Labels are persisted either way. */
+  const commit = async (next?: QueueStatus, skipTraining?: boolean) => {
+    setMsg("Saving…");
     for (const f of ANNOTATION_FIELDS) {
       if (verified[f.key]) await saveLabel(scanId, f.key, verified[f.key]);
     }
-    const ok = await setQueueStatus(scanId, next, note);
-    if (ok) {
-      setStatus(next);
-      setMsg(`Marked ${QUEUE_STATUS_LABEL[next]}.`);
-    } else setMsg("Could not update status.");
+    const ok = await saveReview(scanId, {
+      status: next,
+      note,
+      reviewerName: reviewer || undefined,
+      skipTraining,
+    });
+    if (!ok) {
+      setMsg("Could not save.");
+      return;
+    }
+    if (next) setStatus(next);
+    setMsg(next ? `Marked ${QUEUE_STATUS_LABEL[next]}.` : "Draft saved.");
+    const fresh = await queueDetail(scanId);
+    if (fresh) setDetail(fresh);
   };
 
   if (loading) return <div className="skeleton mt-4 h-64" />;
@@ -116,21 +134,44 @@ export function AnnotationPanel({ scanId, onClose }: { scanId: string; onClose: 
         </div>
       </div>
 
-      {/* Captured angles */}
-      {detail.angles.length > 0 && (
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          {detail.angles.map((a) => (
-            <figure key={a.angle} className="shrink-0">
-              <img
-                src={`/api/face-scans/${scanId}/images/${a.angle}`}
-                alt={a.angle}
-                className="h-24 w-[4.5rem] rounded-lg object-cover"
-              />
-              <figcaption className="mt-0.5 text-center text-[10px] text-ink-tertiary">{a.angle}</figcaption>
-            </figure>
-          ))}
+      {/* Near-duplicate warning */}
+      {detail.duplicate && detail.duplicate.similarity >= DUPLICATE_THRESHOLD && !dupDismissed && (
+        <div className="rounded-xl border border-soon-edge bg-soon-surface p-3">
+          <p className="text-sm font-medium text-soon">
+            This scan is very similar to an existing approved sample.
+          </p>
+          <p className="mt-0.5 text-xs text-soon/80">
+            {Math.round(detail.duplicate.similarity * 100)}% similar to an earlier scan of this patient.
+            Near-duplicates add little to training and can bias the model.
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button onClick={() => setDupDismissed(true)} className="btn-secondary min-h-[32px] text-xs">
+              Approve Anyway
+            </button>
+            <button
+              onClick={() => commit("approved", true)}
+              className="btn-secondary min-h-[32px] text-xs"
+            >
+              Skip Training
+            </button>
+            <button
+              onClick={() => setConfirmDeleteDup(true)}
+              className="min-h-[32px] rounded-lg border border-urgent/40 bg-urgent/10 px-2 text-xs font-medium text-urgent"
+            >
+              Delete Duplicate
+            </button>
+          </div>
         </div>
       )}
+
+      {/* Images: zoom / rotate / switch angle / download / delete + quality */}
+      <ImageManager
+        scanId={scanId}
+        angles={angles}
+        wasExported={Boolean(detail.entry.exportedAt)}
+        onImageDeleted={(angle) => setAngles((a) => a.filter((x) => x.angle !== angle))}
+        onScanDeleted={onClose}
+      />
 
       <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
         {/* Editable labels — AI prediction shown read-only beside each field */}
@@ -190,31 +231,85 @@ export function AnnotationPanel({ scanId, onClose }: { scanId: string; onClose: 
         </section>
       </div>
 
-      {/* Review actions */}
+      {/* Reviewer notes — part of the training metadata */}
       <section className="card p-4">
-        <div className="flex flex-wrap items-center gap-2">
-          {QUEUE_STATUSES.map((s) => (
-            <button
-              key={s}
-              onClick={() => applyStatus(s)}
-              className={`min-h-[36px] rounded-full px-3 text-sm font-medium transition-colors ${
-                status === s
-                  ? "bg-gold text-gold-ink"
-                  : "border border-hairline-strong bg-surface-raised text-ink-secondary hover:text-ink"
-              }`}
-            >
-              {QUEUE_STATUS_LABEL[s]}
-            </button>
-          ))}
-        </div>
-        <input
+        <h4 className="text-sm font-semibold text-ink">Reviewer Notes</h4>
+        <textarea
           value={note}
           onChange={(e) => setNote(e.target.value)}
-          placeholder="Reviewer note (optional)"
-          className="field mt-3 w-full"
+          rows={3}
+          placeholder="Observations, disagreements with the AI, anything the next reviewer should know…"
+          className="field mt-2 w-full resize-y"
         />
+        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+          <label className="text-xs text-ink-secondary">
+            Reviewer name
+            <input
+              value={reviewer}
+              onChange={(e) => setReviewer(e.target.value)}
+              placeholder="Your name"
+              className="field mt-1 w-full"
+            />
+          </label>
+          <dl className="grid grid-cols-2 gap-x-2 self-end text-xs">
+            <dt className="text-ink-tertiary">Date reviewed</dt>
+            <dd className="font-mono text-ink-secondary">
+              {detail.entry.reviewedAt ? new Date(detail.entry.reviewedAt).toLocaleString() : "—"}
+            </dd>
+            <dt className="text-ink-tertiary">Last modified</dt>
+            <dd className="font-mono text-ink-secondary">
+              {detail.entry.updatedAt ? new Date(detail.entry.updatedAt).toLocaleString() : "—"}
+            </dd>
+          </dl>
+        </div>
+      </section>
+
+      {/* Workflow */}
+      <section className="card p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <button onClick={() => commit()} className="btn-secondary px-4">Save Draft</button>
+          <button onClick={() => commit("approved")} className="btn-primary px-4">Approve</button>
+          <button
+            onClick={() => commit("rejected")}
+            className="min-h-[40px] rounded-lg border border-urgent/40 bg-urgent/10 px-4 text-sm font-medium text-urgent"
+          >
+            Reject
+          </button>
+          <button
+            onClick={() => commit("needs_expert")}
+            className="min-h-[40px] rounded-lg border border-soon-edge bg-soon-surface px-4 text-sm font-medium text-soon"
+          >
+            Needs Expert Review
+          </button>
+          <span className="ml-auto text-xs text-ink-tertiary">
+            Current: {QUEUE_STATUS_LABEL[status]}
+            {detail.entry.skipTraining && " · excluded from training"}
+          </span>
+        </div>
+        <p className="mt-2 text-[11px] text-ink-tertiary">
+          Approve includes this sample in the next training export. Reject removes it from future
+          training. Needs Expert Review excludes it until someone re-reviews it.
+        </p>
         {msg && <p className="mt-2 text-xs text-ink-secondary">{msg}</p>}
       </section>
+
+      {confirmDeleteDup && (
+        <ConfirmDialog
+          title="Delete the entire scan session?"
+          body="This removes all images, AI predictions and reviewer annotations."
+          warning={
+            detail.entry.exportedAt
+              ? "This scan has already been used for training. It will be excluded from future training but cannot be removed from already-trained models."
+              : null
+          }
+          onCancel={() => setConfirmDeleteDup(false)}
+          onConfirm={async () => {
+            await deleteScan(scanId);
+            setConfirmDeleteDup(false);
+            onClose();
+          }}
+        />
+      )}
     </div>
   );
 }

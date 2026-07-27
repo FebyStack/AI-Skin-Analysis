@@ -1,6 +1,8 @@
 import { Router, type RequestHandler } from "express";
 import type { AppDeps } from "../../shared/deps";
 import { QUEUE_STATUSES, type QueueStatus } from "../../../shared/training-queue";
+import { scoreAngle } from "../../../shared/image-quality";
+import type { AngleQuality } from "../../../shared/face";
 import { deriveReasoning } from "../../../ai/face/reasoning";
 import type { FaceReport } from "../../../shared/face";
 
@@ -85,27 +87,61 @@ export function createQueueRoutes(deps: AppDeps, auth: RequestHandler): Router {
       labels,
       reasoning,
       reasoningSource,
-      angles: angles.map((a) => ({ angle: a.angle, quality: a.quality })),
+      angles: angles.map((a) => ({
+        angle: a.angle,
+        quality: a.quality,
+        // Scored from the metrics captured at shoot time — no re-decode needed.
+        qualityScore: scoreAngle(a.quality as AngleQuality),
+      })),
+      duplicate: entry.duplicateOf
+        ? { scanId: entry.duplicateOf, similarity: entry.similarity ?? 0 }
+        : null,
     });
   });
 
+  // Save Draft / Approve / Reject / Needs Expert Review. Omitting `status` saves
+  // the reviewer notes without moving the sample (that's Save Draft).
   router.post("/api/training-queue/:scanId/status", auth, async (req, res) => {
-    const { status, note } = req.body ?? {};
-    if (!isStatus(status)) {
+    const { status, note, reviewerName, skipTraining } = req.body ?? {};
+    if (status !== undefined && !isStatus(status)) {
       res.status(400).json({ error: "invalid status", allowed: QUEUE_STATUSES });
       return;
     }
-    const ok = await deps.scans.setQueueStatus(
-      req.params.scanId,
-      status,
-      null,
-      typeof note === "string" ? note : null,
-    );
+    const ok = await deps.scans.updateReview(req.params.scanId, {
+      status: typeof status === "string" ? status : undefined,
+      note: typeof note === "string" ? note : undefined,
+      reviewerName: typeof reviewerName === "string" ? reviewerName : undefined,
+      skipTraining: typeof skipTraining === "boolean" ? skipTraining : undefined,
+    });
     if (!ok) {
       res.status(404).json({ error: "not in queue" });
       return;
     }
-    res.json({ ok: true, status });
+    res.json({ ok: true, status: status ?? null });
+  });
+
+  // Delete ONE angle — the rest of the scan survives.
+  router.delete("/api/training-queue/:scanId/images/:angle", auth, async (req, res) => {
+    const ok = await deps.scans.deleteImage(req.params.scanId, req.params.angle);
+    if (!ok) {
+      res.status(404).json({ error: "image not found" });
+      return;
+    }
+    res.json({ ok: true });
+  });
+
+  // Delete the whole scan: images, AI prediction and annotations cascade.
+  // Already-exported samples can't be pulled back out of a trained model — the
+  // UI warns about that; here we just report it so the client can say so.
+  router.delete("/api/training-queue/:scanId", auth, async (req, res) => {
+    const entry = await deps.scans.getQueueEntry(req.params.scanId);
+    const wasExported = Boolean(entry?.exportedAt);
+    const ok = await deps.scans.remove(req.params.scanId);
+    if (!ok) {
+      res.status(404).json({ error: "not found" });
+      return;
+    }
+    res.json({ ok: true, wasExported });
   });
 
   return router;

@@ -3,6 +3,7 @@ import type { AppDeps } from "../../shared/deps";
 import { validateFaceReport, type FaceReport } from "../../../shared/face";
 import { builtinFaceExplanation } from "../../../ai/llm/fallback/face-education";
 import { compressToJpeg } from "../../utils/image";
+import { dHash } from "../../utils/image-hash";
 import { resolveScanPatient } from "../patients/resolve";
 
 interface IncomingImage {
@@ -99,9 +100,12 @@ export function createFaceScanRoutes(deps: AppDeps, auth: RequestHandler): Route
     }
     await deps.scans.addImages(scan.id, scanImages);
 
-    // Every completed scan enters the Training Queue for human review. Idempotent,
-    // and never blocks the save if it fails.
-    await deps.scans.enqueueForReview(scan.id).catch(() => undefined);
+    // Every completed scan enters the Training Queue for human review. The front
+    // image is fingerprinted so near-duplicates of this patient's earlier scans
+    // get flagged. Idempotent, and never blocks the save if it fails.
+    await deps.scans
+      .enqueueForReview(scan.id, await dHash(compressedFront.jpeg))
+      .catch(() => undefined);
 
     // Best-effort online enhancement (fire-and-forget-ish): try it, but if it
     // fails, the builtin already saved. Skipped when the operator prefers builtin.

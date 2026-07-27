@@ -91,7 +91,7 @@ export function createTrainingRoutes(deps: AppDeps, auth: RequestHandler): Route
       res.status(400).json({ error: `unknown dimension: ${dimension}` });
       return;
     }
-    const labeled = await deps.scans.listLabeled(dimension);
+    const labeled = await deps.scans.listTrainable(dimension);
     const outBase = path.join(datasetsDir(), dimension, "scans");
     let written = 0;
     const missing: string[] = [];
@@ -108,6 +108,7 @@ export function createTrainingRoutes(deps: AppDeps, auth: RequestHandler): Route
       writeFileSync(path.join(dir, `${scanId}.jpg`), Buffer.from(img.jpeg));
       written++;
     }
+    await deps.scans.markExported(labeled.map((l) => l.scanId));
     res.json({ ok: true, exported: written, labeled: labeled.length, missing, dir: outBase });
   });
 

@@ -60,6 +60,9 @@ export function confidenceBand(confidence: number): ConfidenceBand {
   return "low";
 }
 
+/** At/above this the new scan is treated as a near-duplicate of an earlier one. */
+export const DUPLICATE_THRESHOLD = 0.95;
+
 export interface QueueEntry {
   scanId: string;
   patientId: string;
@@ -68,7 +71,15 @@ export interface QueueEntry {
   status: QueueStatus;
   reviewedBy: string | null;
   reviewedAt: number | null;
+  updatedAt: number | null;
   note: string | null;
+  /** Approved but deliberately withheld from training (e.g. a near-duplicate). */
+  skipTraining: boolean;
+  /** Set when an earlier scan of the same patient looks near-identical. */
+  duplicateOf: string | null;
+  similarity: number | null;
+  /** Set once a training export has consumed this sample. */
+  exportedAt: number | null;
   /** Headline AI numbers for the list row. */
   overallScore: number | null;
   overallConfidence: number | null;

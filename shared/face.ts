@@ -33,7 +33,16 @@ export interface SkinTypeResult {
   evidence: string;     // names the model/version behind it
 }
 
-export interface AngleQuality { ok: boolean; issues: string[] }
+/** Raw capture measurements, carried so quality can be scored after the fact. */
+export interface QualityMetrics {
+  minEdge: number;        // shortest image side, px
+  luma: number;           // mean frame luminance 0..1
+  sharpness: number;      // high-frequency energy (blur proxy)
+  faceFraction: number;   // face bbox height / image height
+  centerOffset: number;   // 0 centred .. ~1 at a corner
+}
+
+export interface AngleQuality { ok: boolean; issues: string[]; metrics?: QualityMetrics }
 
 export interface FaceExplanation {
   patientSummary: string;

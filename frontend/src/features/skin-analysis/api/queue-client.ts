@@ -1,5 +1,6 @@
 import type { FaceReport } from "@shared/face";
 import type { QueueEntry, QueueStats, QueueStatus } from "@shared/training-queue";
+import type { QualityResult } from "@shared/image-quality";
 
 export interface QueueDetail {
   entry: QueueEntry;
@@ -7,7 +8,8 @@ export interface QueueDetail {
   labels: { dimension: string; label: string }[];
   reasoning: string[];
   reasoningSource: "gemini" | "derived";
-  angles: { angle: string; quality: unknown }[];
+  angles: { angle: string; quality: unknown; qualityScore: QualityResult | null }[];
+  duplicate: { scanId: string; similarity: number } | null;
 }
 
 async function getJSON<T>(url: string): Promise<T | null> {
@@ -41,13 +43,26 @@ export async function queueDetail(scanId: string): Promise<QueueDetail | null> {
   return getJSON<QueueDetail>(`/api/training-queue/${scanId}`);
 }
 
-export async function setQueueStatus(scanId: string, status: QueueStatus, note?: string): Promise<boolean> {
+export interface ReviewUpdate {
+  /** Omit to save reviewer notes without moving the sample (Save Draft). */
+  status?: QueueStatus;
+  note?: string;
+  reviewerName?: string;
+  skipTraining?: boolean;
+}
+
+export async function saveReview(scanId: string, patch: ReviewUpdate): Promise<boolean> {
   const r = await fetch(`/api/training-queue/${scanId}/status`, {
     method: "POST",
     credentials: "include",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ status, note }),
+    body: JSON.stringify(patch),
   });
+  return r.ok;
+}
+
+export async function deleteScan(scanId: string): Promise<boolean> {
+  const r = await fetch(`/api/training-queue/${scanId}`, { method: "DELETE", credentials: "include" });
   return r.ok;
 }
 

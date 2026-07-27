@@ -43,6 +43,20 @@ function faceFraction(g: FaceGeometry): number {
   return maxY - minY;
 }
 
+/** How far the face centre sits from the frame centre, 0 (centred) .. ~1. */
+function centerOffset(g: FaceGeometry): number {
+  let minX = 1, minY = 1, maxX = 0, maxY = 0;
+  for (const l of g.landmarks) {
+    if (l.x < minX) minX = l.x;
+    if (l.y < minY) minY = l.y;
+    if (l.x > maxX) maxX = l.x;
+    if (l.y > maxY) maxY = l.y;
+  }
+  const dx = (minX + maxX) / 2 - 0.5;
+  const dy = (minY + maxY) / 2 - 0.5;
+  return Math.hypot(dx, dy) * 2; // 1.0 ≈ face centre at a frame corner
+}
+
 export function validateCapture(angle: FaceAngle, px: Pixels, geometry: FaceGeometry | null): AngleQuality {
   const issues: string[] = [];
   if (Math.min(px.width, px.height) < MIN_EDGE_PX) issues.push("low-resolution");
@@ -50,12 +64,21 @@ export function validateCapture(angle: FaceAngle, px: Pixels, geometry: FaceGeom
   if (mean < LUMA_MIN) issues.push("too-dark");
   if (mean > LUMA_MAX) issues.push("too-bright");
   if (hf < BLUR_MIN_HF) issues.push("blur");
+  // Raw numbers travel with the capture so the Training Queue can score quality
+  // later without re-decoding the image.
+  const metrics = {
+    minEdge: Math.min(px.width, px.height),
+    luma: mean,
+    sharpness: hf,
+    faceFraction: geometry ? faceFraction(geometry) : 0,
+    centerOffset: geometry ? centerOffset(geometry) : 1,
+  };
   if (!geometry) {
     issues.push("no-face");
-    return { ok: false, issues };
+    return { ok: false, issues, metrics };
   }
   const [lo, hi] = ANGLE_YAW_WINDOWS[angle];
   if (geometry.yawDeg < lo || geometry.yawDeg > hi) issues.push("wrong-orientation");
   if (faceFraction(geometry) < FACE_MIN_FRACTION) issues.push("face-too-small");
-  return { ok: issues.length === 0, issues };
+  return { ok: issues.length === 0, issues, metrics };
 }

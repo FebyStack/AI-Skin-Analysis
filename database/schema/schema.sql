@@ -69,6 +69,17 @@ CREATE TABLE IF NOT EXISTS training_queue (
 );
 CREATE INDEX IF NOT EXISTS training_queue_status ON training_queue (status, created_at DESC);
 
+-- Added after the initial queue release; ALTERs keep existing installs working.
+ALTER TABLE training_queue ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;
+-- Excluded from training even when approved (e.g. a near-duplicate kept on file).
+ALTER TABLE training_queue ADD COLUMN IF NOT EXISTS skip_training BOOLEAN NOT NULL DEFAULT false;
+-- Perceptual dHash of the front image + the closest earlier scan for this patient.
+ALTER TABLE training_queue ADD COLUMN IF NOT EXISTS image_hash TEXT;
+ALTER TABLE training_queue ADD COLUMN IF NOT EXISTS duplicate_of UUID;
+ALTER TABLE training_queue ADD COLUMN IF NOT EXISTS similarity REAL;
+-- Whether this sample has already been consumed by a training export.
+ALTER TABLE training_queue ADD COLUMN IF NOT EXISTS exported_at TIMESTAMPTZ;
+
 -- Model registry for versioning, distribution, and rollback (Plan 13 Task 1).
 CREATE TABLE IF NOT EXISTS model_registry (
   id TEXT PRIMARY KEY,
