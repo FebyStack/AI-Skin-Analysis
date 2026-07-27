@@ -13,6 +13,7 @@ Set `DATASETS_DIR` to relocate everything (e.g. an external drive).
 | ACNE04 (acne 5-class) | `acne/acne04/` | `.venv/bin/python -m ai.training.acne.fetch_acne04` |
 | acne-grading (more mild/moderate/severe) | `acne/acnegrading/` | Kaggle `rutviklathiyateksun/acne-grading-classificationdataset` (49MB); Level_0/1/2 → mild/moderate/severe, deduped by filename stem against acne04. No Level_3/very-severe. |
 | killa92 (skin type 4-class) | `skintype/killa92/` | `.venv/bin/python -m ai.training.skintype.fetch_killa92` |
+| multi-condition (redness, wrinkles, pores, pigmentation) | `<dim>/multi/{present,absent}/` | `.venv/bin/kaggle datasets download -d shijo96john/facial-skin-acne-pigmentation-pores-wrinkles -p ai/datasets/raw/_multi` then unzip (do NOT use `--unzip`, it corrupts), then `.venv/bin/python -m ai.training.dimension.fetch_multi` |
 
 `fetch_killa92` also seeds `acne/clearskin/clear/`. Both need no extra disk to speak of.
 Note: the full 1.1GB ACNE04 (`lexuanhieu131297/acne-severity-classification`, filename-encoded levels, includes very-severe) is the way to boost the weak very-severe class — retry when on a faster link (large Kaggle downloads drop on slow connections).
