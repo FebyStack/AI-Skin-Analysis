@@ -170,4 +170,33 @@ scans** (same camera/framing), not another public dataset.
 (n=232 — bigger, harder test set than the earlier 0.817 at n=188, which had fewer
 very-severe cases; val_macro_f1 rose 0.760→0.846); skintype **0.773** / acc 0.792.
 
-last Claude session: 2026-07-27 (dimension models pulled as confounded)
+### Mobile OOM + one multi-head model (2026-07-27, commits `b678655`, `e3eaef0`)
+
+Phone showed Safari's "a problem repeatedly occurred" (an OOM tab kill, NOT a JS
+error — console was clean), then hung on "Saving your scan…". Causes + fixes:
+
+- Multi-angle decoding held all 5 angles at FULL resolution (~18-41MB). Crops are
+  now scaled straight into a 224x224 canvas in one drawImage (~40x less memory,
+  better resampling) and the ImageBitmap is closed. `MODEL_INPUT` in GuidedFaceFlow.
+- face-parsing is ~85MB — skipped on memory-capped devices (`isMemoryConstrained()`
+  in `segmentation/parser.ts`: deviceMemory<4, or iOS/iPadOS incl. the Mac-UA iPad).
+  Those devices use landmark masks, which is what the 4s parse timeout already gave
+  them. Force on with `VITE_FORCE_FACE_PARSING=1`.
+- Refinement had no time bound → the save could hang. Now capped by
+  `VITE_REFINE_TIMEOUT_MS` (20s); on timeout the deterministic report is saved.
+
+**Architecture change — ONE model for the PWA** (`ai/training/multi/`): a single
+shared EfficientNet-B0 trunk with a Linear head per task (acne 5-class + skintype
+4-class). Each sample carries one task's label, loss is masked to that head, but
+the trunk trains on all 5,725 rows (vs 1,621/4,104 in isolation) — fewer bytes AND
+a regularizing effect. ONNX has one output per task (`logits_<task>`);
+`ai/face/analyzers/face-model.ts` does ONE forward pass per view for everything,
+views sequential so a phone never holds parallel inferences. Learned-analysis cost:
+~30MB/10 passes → **~15MB/5 passes**. Adding a task = one entry in `multi/tasks.py`
+TASKS (that's where redness/wrinkles/etc. belong once real labeled scans exist).
+
+`make retrain-face` (train→eval→export). GuidedFaceFlow prefers `/models/face/` and
+falls back to the old per-task acne/skintype models until it exists; once it does,
+`frontend/public/models/{acne,skintype}/` are dead weight and can be deleted.
+
+last Claude session: 2026-07-27 (mobile OOM fix + single multi-head model)
