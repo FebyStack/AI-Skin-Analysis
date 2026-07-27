@@ -5,6 +5,7 @@ import sharp from "sharp";
 import { createApp } from "../../app/app";
 import { makeTestDeps } from "../../shared/testing";
 import { goldenFaceReport } from "../../../shared/testing/face-fixtures";
+import { ANNOTATION_FIELDS } from "../../../shared/training-queue";
 
 const app = createApp(makeTestDeps());
 let cookie = "";
@@ -211,5 +212,55 @@ describe("training queue", () => {
     expect(del.status).toBe(200);
     expect(typeof del.body.wasExported).toBe("boolean");
     expect((await request(app).get(`/api/training-queue/${id}`).set("Cookie", cookie)).status).toBe(404);
+  });
+});
+
+describe("dataset + model governance", () => {
+  it("a dataset version freezes Ready samples AND writes them for the trainer", async () => {
+    const image = await jpegB64();
+    const save = await request(app).post("/api/face-scans").set("Cookie", cookie).send({
+      report: goldenFaceReport(),
+      images: [{ angle: "front", image, mime: "image/jpeg" }],
+      consent: { analysis: true, training: true },
+    });
+    const id = save.body.scan.id;
+    // Fully label + approve so the sample is Ready for Training.
+    for (const f of ANNOTATION_FIELDS) {
+      await request(app).post(`/api/scans/${id}/label`).set("Cookie", cookie)
+        .send({ dimension: f.key, label: f.options[1] });
+    }
+    await request(app).post(`/api/training-queue/${id}/status`).set("Cookie", cookie)
+      .send({ status: "approved" });
+
+    const made = await request(app).post("/api/datasets").set("Cookie", cookie).send({});
+    expect(made.status).toBe(200);
+    expect(made.body.imageCount).toBeGreaterThanOrEqual(1);
+    expect(made.body.written).toBeGreaterThanOrEqual(1); // images materialized on disk
+
+    const list = await request(app).get("/api/datasets").set("Cookie", cookie);
+    expect(list.body.versions[0].isCurrent).toBe(true);
+  });
+
+  it("refuses a dataset version when nothing is Ready", async () => {
+    // A brand-new app has no approved+labeled samples.
+    const fresh = createApp(makeTestDeps());
+    const login = await request(fresh).post("/api/auth/login").send({ password: "clinic-pass" });
+    const res = await request(fresh)
+      .post("/api/datasets")
+      .set("Cookie", login.headers["set-cookie"][0])
+      .send({});
+    expect(res.status).toBe(400);
+  });
+
+  it("registering with no trained candidate on disk fails cleanly", async () => {
+    const res = await request(app).post("/api/model-releases").set("Cookie", cookie).send({});
+    expect([200, 404]).toContain(res.status); // 404 unless a candidate exists locally
+  });
+
+  it("reports retrain readiness against the threshold", async () => {
+    const res = await request(app).get("/api/training/readiness").set("Cookie", cookie);
+    expect(res.status).toBe(200);
+    expect(typeof res.body.approvedSinceLastTraining).toBe("number");
+    expect(typeof res.body.ready).toBe("boolean");
   });
 });

@@ -1,5 +1,5 @@
 import { Router, type RequestHandler } from "express";
-import { statSync } from "node:fs";
+import { mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type { AppDeps } from "../../shared/deps";
 import {
@@ -19,6 +19,13 @@ import {
 //   2. A better production model is never replaced automatically. Deployment is
 //      a human click, and the API refuses to promote a candidate that scores
 //      worse unless the caller explicitly forces it.
+function datasetsDir(): string {
+  return process.env.DATASETS_DIR ?? path.resolve(process.cwd(), "ai/datasets");
+}
+function modelsDir(): string {
+  return process.env.MODELS_DIR ?? path.resolve(process.cwd(), "ai/models");
+}
+
 export function createGovernanceRoutes(deps: AppDeps, auth: RequestHandler): Router {
   const router = Router();
 
@@ -48,7 +55,31 @@ export function createGovernanceRoutes(deps: AppDeps, auth: RequestHandler): Rou
       complete,
       typeof req.body?.note === "string" ? req.body.note : null,
     );
-    res.json({ ok: true, version, imageCount: complete.length });
+
+    // Materialize the frozen set on disk so the trainer reads exactly this
+    // version: $DATASETS_DIR/<dimension>/scans/<label>/<scanId>.jpg. Without
+    // this the manifest and the training data could drift apart.
+    let written = 0;
+    const missing: string[] = [];
+    for (const sample of complete) {
+      const img =
+        (await deps.scans.getScanImage(sample.scanId, "front")) ??
+        (await deps.scans.getImage(sample.scanId));
+      if (!img) {
+        missing.push(sample.scanId);
+        continue;
+      }
+      for (const field of ANNOTATION_FIELDS) {
+        const label = sample.labels[field.key];
+        if (!label) continue;
+        const dir = path.join(datasetsDir(), field.key, "scans", label);
+        mkdirSync(dir, { recursive: true });
+        writeFileSync(path.join(dir, `${sample.scanId}.jpg`), Buffer.from(img.jpeg));
+      }
+      written++;
+    }
+    await deps.scans.markExported(complete.map((s) => s.scanId));
+    res.json({ ok: true, version, imageCount: complete.length, written, missing });
   });
 
   /** Rollback = point `is_current` at an older version; nothing is rewritten. */
@@ -62,8 +93,10 @@ export function createGovernanceRoutes(deps: AppDeps, auth: RequestHandler): Rou
   });
 
   // ----- Model releases -----
+  // NOTE: deliberately /api/model-releases, not /api/models/... — the admin-gated
+  // model-distribution router owns /api/models and would swallow these (503).
 
-  router.get("/api/models/releases", auth, async (_req, res) => {
+  router.get("/api/model-releases", auth, async (_req, res) => {
     res.json({ releases: await deps.scans.listModelReleases() });
   });
 
@@ -71,12 +104,26 @@ export function createGovernanceRoutes(deps: AppDeps, auth: RequestHandler): Rou
    * Register a freshly trained candidate. Metrics come from the trainer's
    * model.json; size from the exported ONNX when present.
    */
-  router.post("/api/models/releases", auth, async (req, res) => {
-    const { version, datasetVersion, macroF1, acneF1, skintypeF1 } = req.body ?? {};
-    if (typeof version !== "string" || !version) {
-      res.status(400).json({ error: "version required" });
+  router.post("/api/model-releases", auth, async (req, res) => {
+    // Reads the trainer's own output so `make retrain-face` needs no API call:
+    // one click here registers whatever candidate is on disk, with its metrics.
+    let meta: { version?: string; metrics?: Record<string, number> } = {};
+    try {
+      meta = JSON.parse(
+        readFileSync(path.join(modelsDir(), "face", "candidate", "model.json"), "utf8"),
+      );
+    } catch {
+      res.status(404).json({
+        error: "no trained candidate found — run `make retrain-face` first",
+      });
       return;
     }
+    const version = typeof req.body?.version === "string" ? req.body.version : meta.version;
+    if (!version) {
+      res.status(400).json({ error: "candidate has no version" });
+      return;
+    }
+    const m = meta.metrics ?? {};
     let sizeBytes: number | null = null;
     try {
       sizeBytes = statSync(
@@ -85,17 +132,19 @@ export function createGovernanceRoutes(deps: AppDeps, auth: RequestHandler): Rou
     } catch {
       /* not exported yet */
     }
+    // Attribute the model to whichever dataset version is current.
+    const currentDataset = (await deps.scans.listDatasetVersions()).find((d) => d.isCurrent);
     await deps.scans.recordModelRelease({
       version,
       trainedAt: Date.now(),
-      datasetVersion: typeof datasetVersion === "string" ? datasetVersion : null,
-      macroF1: typeof macroF1 === "number" ? macroF1 : null,
-      acneF1: typeof acneF1 === "number" ? acneF1 : null,
-      skintypeF1: typeof skintypeF1 === "number" ? skintypeF1 : null,
+      datasetVersion: currentDataset?.version ?? null,
+      macroF1: m.val_macro_f1 ?? null,
+      acneF1: m.val_macro_f1_acne ?? null,
+      skintypeF1: m.val_macro_f1_skintype ?? null,
       sizeBytes,
       deployment: "candidate",
     });
-    res.json({ ok: true, version });
+    res.json({ ok: true, version, datasetVersion: currentDataset?.version ?? null });
   });
 
   /**
@@ -103,7 +152,7 @@ export function createGovernanceRoutes(deps: AppDeps, auth: RequestHandler): Rou
    * scores below the current production model — pass force:true to override
    * deliberately. Rolling back to an older release is always allowed.
    */
-  router.post("/api/models/releases/:version/deploy", auth, async (req, res) => {
+  router.post("/api/model-releases/:version/deploy", auth, async (req, res) => {
     const deployment = (req.body?.deployment ?? "production") as Deployment;
     const force = req.body?.force === true;
     const releases = await deps.scans.listModelReleases();

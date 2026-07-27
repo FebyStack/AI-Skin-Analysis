@@ -56,7 +56,7 @@ export function GovernancePanel() {
   const load = useCallback(async () => {
     const [d, r, k, s] = await Promise.all([
       getJSON<{ versions: DatasetVersion[] }>("/api/datasets"),
-      getJSON<{ releases: ModelRelease[] }>("/api/models/releases"),
+      getJSON<{ releases: ModelRelease[] }>("/api/model-releases"),
       getJSON<TrainingReadiness>("/api/training/readiness"),
       getJSON<QueueStats>("/api/training-queue/stats"),
     ]);
@@ -81,8 +81,15 @@ export function GovernancePanel() {
     void load();
   };
 
+  const registerCandidate = async () => {
+    setMsg("Registering…");
+    const r = await post("/api/model-releases");
+    setMsg(r.ok ? "Candidate registered — deploy it below when you're happy." : r.error ?? "Could not register.");
+    void load();
+  };
+
   const deploy = async (version: string, force = false) => {
-    const r = await post(`/api/models/releases/${version}/deploy`, { deployment: "production", force });
+    const r = await post(`/api/model-releases/${version}/deploy`, { deployment: "production", force });
     setMsg(
       r.ok
         ? `Deployed ${version}.`
@@ -135,11 +142,14 @@ export function GovernancePanel() {
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
           <button onClick={createDataset} className="btn-primary text-sm">
-            Create Dataset Version
+            1. Create Dataset Version
           </button>
           <span className="self-center text-xs text-ink-tertiary">
-            then run <code className="text-gold">make retrain-face</code> and register the candidate
+            2. run <code className="text-gold">make retrain-face</code>
           </span>
+          <button onClick={registerCandidate} className="btn-secondary text-sm">
+            3. Register Trained Candidate
+          </button>
         </div>
         {msg && <p className="mt-2 text-xs text-ink-secondary">{msg}</p>}
       </section>
