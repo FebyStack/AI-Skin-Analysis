@@ -15,6 +15,7 @@ import { createCaptureRoutes } from "../modules/capture/routes";
 import { createModelsRoutes } from "../modules/models/routes";
 import { createTrainingRoutes } from "../modules/training/routes";
 import { createQueueRoutes } from "../modules/training/queue-routes";
+import { createGovernanceRoutes } from "../modules/training/governance-routes";
 import { createModelUploadRouter } from "../modules/models/upload-route";
 
 const errMessage = (err: unknown): string =>
@@ -67,6 +68,7 @@ export function createApp(deps: AppDeps): Express {
   app.use("/api/models", createModelsRoutes(deps, admin));
   app.use(createTrainingRoutes(deps, auth));
   app.use(createQueueRoutes(deps, auth));
+  app.use(createGovernanceRoutes(deps, auth));
 
   try {
     app.use(

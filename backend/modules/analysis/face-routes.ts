@@ -28,7 +28,7 @@ export function createFaceScanRoutes(deps: AppDeps, auth: RequestHandler): Route
   // Persist a completed face scan (client-computed report + captured angle images).
   // Server re-validates the report before saving and re-checks safety invariants.
   router.post("/api/face-scans", auth, async (req, res) => {
-    const { report: reportBody, images, patientId } = req.body ?? {};
+    const { report: reportBody, images, patientId, consent } = req.body ?? {};
 
     // Server never trusts the client — re-run the contract validator.
     const validated = validateFaceReport(reportBody);
@@ -100,12 +100,22 @@ export function createFaceScanRoutes(deps: AppDeps, auth: RequestHandler): Route
     }
     await deps.scans.addImages(scan.id, scanImages);
 
-    // Every completed scan enters the Training Queue for human review. The front
-    // image is fingerprinted so near-duplicates of this patient's earlier scans
-    // get flagged. Idempotent, and never blocks the save if it fails.
-    await deps.scans
-      .enqueueForReview(scan.id, await dHash(compressedFront.jpeg))
-      .catch(() => undefined);
+    // Two independent consents travel with the scan. Absent (older clients) is
+    // treated as "analysis yes, training no" — never assume training consent.
+    const scanConsent = {
+      analysis: consent?.analysis !== false,
+      training: consent?.training === true,
+    };
+    await deps.scans.setConsent(scan.id, scanConsent).catch(() => undefined);
+
+    // ONLY training-consented scans enter the Training Queue. Without consent the
+    // scan is still saved and shown in history — it just can never become
+    // training data. The front image is fingerprinted for duplicate detection.
+    if (scanConsent.training) {
+      await deps.scans
+        .enqueueForReview(scan.id, await dHash(compressedFront.jpeg))
+        .catch(() => undefined);
+    }
 
     // Best-effort online enhancement (fire-and-forget-ish): try it, but if it
     // fails, the builtin already saved. Skipped when the operator prefers builtin.

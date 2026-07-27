@@ -1,0 +1,14 @@
+{
+  "name": "efficientnet-b0",
+  "version": "pores-20260727-063211",
+  "classes": [
+    "absent",
+    "present"
+  ],
+  "img_size": 224,
+  "metrics": {
+    "val_macro_f1": 0.9941858499814082,
+    "pores_accuracy": 0.9941860465116279
+  },
+  "dataset_manifest_sha256": null
+}

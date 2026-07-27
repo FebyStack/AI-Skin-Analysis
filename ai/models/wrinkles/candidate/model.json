@@ -1,0 +1,14 @@
+{
+  "name": "efficientnet-b0",
+  "version": "wrinkles-20260727-062455",
+  "classes": [
+    "absent",
+    "present"
+  ],
+  "img_size": 224,
+  "metrics": {
+    "val_macro_f1": 0.9767410412440838,
+    "wrinkles_accuracy": 0.9767441860465116
+  },
+  "dataset_manifest_sha256": null
+}

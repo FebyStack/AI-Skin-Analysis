@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { ConsentGate } from "./components/consent/ConsentGate";
+import { ScanConsentGate } from "./components/consent/ScanConsentGate";
+import { setScanConsent } from "./privacy/scan-consent";
 import { GuidedFaceFlow } from "./components/capture/GuidedFaceFlow";
 import { LesionScanFlow } from "./components/lesion/LesionScanFlow";
 import { HistoryView } from "./components/history/HistoryView";
@@ -68,7 +69,7 @@ export function SkinAnalysisPage() {
           ) : view === "training" ? (
             <TrainingDashboard />
           ) : (
-            <ConsentGate>
+            <ScanConsentGate onConsent={setScanConsent}>
               <div className="flex justify-center">
                 <Segmented
                   ariaLabel="Capture mode"
@@ -83,7 +84,7 @@ export function SkinAnalysisPage() {
               <div className="mt-8 flex justify-center">
                 {mode === "closeup" ? <LesionScanFlow /> : <GuidedFaceFlow />}
               </div>
-            </ConsentGate>
+            </ScanConsentGate>
           )}
         </div>
       </main>

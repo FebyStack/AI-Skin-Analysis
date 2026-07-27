@@ -26,7 +26,11 @@ beforeAll(async () => {
   const save = await request(app)
     .post("/api/face-scans")
     .set("Cookie", cookie)
-    .send({ report: goldenFaceReport(), images: [{ angle: "front", image, mime: "image/jpeg" }] });
+    .send({
+      report: goldenFaceReport(),
+      images: [{ angle: "front", image, mime: "image/jpeg" }],
+      consent: { analysis: true, training: true },
+    });
   expect(save.status).toBe(200);
   scanId = save.body.scan.id;
 });
@@ -108,6 +112,20 @@ describe("training queue", () => {
     expect(res.status).toBe(400);
   });
 
+  it("a scan WITHOUT training consent never enters the queue", async () => {
+    const image = await jpegB64();
+    const save = await request(app).post("/api/face-scans").set("Cookie", cookie).send({
+      report: goldenFaceReport(),
+      images: [{ angle: "front", image, mime: "image/jpeg" }],
+      consent: { analysis: true, training: false },
+    });
+    expect(save.status).toBe(200); // the scan itself is still saved
+    const res = await request(app)
+      .get(`/api/training-queue/${save.body.scan.id}`)
+      .set("Cookie", cookie);
+    expect(res.status).toBe(404);
+  });
+
   it("requires auth", async () => {
     expect((await request(app).get("/api/training-queue")).status).toBe(401);
   });
@@ -167,6 +185,7 @@ describe("training queue", () => {
         { angle: "front", image, mime: "image/jpeg" },
         { angle: "left-45", image, mime: "image/jpeg" },
       ],
+      consent: { analysis: true, training: true },
     });
     const id = save.body.scan.id;
 
@@ -184,6 +203,7 @@ describe("training queue", () => {
     const save = await request(app).post("/api/face-scans").set("Cookie", cookie).send({
       report: goldenFaceReport(),
       images: [{ angle: "front", image, mime: "image/jpeg" }],
+      consent: { analysis: true, training: true },
     });
     const id = save.body.scan.id;
 

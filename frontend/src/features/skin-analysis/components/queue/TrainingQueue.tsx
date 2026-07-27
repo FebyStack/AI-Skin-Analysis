@@ -7,6 +7,7 @@ import {
   type QueueStatus,
 } from "@shared/training-queue";
 import { listQueue, queueStats } from "../../api/queue-client";
+import { ELIGIBILITY_LABEL, type Eligibility } from "@shared/training-governance";
 import { AnnotationPanel } from "./AnnotationPanel";
 import { ConfidenceBadge } from "./ConfidenceBadge";
 
@@ -161,6 +162,15 @@ export function TrainingQueue() {
                         {e.labeledCount > 0 && <span>· {e.labeledCount} labeled</span>}
                         <span className={`rounded-full border px-2 py-0.5 ${STATUS_PILL[e.status]}`}>
                           {QUEUE_STATUS_LABEL[e.status]}
+                        </span>
+                        <span
+                          className={`rounded-full border px-2 py-0.5 ${
+                            e.eligibility === "ready"
+                              ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400"
+                              : "border-hairline-strong bg-surface-raised text-ink-tertiary"
+                          }`}
+                        >
+                          {ELIGIBILITY_LABEL[e.eligibility as Eligibility] ?? e.eligibility}
                         </span>
                       </p>
                     </div>

@@ -1,0 +1,16 @@
+{
+  "name": "efficientnet-b0",
+  "version": "skintype-20260727-032922",
+  "classes": [
+    "normal",
+    "oily",
+    "dry",
+    "combination"
+  ],
+  "img_size": 224,
+  "metrics": {
+    "val_macro_f1": 0.7731917235691259,
+    "skintype_accuracy": 0.7921635434412265
+  },
+  "dataset_manifest_sha256": null
+}

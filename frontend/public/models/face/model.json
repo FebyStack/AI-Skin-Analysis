@@ -1,0 +1,25 @@
+{
+  "name": "efficientnet-b0-multihead",
+  "version": "face-20260727-092609",
+  "tasks": {
+    "acne": [
+      "clear",
+      "mild",
+      "moderate",
+      "severe",
+      "very-severe"
+    ],
+    "skintype": [
+      "normal",
+      "oily",
+      "dry",
+      "combination"
+    ]
+  },
+  "img_size": 224,
+  "metrics": {
+    "val_macro_f1": 0.6299069038336491,
+    "val_macro_f1_acne": 0.6388254110421598,
+    "val_macro_f1_skintype": 0.6209883966251383
+  }
+}

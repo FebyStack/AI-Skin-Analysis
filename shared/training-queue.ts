@@ -86,6 +86,8 @@ export interface QueueEntry {
   modelVersion: string | null;
   angleCount: number;
   labeledCount: number;
+  consentTraining: boolean;
+  eligibility: string;
 }
 
 export interface QueueStats {

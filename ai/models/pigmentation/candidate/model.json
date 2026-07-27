@@ -1,0 +1,14 @@
+{
+  "name": "efficientnet-b0",
+  "version": "pigmentation-20260727-063750",
+  "classes": [
+    "absent",
+    "present"
+  ],
+  "img_size": 224,
+  "metrics": {
+    "val_macro_f1": 0.9626433696935666,
+    "pigmentation_accuracy": 0.9626436781609196
+  },
+  "dataset_manifest_sha256": null
+}

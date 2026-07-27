@@ -12,6 +12,7 @@ import { ConfidenceBadge } from "./ConfidenceBadge";
 import { ImageManager } from "./ImageManager";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { DUPLICATE_THRESHOLD } from "@shared/training-queue";
+import { ELIGIBILITY_LABEL, type Eligibility } from "@shared/training-governance";
 
 /** The AI's suggested label + its confidence for one field. Never written to. */
 function aiPrediction(report: FaceReport | null, key: string): { value: string | null; confidence: number | null } {
@@ -122,6 +123,26 @@ export function AnnotationPanel({ scanId, onClose }: { scanId: string; onClose: 
           <p className="text-xs text-ink-tertiary">
             <span className="font-mono">{new Date(detail.entry.createdAt).toLocaleString()}</span>
             {report?.modelVersions?.acne && <> · model {report.modelVersions.acne}</>}
+          </p>
+          <p className="mt-1 flex flex-wrap items-center gap-2 text-[11px]">
+            <span
+              className={`rounded-full border px-2 py-0.5 ${
+                detail.consent?.training
+                  ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400"
+                  : "border-urgent/40 bg-urgent/10 text-urgent"
+              }`}
+            >
+              {detail.consent?.training ? "Training consent given" : "No training consent"}
+            </span>
+            <span
+              className={`rounded-full border px-2 py-0.5 ${
+                detail.eligibility === "ready"
+                  ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400"
+                  : "border-hairline-strong bg-surface-raised text-ink-tertiary"
+              }`}
+            >
+              {ELIGIBILITY_LABEL[detail.eligibility as Eligibility] ?? detail.eligibility}
+            </span>
           </p>
         </div>
         <div className="flex items-center gap-2">

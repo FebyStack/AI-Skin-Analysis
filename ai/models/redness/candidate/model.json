@@ -1,0 +1,14 @@
+{
+  "name": "efficientnet-b0",
+  "version": "redness-20260727-061449",
+  "classes": [
+    "absent",
+    "present"
+  ],
+  "img_size": 224,
+  "metrics": {
+    "val_macro_f1": 0.9709292499070412,
+    "redness_accuracy": 0.9709302325581395
+  },
+  "dataset_manifest_sha256": null
+}

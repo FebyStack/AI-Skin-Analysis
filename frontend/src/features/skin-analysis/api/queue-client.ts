@@ -1,6 +1,7 @@
 import type { FaceReport } from "@shared/face";
 import type { QueueEntry, QueueStats, QueueStatus } from "@shared/training-queue";
 import type { QualityResult } from "@shared/image-quality";
+import type { Eligibility, ScanConsent } from "@shared/training-governance";
 
 export interface QueueDetail {
   entry: QueueEntry;
@@ -10,6 +11,8 @@ export interface QueueDetail {
   reasoningSource: "gemini" | "derived";
   angles: { angle: string; quality: unknown; qualityScore: QualityResult | null }[];
   duplicate: { scanId: string; similarity: number } | null;
+  consent: ScanConsent;
+  eligibility: Eligibility;
 }
 
 async function getJSON<T>(url: string): Promise<T | null> {

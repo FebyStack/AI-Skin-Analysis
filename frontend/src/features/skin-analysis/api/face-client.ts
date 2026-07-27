@@ -1,4 +1,5 @@
 import type { FaceReport, FaceAngle, AngleQuality } from "@shared/face";
+import { scanConsent } from "../privacy/scan-consent";
 
 export class FaceAuthError extends Error {
   constructor() {
@@ -62,7 +63,7 @@ export async function saveFaceScan(
     method: "POST",
     credentials: "include",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ report, images, patientId }),
+    body: JSON.stringify({ report, images, patientId, consent: scanConsent() }),
   });
   if (res.status === 401) throw new FaceAuthError();
   if (!res.ok) throw new FaceFailedError();

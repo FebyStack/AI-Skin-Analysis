@@ -1,7 +1,9 @@
 import { Router, type RequestHandler } from "express";
 import type { AppDeps } from "../../shared/deps";
 import { QUEUE_STATUSES, type QueueStatus } from "../../../shared/training-queue";
-import { scoreAngle } from "../../../shared/image-quality";
+import { scoreAngle, QUALITY_MIN_SCORE } from "../../../shared/image-quality";
+import { ANNOTATION_FIELDS } from "../../../shared/training-queue";
+import { eligibilityOf } from "../../../shared/training-governance";
 import type { AngleQuality } from "../../../shared/face";
 import { deriveReasoning } from "../../../ai/face/reasoning";
 import type { FaceReport } from "../../../shared/face";
@@ -45,12 +47,26 @@ export function createQueueRoutes(deps: AppDeps, auth: RequestHandler): Router {
         const scan = await deps.scans.get(e.scanId);
         const report = scan?.report as FaceReport | undefined;
         const angles = await deps.scans.listImages(e.scanId);
+        const consent = await deps.scans.getConsent(e.scanId);
+        const scores = angles
+          .map((a) => scoreAngle(a.quality as AngleQuality)?.score)
+          .filter((s): s is number => typeof s === "number");
         return {
           ...e,
           overallScore: report?.overall?.score ?? null,
           overallConfidence: report?.overall?.confidence ?? null,
           modelVersion: report?.modelVersions?.acne ?? null,
           angleCount: angles.length,
+          consentTraining: consent.training,
+          eligibility: eligibilityOf({
+            status: e.status,
+            consentTraining: consent.training,
+            labeledCount: e.labeledCount,
+            requiredLabels: ANNOTATION_FIELDS.length,
+            minQualityScore: scores.length ? Math.min(...scores) : null,
+            qualityThreshold: QUALITY_MIN_SCORE,
+            skipTraining: e.skipTraining,
+          }),
         };
       }),
     );
@@ -68,6 +84,10 @@ export function createQueueRoutes(deps: AppDeps, auth: RequestHandler): Router {
     const report = scan.report as FaceReport | null;
     const angles = await deps.scans.listImages(scan.id);
     const labels = await deps.scans.getLabels(scan.id);
+    const consent = await deps.scans.getConsent(scan.id);
+    const qualityScores = angles
+      .map((a) => scoreAngle(a.quality as AngleQuality)?.score)
+      .filter((s): s is number => typeof s === "number");
 
     let reasoning: string[] = report ? deriveReasoning(report) : [];
     let reasoningSource: "gemini" | "derived" = "derived";
@@ -96,6 +116,16 @@ export function createQueueRoutes(deps: AppDeps, auth: RequestHandler): Router {
       duplicate: entry.duplicateOf
         ? { scanId: entry.duplicateOf, similarity: entry.similarity ?? 0 }
         : null,
+      consent,
+      eligibility: eligibilityOf({
+        status: entry.status,
+        consentTraining: consent.training,
+        labeledCount: labels.length,
+        requiredLabels: ANNOTATION_FIELDS.length,
+        minQualityScore: qualityScores.length ? Math.min(...qualityScores) : null,
+        qualityThreshold: QUALITY_MIN_SCORE,
+        skipTraining: entry.skipTraining,
+      }),
     });
   });
 

@@ -106,3 +106,41 @@ CREATE TABLE IF NOT EXISTS model_versions (
 
 CREATE INDEX IF NOT EXISTS model_versions_model ON model_versions (model_id);
 CREATE INDEX IF NOT EXISTS model_versions_current ON model_versions (is_current);
+
+-- Per-scan consent. Two independent decisions: analysis is required to scan at
+-- all, training consent is optional and is what gates entry to the Training
+-- Queue. Defaults are deliberately asymmetric — an old scan predates the
+-- training question, so it must NOT be assumed to have consented.
+ALTER TABLE scans ADD COLUMN IF NOT EXISTS consent_analysis BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE scans ADD COLUMN IF NOT EXISTS consent_training BOOLEAN NOT NULL DEFAULT false;
+
+-- Immutable dataset snapshots. A version is never rewritten: creating v2 leaves
+-- v1 exactly as it was, so any model stays reproducible from its dataset.
+-- Rollback just moves `is_current`.
+CREATE TABLE IF NOT EXISTS dataset_versions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  version TEXT NOT NULL UNIQUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  image_count INT NOT NULL DEFAULT 0,
+  note TEXT,
+  is_current BOOLEAN NOT NULL DEFAULT false,
+  -- Frozen membership: [{scanId, labels:{dimension:label}}]
+  manifest JSONB NOT NULL DEFAULT '[]'
+);
+CREATE INDEX IF NOT EXISTS dataset_versions_current ON dataset_versions (is_current);
+
+-- One row per trained model, with the dataset it came from and its metrics.
+-- deployment: candidate | production | archived. Only one production at a time.
+CREATE TABLE IF NOT EXISTS model_releases (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  version TEXT NOT NULL UNIQUE,
+  trained_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  dataset_version TEXT,
+  macro_f1 REAL,
+  acne_f1 REAL,
+  skintype_f1 REAL,
+  size_bytes BIGINT,
+  deployment TEXT NOT NULL DEFAULT 'candidate'
+    CHECK (deployment IN ('candidate', 'production', 'archived'))
+);
+CREATE INDEX IF NOT EXISTS model_releases_deployment ON model_releases (deployment, trained_at DESC);

@@ -1,0 +1,17 @@
+{
+  "name": "efficientnet-b0",
+  "version": "acne-20260727-061436",
+  "classes": [
+    "clear",
+    "mild",
+    "moderate",
+    "severe",
+    "very-severe"
+  ],
+  "img_size": 224,
+  "metrics": {
+    "val_macro_f1": 0.7667178257394085,
+    "acne_ordinal_mae": 0.2543103448275862
+  },
+  "dataset_manifest_sha256": null
+}
