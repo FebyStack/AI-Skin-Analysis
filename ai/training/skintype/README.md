@@ -10,7 +10,7 @@ exists the browser fills it in.
 
 ## Where data lives
 
-`$DATASETS_DIR/skintype/` (default `ai/datasets/skintype/`, gitignored). Layouts
+`$DATASETS_DIR/skintype/` (default `ai/datasets/skintype/`, gitignored). Layout
 read by `ingest.collect_all()`:
 
 ```
@@ -19,7 +19,6 @@ $DATASETS_DIR/skintype/
     normal/*.jpg  oily/*.jpg  dry/*.jpg  combination/*.jpg
   scans/                   # written by the backend export (app-collected data)
     oily/<scanId>.jpg  ...
-  my-labels.csv            # or a CSV with columns: path,label
 ```
 
 **Quick start dataset:** `.venv/bin/python -m ai.training.skintype.fetch_killa92`

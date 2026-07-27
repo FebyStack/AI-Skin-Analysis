@@ -1,7 +1,6 @@
 """Evaluate a trained skin-type model on the held-out split.
 
     .venv/bin/python -m ai.training.skintype.evaluate                      # candidate
-    .venv/bin/python -m ai.training.skintype.evaluate --model-dir ai/models/skintype/production
 
 Skin type is categorical (no order), so this reports accuracy + macro-F1 (no MAE).
 Writes the metrics into the model's model.json for the registry/promote gate.
@@ -24,17 +23,18 @@ from ai.training.build_master import split_rows
 from ai.training.dataset import LesionDataset  # generic (path,label) image dataset
 from ai.training.history import append_run
 
+MODEL_DIR = Path("ai/models/skintype/candidate")
+
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model-dir", type=Path, default=Path("ai/models/skintype/candidate"))
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args(argv)
 
-    meta = json.loads((args.model_dir / "model.json").read_text())
+    meta = json.loads((MODEL_DIR / "model.json").read_text())
     classes = meta["classes"]
     net = efficientnet_b0(num_classes=len(classes))
-    net.load_state_dict(torch.load(args.model_dir / "current.pt", map_location="cpu", weights_only=True))
+    net.load_state_dict(torch.load(MODEL_DIR / "current.pt", map_location="cpu", weights_only=True))
     net.eval()
 
     all_rows = collect_all()
@@ -55,8 +55,8 @@ def main(argv: list[str] | None = None) -> int:
     metrics = {"val_macro_f1": macro_f1, "skintype_accuracy": accuracy}
 
     meta["metrics"] = {**(meta.get("metrics") or {}), **metrics}
-    (args.model_dir / "model.json").write_text(json.dumps(meta, indent=2))
-    append_run(args.model_dir.parent, meta.get("version", "candidate"), metrics, label_counts(all_rows))
+    (MODEL_DIR / "model.json").write_text(json.dumps(meta, indent=2))
+    append_run(MODEL_DIR.parent, meta.get("version", "candidate"), metrics, label_counts(all_rows))
     print(f"skin-type eval: macro_f1={macro_f1:.3f}  accuracy={accuracy:.3f}  (n={len(gts)})")
     print(f"classes: {SKIN_TYPE_CLASSES}")
     return 0

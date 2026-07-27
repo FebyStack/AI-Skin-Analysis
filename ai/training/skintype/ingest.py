@@ -1,10 +1,10 @@
 """Build skin-type training rows from labeled images on disk.
 
-Two supported layouts, both under $DATASETS_DIR/skintype/ (relocatable):
+Folder-per-class under $DATASETS_DIR/skintype/ (relocatable):
 
-  1. Folder-per-class:  $DATASETS_DIR/skintype/<source>/<class>/*.jpg
-     where <class> is one of SKIN_TYPE_CLASSES (or an alias).
-  2. CSV:  $DATASETS_DIR/skintype/<source>.csv  with columns: path,label
+    $DATASETS_DIR/skintype/<source>/<class>/*.jpg
+
+where <class> is one of SKIN_TYPE_CLASSES (or an alias).
 
 Returns rows [{path, label, group}] ready for ai.training.train.train_one.
 Mirrors ai.training.acne.ingest — the 'scans' folder the backend export writes
@@ -12,7 +12,6 @@ lands here too, so external datasets + labeled app scans merge.
 """
 from __future__ import annotations
 
-import csv
 from pathlib import Path
 
 from ai.training.paths import datasets_dir
@@ -40,20 +39,6 @@ def rows_from_folders(source: str) -> list[dict]:
     return rows
 
 
-def rows_from_csv(source: str) -> list[dict]:
-    csv_path = skintype_dir() / f"{source}.csv"
-    rows: list[dict] = []
-    if not csv_path.exists():
-        return rows
-    with open(csv_path, newline="") as f:
-        for r in csv.DictReader(f):
-            label = normalize_skin_type(r.get("label", ""))
-            path = r.get("path", "")
-            if label and path:
-                rows.append({"path": path, "label": label, "group": Path(path).stem})
-    return rows
-
-
 def collect_all() -> list[dict]:
     base = skintype_dir()
     rows: list[dict] = []
@@ -62,8 +47,6 @@ def collect_all() -> list[dict]:
     for child in sorted(base.iterdir()):
         if child.is_dir():
             rows += rows_from_folders(child.name)
-        elif child.suffix.lower() == ".csv":
-            rows += rows_from_csv(child.stem)
     return rows
 
 

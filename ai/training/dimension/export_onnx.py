@@ -20,11 +20,10 @@ from ai.training.dimension.labels import DIMENSION_CLASSES
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dim", required=True, choices=sorted(DIMENSION_CLASSES))
-    ap.add_argument("--model-dir", type=Path, default=None)
     args = ap.parse_args(argv)
 
     dim = args.dim
-    model_dir = args.model_dir or Path(f"ai/models/{dim}/candidate")
+    model_dir = Path(f"ai/models/{dim}/candidate")
     dest = Path(f"frontend/public/models/{dim}")
 
     meta = json.loads((model_dir / "model.json").read_text())

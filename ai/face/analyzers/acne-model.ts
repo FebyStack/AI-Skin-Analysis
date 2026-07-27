@@ -6,7 +6,7 @@
 // new /models/acne/model.onnx, and this picks it up on next load. Only ever
 // overrides the `acne` dimension — the other 10 analyzers are untouched.
 import { pickExecutionProviders, configureOrt } from "../../classifier/classifier";
-import { resolveModelSource, type ModelCacheProvider } from "../models/cached-blob";
+import { resolveModelSource } from "../models/cached-blob";
 import type { DimensionScore, FaceReport } from "../../../shared/face";
 import type { Pixels } from "../types";
 
@@ -26,18 +26,13 @@ const STD = [0.229, 0.224, 0.225];
 type OrtSession = import("onnxruntime-web").InferenceSession;
 
 let sessionPromise: Promise<OrtSession | null> | null = null;
-let cacheProvider: ModelCacheProvider | null = null;
-export function setAcneCacheProvider(provider: ModelCacheProvider | null): void {
-  cacheProvider = provider;
-}
-
 export function ensureAcneModel(): Promise<OrtSession | null> {
   sessionPromise ??= loadSession();
   return sessionPromise;
 }
 
 async function loadSession(): Promise<OrtSession | null> {
-  const source = await resolveModelSource("acne", ACNE_MODEL_URL, cacheProvider, () => undefined);
+  const source = await resolveModelSource("acne", ACNE_MODEL_URL, null, () => undefined);
   try {
     if (source.url === ACNE_MODEL_URL) {
       const probe = await fetch(ACNE_MODEL_URL, { method: "HEAD" });

@@ -34,13 +34,3 @@ def test_collect_all_reads_folders_and_scans(monkeypatch, tmp_path):
     labels = sorted(r["label"] for r in rows)
     assert labels == ["mild", "moderate", "severe"]  # scan "2" → moderate; junk folder dropped
     assert ingest.label_counts(rows)["moderate"] == 1
-
-
-def test_collect_all_reads_csv(monkeypatch, tmp_path):
-    monkeypatch.setenv("DATASETS_DIR", str(tmp_path))
-    (tmp_path / "acne").mkdir(parents=True)
-    img = tmp_path / "acne" / "x.jpg"
-    _img(img)
-    (tmp_path / "acne" / "labels.csv").write_text(f"path,label\n{img},severe\n")
-    rows = ingest.collect_all()
-    assert any(r["label"] == "severe" and r["path"] == str(img) for r in rows)

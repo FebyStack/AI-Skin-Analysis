@@ -1,7 +1,6 @@
 """Export a trained acne EfficientNet-B0 checkpoint to ONNX for in-browser use.
 
     .venv/bin/python -m ai.training.acne.export_onnx                        # candidate → frontend
-    .venv/bin/python -m ai.training.acne.export_onnx --model-dir ai/models/acne/production
 
 Writes model.onnx (opset 17, 1x3x224x224 input, dynamic batch) + copies model.json
 next to it so the browser knows the class order. Output lands where the browser
@@ -9,7 +8,6 @@ serves it: frontend/public/models/acne/.
 """
 from __future__ import annotations
 
-import argparse
 import json
 from pathlib import Path
 
@@ -20,16 +18,12 @@ DEFAULT_SRC = Path("ai/models/acne/candidate")
 DEST_DIR = Path("frontend/public/models/acne")
 
 
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--model-dir", type=Path, default=DEFAULT_SRC)
-    args = ap.parse_args(argv)
-
-    meta = json.loads((args.model_dir / "model.json").read_text())
+def main() -> int:
+    meta = json.loads((DEFAULT_SRC / "model.json").read_text())
     classes = meta["classes"]
     net = efficientnet_b0(num_classes=len(classes))
     # weights_only=True: refuse pickled code on load.
-    net.load_state_dict(torch.load(args.model_dir / "current.pt", map_location="cpu", weights_only=True))
+    net.load_state_dict(torch.load(DEFAULT_SRC / "current.pt", map_location="cpu", weights_only=True))
     net.eval()
 
     DEST_DIR.mkdir(parents=True, exist_ok=True)

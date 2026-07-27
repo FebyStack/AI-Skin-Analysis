@@ -11,7 +11,7 @@ Severity is 5-level ordinal: `clear, mild, moderate, severe, very-severe`
 ## Where data lives
 
 Everything under `$DATASETS_DIR/acne/` (default `ai/datasets/acne/`, gitignored;
-set `DATASETS_DIR` to relocate). Two layouts, both read by `ingest.collect_all()`:
+set `DATASETS_DIR` to relocate). Layout read by `ingest.collect_all()`:
 
 ```
 $DATASETS_DIR/acne/
@@ -19,7 +19,6 @@ $DATASETS_DIR/acne/
     clear/*.jpg  mild/*.jpg  moderate/*.jpg  severe/*.jpg  very-severe/*.jpg
   scans/                     # written by the backend export (app-collected data)
     mild/<scanId>.jpg  moderate/<scanId>.jpg  ...
-  my-labels.csv              # or a CSV with columns: path,label
 ```
 
 Folder names accept aliases (`0..4`, `comedonal`, `nodulocystic`, …) — see labels.py.

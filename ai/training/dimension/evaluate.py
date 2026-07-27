@@ -27,12 +27,11 @@ from ai.training.history import append_run
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dim", required=True, choices=sorted(DIMENSION_CLASSES))
-    ap.add_argument("--model-dir", type=Path, default=None)
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args(argv)
 
     dim = args.dim
-    model_dir = args.model_dir or Path(f"ai/models/{dim}/candidate")
+    model_dir = Path(f"ai/models/{dim}/candidate")
     meta = json.loads((model_dir / "model.json").read_text())
     classes = meta["classes"]
     net = efficientnet_b0(num_classes=len(classes))

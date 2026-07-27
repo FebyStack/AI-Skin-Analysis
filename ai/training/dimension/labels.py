@@ -23,7 +23,6 @@ DIMENSION_CLASSES: dict[str, list[str]] = {
 _ALIASES = {
     "absent": "absent", "none": "absent", "clear": "absent", "no": "absent", "0": "absent",
     "present": "present", "yes": "present", "1": "present",
-    "mild": "present", "moderate": "present", "severe": "present",
 }
 
 

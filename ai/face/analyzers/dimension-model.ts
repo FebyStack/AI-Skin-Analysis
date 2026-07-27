@@ -7,7 +7,7 @@
 // expectation over classes, so binary ["absent","present"] yields exactly
 // P(present) — a calibrated 0..1 dimension score.
 import { pickExecutionProviders, configureOrt } from "../../classifier/classifier";
-import { resolveModelSource, type ModelCacheProvider } from "../models/cached-blob";
+import { resolveModelSource } from "../models/cached-blob";
 import type { DimensionScore, FaceDimension, FaceReport } from "../../../shared/face";
 import type { Pixels } from "../types";
 
@@ -26,11 +26,6 @@ const MIN_CONFIDENCE = Number(import.meta.env?.VITE_DIMENSION_MIN_CONF ?? "0.55"
 type OrtSession = import("onnxruntime-web").InferenceSession;
 
 const sessions = new Map<string, Promise<OrtSession | null>>();
-let cacheProvider: ModelCacheProvider | null = null;
-export function setDimensionCacheProvider(provider: ModelCacheProvider | null): void {
-  cacheProvider = provider;
-}
-
 function modelUrl(dim: string): string {
   return `/models/${dim}/model.onnx`;
 }
@@ -46,7 +41,7 @@ export function ensureDimensionModel(dim: string): Promise<OrtSession | null> {
 
 async function loadSession(dim: string): Promise<OrtSession | null> {
   const url = modelUrl(dim);
-  const source = await resolveModelSource(dim, url, cacheProvider, () => undefined);
+  const source = await resolveModelSource(dim, url, null, () => undefined);
   try {
     if (source.url === url) {
       const probe = await fetch(url, { method: "HEAD" });

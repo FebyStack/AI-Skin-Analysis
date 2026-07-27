@@ -3,7 +3,7 @@
 // report simply omits skinType (offline-safe, never blocks). Categorical, so it
 // fills FaceReport.skinType rather than overriding a 0..1 dimension.
 import { pickExecutionProviders, configureOrt } from "../../classifier/classifier";
-import { resolveModelSource, type ModelCacheProvider } from "../models/cached-blob";
+import { resolveModelSource } from "../models/cached-blob";
 import { SKIN_TYPES, type SkinType, type SkinTypeResult, type FaceReport } from "../../../shared/face";
 import type { Pixels } from "../types";
 
@@ -24,18 +24,13 @@ const STD = [0.229, 0.224, 0.225];
 type OrtSession = import("onnxruntime-web").InferenceSession;
 
 let sessionPromise: Promise<OrtSession | null> | null = null;
-let cacheProvider: ModelCacheProvider | null = null;
-export function setSkinTypeCacheProvider(provider: ModelCacheProvider | null): void {
-  cacheProvider = provider;
-}
-
 export function ensureSkinTypeModel(): Promise<OrtSession | null> {
   sessionPromise ??= loadSession();
   return sessionPromise;
 }
 
 async function loadSession(): Promise<OrtSession | null> {
-  const source = await resolveModelSource("skintype", SKINTYPE_MODEL_URL, cacheProvider, () => undefined);
+  const source = await resolveModelSource("skintype", SKINTYPE_MODEL_URL, null, () => undefined);
   try {
     if (source.url === SKINTYPE_MODEL_URL) {
       const probe = await fetch(SKINTYPE_MODEL_URL, { method: "HEAD" });

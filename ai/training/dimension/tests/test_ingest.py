@@ -20,7 +20,7 @@ def test_unknown_dimension_raises():
 @pytest.mark.parametrize(
     "raw,expected",
     [("present", "present"), ("Absent", "absent"), ("clear", "absent"),
-     ("moderate", "present"), ("banana", None)],
+     ("banana", None)],
 )
 def test_normalize(raw, expected):
     assert normalize_label("redness", raw) == expected

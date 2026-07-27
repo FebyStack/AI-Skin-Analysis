@@ -4,14 +4,10 @@ Layout (same shape as acne/skintype, parameterized by dimension):
 
     $DATASETS_DIR/<dimension>/<source>/<class>/*.jpg
     $DATASETS_DIR/<dimension>/scans/<class>/<scanId>.jpg   # clinician-labeled app scans
-    $DATASETS_DIR/<dimension>/<source>.csv                 # columns: path,label
 
 Returns rows [{path, label, group}] for ai.training.train.train_one.
 """
 from __future__ import annotations
-
-import csv
-from pathlib import Path
 
 from ai.training.paths import datasets_dir
 from ai.training.dimension.labels import classes_for, normalize_label
@@ -38,20 +34,6 @@ def rows_from_folders(dimension: str, source: str) -> list[dict]:
     return rows
 
 
-def rows_from_csv(dimension: str, source: str) -> list[dict]:
-    csv_path = dimension_dir(dimension) / f"{source}.csv"
-    rows: list[dict] = []
-    if not csv_path.exists():
-        return rows
-    with open(csv_path, newline="") as f:
-        for r in csv.DictReader(f):
-            label = normalize_label(dimension, r.get("label", ""))
-            path = r.get("path", "")
-            if label and path:
-                rows.append({"path": path, "label": label, "group": Path(path).stem})
-    return rows
-
-
 def collect_all(dimension: str) -> list[dict]:
     base = dimension_dir(dimension)
     rows: list[dict] = []
@@ -60,8 +42,6 @@ def collect_all(dimension: str) -> list[dict]:
     for child in sorted(base.iterdir()):
         if child.is_dir():
             rows += rows_from_folders(dimension, child.name)
-        elif child.suffix.lower() == ".csv":
-            rows += rows_from_csv(dimension, child.stem)
     return rows
 
 

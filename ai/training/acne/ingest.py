@@ -1,19 +1,17 @@
 """Build acne training rows from labeled images on disk.
 
-Two supported layouts, both under $DATASETS_DIR/acne/ (relocatable):
+Folder-per-severity under $DATASETS_DIR/acne/ (relocatable) — external datasets
+AND exported app scans both land here:
 
-  1. Folder-per-severity (external datasets AND exported app scans both land here):
-       $DATASETS_DIR/acne/<source>/<label>/*.jpg
-     where <label> is one of ACNE_CLASSES (or an alias, e.g. "0".."4").
+    $DATASETS_DIR/acne/<source>/<label>/*.jpg
 
-  2. CSV:  $DATASETS_DIR/acne/<source>.csv  with columns: path,label
+where <label> is one of ACNE_CLASSES (or an alias, e.g. "0".."4").
 
 Returns rows [{path, label, group}] ready for ai.training.train.train_one.
 group defaults to the file stem so patient/image grouping can be layered later.
 """
 from __future__ import annotations
 
-import csv
 from pathlib import Path
 
 from ai.training.paths import datasets_dir
@@ -42,24 +40,9 @@ def rows_from_folders(source: str) -> list[dict]:
     return rows
 
 
-def rows_from_csv(source: str) -> list[dict]:
-    """$DATASETS_DIR/acne/<source>.csv (path,label) → rows."""
-    csv_path = acne_dir() / f"{source}.csv"
-    rows: list[dict] = []
-    if not csv_path.exists():
-        return rows
-    with open(csv_path, newline="") as f:
-        for r in csv.DictReader(f):
-            label = normalize_acne_label(r.get("label", ""))
-            path = r.get("path", "")
-            if label and path:
-                rows.append({"path": path, "label": label, "group": Path(path).stem})
-    return rows
-
-
 def collect_all() -> list[dict]:
-    """Every folder-source + every CSV under $DATASETS_DIR/acne/. Includes the
-    'scans' folder that the backend export writes to — external + app data merged."""
+    """Every folder-source under $DATASETS_DIR/acne/. Includes the 'scans' folder
+    that the backend export writes to — external + app data merged."""
     base = acne_dir()
     rows: list[dict] = []
     if not base.exists():
@@ -67,8 +50,6 @@ def collect_all() -> list[dict]:
     for child in sorted(base.iterdir()):
         if child.is_dir():
             rows += rows_from_folders(child.name)
-        elif child.suffix.lower() == ".csv":
-            rows += rows_from_csv(child.stem)
     return rows
 
 

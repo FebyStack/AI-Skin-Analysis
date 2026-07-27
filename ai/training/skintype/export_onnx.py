@@ -1,14 +1,12 @@
 """Export a trained skin-type EfficientNet-B0 checkpoint to ONNX for in-browser use.
 
     .venv/bin/python -m ai.training.skintype.export_onnx                        # candidate → frontend
-    .venv/bin/python -m ai.training.skintype.export_onnx --model-dir ai/models/skintype/production
 
 Writes model.onnx (opset 17, 1x3x224x224, dynamic batch) + copies model.json next
 to it so the browser knows the class order. Output → frontend/public/models/skintype/.
 """
 from __future__ import annotations
 
-import argparse
 import json
 from pathlib import Path
 
@@ -19,15 +17,11 @@ DEFAULT_SRC = Path("ai/models/skintype/candidate")
 DEST_DIR = Path("frontend/public/models/skintype")
 
 
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--model-dir", type=Path, default=DEFAULT_SRC)
-    args = ap.parse_args(argv)
-
-    meta = json.loads((args.model_dir / "model.json").read_text())
+def main() -> int:
+    meta = json.loads((DEFAULT_SRC / "model.json").read_text())
     classes = meta["classes"]
     net = efficientnet_b0(num_classes=len(classes))
-    net.load_state_dict(torch.load(args.model_dir / "current.pt", map_location="cpu", weights_only=True))
+    net.load_state_dict(torch.load(DEFAULT_SRC / "current.pt", map_location="cpu", weights_only=True))
     net.eval()
 
     DEST_DIR.mkdir(parents=True, exist_ok=True)

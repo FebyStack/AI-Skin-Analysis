@@ -37,7 +37,7 @@ async function getJSON<T>(url: string): Promise<T | null> {
 }
 
 // Tiny inline sparkline: values → a normalized polyline in a 100×28 box.
-function Spark({ values, color = "var(--gold, #c9a24b)" }: { values: number[]; color?: string }) {
+function Spark({ values }: { values: number[] }) {
   if (values.length < 2) return <span className="text-xs text-ink-tertiary">—</span>;
   const min = Math.min(...values);
   const max = Math.max(...values);
@@ -47,7 +47,7 @@ function Spark({ values, color = "var(--gold, #c9a24b)" }: { values: number[]; c
     .join(" ");
   return (
     <svg viewBox="0 0 100 28" preserveAspectRatio="none" className="h-7 w-24">
-      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+      <polyline points={pts} fill="none" stroke="var(--gold, #c9a24b)" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
     </svg>
   );
 }
