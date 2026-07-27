@@ -6,9 +6,16 @@ import type { AppDeps } from "../../shared/deps";
 // Labels a clinician can assign per dimension → training data for learned analyzers.
 const ACNE_LABELS = new Set(["clear", "mild", "moderate", "severe", "very-severe"]);
 const SKINTYPE_LABELS = new Set(["normal", "oily", "dry", "combination"]);
+// Presence dimensions (redness/wrinkles/pores/pigmentation) — classes match
+// ai/training/dimension/labels.py so exported scans train the same model.
+const PRESENCE_LABELS = new Set(["absent", "present"]);
 const LABELS_BY_DIMENSION: Record<string, Set<string>> = {
   acne: ACNE_LABELS,
   skintype: SKINTYPE_LABELS,
+  redness: PRESENCE_LABELS,
+  wrinkles: PRESENCE_LABELS,
+  pores: PRESENCE_LABELS,
+  pigmentation: PRESENCE_LABELS,
 };
 
 // Export lands where the Python trainer reads it ($DATASETS_DIR/acne/scans/...).

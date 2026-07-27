@@ -12,6 +12,7 @@ import { SKINTYPE_CLASSES } from "@ai/face/analyzers/skintype-model";
 import { scanPatientId } from "../../store/patient-store";
 import { refineAcneWithModel } from "@ai/face/analyzers/acne-model";
 import { refineSkinTypeWithModel } from "@ai/face/analyzers/skintype-model";
+import { refineDimensionsWithModels } from "@ai/face/analyzers/dimension-model";
 import { detectGeometry } from "@ai/face/landmarks/mediapipe";
 import { ANGLE_YAW_WINDOWS } from "@ai/face/quality/validate";
 import type { FaceGeometry, Pixels } from "@ai/face/types";
@@ -178,6 +179,9 @@ export function GuidedFaceFlow() {
       if (views.length > 0) {
         report = await refineAcneWithModel(report, views);
         report = await refineSkinTypeWithModel(report, views);
+        // redness / wrinkles / pores / pigmentation — each overrides only if a
+        // trained model exists for it and clears the confidence gate.
+        report = await refineDimensionsWithModels(report, views);
       }
 
       try {

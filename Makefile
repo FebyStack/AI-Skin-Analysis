@@ -1,4 +1,4 @@
-.PHONY: up down lan build backup restore retrain retrain-acne retrain-skintype
+.PHONY: up down lan build backup restore retrain retrain-acne retrain-skintype retrain-dim retrain-dims
 
 # Compose lives in infrastructure/docker/; --env-file keeps root .env interpolation working.
 COMPOSE = docker compose -f infrastructure/docker/docker-compose.yml --env-file .env
@@ -21,6 +21,17 @@ retrain-skintype:
 	$(PY) -m ai.training.skintype.train_skintype --epochs $(EPOCHS)
 	-$(PY) -m ai.training.skintype.evaluate
 	$(PY) -m ai.training.skintype.export_onnx
+
+# Any face dimension with a model registry entry (redness/wrinkles/pores/pigmentation):
+#   make retrain-dim DIM=redness
+retrain-dim:
+	@test -n "$(DIM)" || (echo "usage: make retrain-dim DIM=redness" && exit 1)
+	$(PY) -m ai.training.dimension.train_dimension --dim $(DIM) --epochs $(EPOCHS)
+	-$(PY) -m ai.training.dimension.evaluate --dim $(DIM)
+	$(PY) -m ai.training.dimension.export_onnx --dim $(DIM)
+
+retrain-dims:
+	@for d in redness wrinkles pores pigmentation; do $(MAKE) retrain-dim DIM=$$d || exit 1; done
 
 retrain: retrain-acne retrain-skintype
 
