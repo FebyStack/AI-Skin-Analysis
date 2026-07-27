@@ -66,6 +66,7 @@ def main(argv: list[str] | None = None) -> int:
         seed=args.seed,
         lr=args.lr,
         version=version,
+        face=True,  # upright faces — no vertical flip
     )
     print(f"trained {version} → {CANDIDATE_DIR}  (val_macro_f1={info['val_macro_f1']:.3f})")
     print("Next: evaluate + export ONNX (ai/training/skintype/README.md).")

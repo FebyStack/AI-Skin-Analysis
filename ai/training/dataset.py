@@ -5,10 +5,10 @@ from torch.utils.data import Dataset
 from ai.training.transforms import train_transforms, serve_transforms
 
 class LesionDataset(Dataset):
-    def __init__(self, rows: list[dict], classes: list[str], training: bool):
+    def __init__(self, rows: list[dict], classes: list[str], training: bool, face: bool = False):
         self.rows, self.classes = rows, classes
         self.idx = {c: i for i, c in enumerate(classes)}
-        self.tf = train_transforms() if training else serve_transforms()
+        self.tf = train_transforms(face=face) if training else serve_transforms()
 
     def __len__(self): return len(self.rows)
 

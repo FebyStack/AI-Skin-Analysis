@@ -31,7 +31,7 @@ def _write_progress(path: Path, version, epoch, total, train_loss, val_f1, histo
     }, indent=2))
 
 def train_one(train_rows, val_rows, classes, epochs=15, out_dir=Path("ai/models/candidate"),
-              seed=0, lr=1e-3, batch=32, version="candidate") -> dict:
+              seed=0, lr=1e-3, batch=32, version="candidate", face=False) -> dict:
     torch.manual_seed(seed)
     dev = _device()
     # Transfer learning: ImageNet-pretrained backbone + a fresh head sized to our
@@ -47,7 +47,7 @@ def train_one(train_rows, val_rows, classes, epochs=15, out_dir=Path("ai/models/
     w = torch.tensor([1.0 / max(counts.get(c, 1), 1) for c in classes], dtype=torch.float32, device=dev)
     loss_fn = torch.nn.CrossEntropyLoss(weight=w)
     opt = torch.optim.AdamW(net.parameters(), lr=lr)
-    tl = DataLoader(LesionDataset(train_rows, classes, True), batch_size=batch, shuffle=True)
+    tl = DataLoader(LesionDataset(train_rows, classes, True, face=face), batch_size=batch, shuffle=True)
     vl = DataLoader(LesionDataset(val_rows, classes, False), batch_size=batch)
 
     out_dir.mkdir(parents=True, exist_ok=True)
