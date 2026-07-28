@@ -1,15 +1,21 @@
 import type { FaceReport, FaceDimension } from "@shared/face";
 import { FACE_DIMENSIONS } from "@shared/face";
+import { ZoneMap } from "./ZoneMap";
+import { useReveal } from "@/motion/useReveal";
 
 interface Props {
   report: FaceReport;
 }
 
 export function FaceReportView({ report }: Props) {
+  // Staggered reveal of the report sections. GSAP animates *from* an offset, so
+  // every section is in the DOM and readable even if motion is suppressed.
+  const scope = useReveal<HTMLDivElement>([report]);
+
   return (
-    <div className="mx-auto max-w-5xl animate-rise space-y-6 px-4">
+    <div ref={scope} className="mx-auto max-w-5xl space-y-6 px-4">
       {/* Overall */}
-      <section className="card p-6 text-center">
+      <section data-reveal className="card p-6 text-center">
         <h2 className="text-[1.0625rem] font-semibold text-ink">Overall Skin Score</h2>
         <div className="mt-3 font-mono text-6xl font-bold tabular-nums text-gold-bright">
           {Math.round(report.overall.score * 100)}
@@ -21,7 +27,7 @@ export function FaceReportView({ report }: Props) {
 
       {/* Plain-language summary (Gemini when online, deterministic builtin offline) */}
       {report.explanation && (
-        <section className="card p-6">
+        <section data-reveal className="card p-6">
           <div className="flex items-center justify-between">
             <h2 className="text-[1.0625rem] font-semibold text-ink">Summary</h2>
             <span className="text-[10px] uppercase tracking-[0.1em] text-ink-tertiary">
@@ -37,7 +43,7 @@ export function FaceReportView({ report }: Props) {
 
       {/* Skin type — only when the trained skintype model produced it */}
       {report.skinType && (
-        <section className="card p-6 text-center">
+        <section data-reveal className="card p-6 text-center">
           <h2 className="text-[1.0625rem] font-semibold text-ink">Skin Type</h2>
           <div className="mt-2 font-serif text-3xl font-semibold capitalize text-gold-bright">
             {report.skinType.type}
@@ -49,7 +55,7 @@ export function FaceReportView({ report }: Props) {
       )}
 
       {/* Dimensions */}
-      <section>
+      <section data-reveal>
         <h2 className="mb-4 font-serif text-xl font-semibold tracking-tight text-ink">Skin Dimensions</h2>
         <ul className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
           {FACE_DIMENSIONS.map((dimension) => (
@@ -63,8 +69,13 @@ export function FaceReportView({ report }: Props) {
         </ul>
       </section>
 
+      {/* Zone map — where on the face each dimension concentrates */}
+      <div data-reveal>
+        <ZoneMap report={report} />
+      </div>
+
       {/* Recommendations */}
-      <section className="card p-6">
+      <section data-reveal className="card p-6">
         <h2 className="text-[1.0625rem] font-semibold text-ink">Recommendations</h2>
         <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-ink-secondary marker:text-gold">
           {report.recommendations.skincare.map((item) => (

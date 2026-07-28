@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { clinicAnalytics, type ClinicAnalytics } from "../../api/queue-client";
+import { useReveal } from "@/motion/useReveal";
 
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="card p-4">
+    <div data-reveal className="card p-4">
       <p className="text-[11px] uppercase tracking-[0.14em] text-ink-tertiary">{label}</p>
       <p className="mt-1 text-2xl font-semibold tabular-nums text-ink">{value}</p>
       {hint && <p className="mt-0.5 text-[11px] text-ink-secondary">{hint}</p>}
@@ -38,6 +39,8 @@ const cap = (v: string | null) => (v == null ? "—" : v.replace(/-/g, " "));
 
 export function AnalyticsDashboard() {
   const [a, setA] = useState<ClinicAnalytics | null>(null);
+  // Cascade the stat cards in once the numbers land.
+  const scope = useReveal<HTMLElement>([a]);
 
   useEffect(() => {
     let alive = true;
@@ -52,7 +55,7 @@ export function AnalyticsDashboard() {
   const reviewHours = a.avgReviewMs == null ? null : a.avgReviewMs / 3_600_000;
 
   return (
-    <section className="space-y-6">
+    <section ref={scope} className="space-y-6">
       <header>
         <h3 className="text-base font-semibold text-ink">Clinic analytics</h3>
         <p className="mt-1 text-xs text-ink-secondary">

@@ -53,6 +53,27 @@ if (!Blob.prototype.text) {
   };
 }
 
+// jsdom implements no media queries at all, so GSAP's matchMedia() (which the
+// reveal hook uses to honour prefers-reduced-motion) throws. Report "no
+// preference" — tests should exercise the animated path, since that is what
+// most users get.
+if (typeof window !== "undefined" && typeof window.matchMedia !== "function") {
+  Object.defineProperty(window, "matchMedia", {
+    writable: true,
+    value: (query: string): MediaQueryList =>
+      ({
+        matches: /no-preference/.test(query),
+        media: query,
+        onchange: null,
+        addListener: () => {},
+        removeListener: () => {},
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        dispatchEvent: () => false,
+      }) as unknown as MediaQueryList,
+  });
+}
+
 // Polyfill createImageBitmap for jsdom
 if (typeof globalThis.createImageBitmap === "undefined") {
   globalThis.createImageBitmap = async function () {

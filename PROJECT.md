@@ -91,7 +91,46 @@ from the scan. Postgres now filters `archived_at IS NULL`.
 `npm run lint` fails repo-wide — there is no `eslint.config.js` (pre-existing,
 unrelated to this work).
 
-last Claude session: 2026-07-28 09:20
+### Motion system + 3D zone map (2026-07-28)
+
+Installed 19 skills (`.claude/skills/`, tracked in `skills-lock.json`): CloudAI-X
+three.js ×10, GreenSock GSAP ×8, LottieFiles motion-design ×1. Note the GSAP repo
+is `greensock/gsap-skills`. No Lottie *runtime* was added — that skill is motion
+principles, not a player, so it costs no bundle.
+
+**Brand motion identity** (`frontend/src/motion/tokens.ts`) — archetype Premium:
+signature easing `cubic-bezier(0.32,0.72,0,1)` (already the CSS `ease-spring`),
+durations quick 160 / standard 320 / slow 620ms, entrance = rise 16px + fade,
+zero overshoot. `staggerFor(n)` clamps any cascade to the 500ms stagger budget.
+Clinical rule on top: motion never delays or hides a result.
+
+**`useReveal()`** (`frontend/src/motion/useReveal.ts`) — `useGSAP` with a scope
+ref, `gsap.matchMedia()` for `prefers-reduced-motion`, animating *from* an offset
+so content is never left invisible. Applied to FaceReportView + AnalyticsDashboard.
+
+**3D zone map** (`FaceZoneMap3D.tsx`, behind `ZoneMap.tsx`) — a schematic head
+painting per-zone severity from `report.dimensions[d].perZone`. Zones are declared
+as `[yaw°, pitch°]` directions and *projected onto the head surface* rather than
+hand-typed xyz; the first hand-typed version buried 2 of 7 markers inside the mesh
+and made the eyes/mouth invisible. Positive yaw = the patient's LEFT = viewer's
+right, matching a frontal photograph.
+
+Guardrails, given the earlier iOS OOM: three.js is a `React.lazy` chunk
+(135 kB gz) that never enters the main bundle and is only fetched when
+`isMemoryConstrained()` is false AND WebGL exists — so iPhones/iPads never load
+it. Pixel ratio capped at 2, rAF stopped via IntersectionObserver + visibility.
+The zone bars are always rendered and are the source of truth; the head is a
+garnish.
+
+**Bundle cost, measured:** GSAP adds **+29.5 kB gz** to the main chunk
+(123.6 → 153.1). three.js adds 0 to it. If that 29.5 kB is unwelcome, `useReveal`
+is the only GSAP consumer and could be lazy-loaded or swapped for the existing
+CSS `animate-rise`.
+
+Test-env note: jsdom implements no `matchMedia`, which GSAP needs, so
+`frontend/src/test/setup.ts` now polyfills it (reporting "no preference").
+
+last Claude session: 2026-07-28 11:30
 
 ## Recent updates (2026-07-12)
 
@@ -159,7 +198,46 @@ from the scan. Postgres now filters `archived_at IS NULL`.
 `npm run lint` fails repo-wide — there is no `eslint.config.js` (pre-existing,
 unrelated to this work).
 
-last Claude session: 2026-07-28 09:20
+### Motion system + 3D zone map (2026-07-28)
+
+Installed 19 skills (`.claude/skills/`, tracked in `skills-lock.json`): CloudAI-X
+three.js ×10, GreenSock GSAP ×8, LottieFiles motion-design ×1. Note the GSAP repo
+is `greensock/gsap-skills`. No Lottie *runtime* was added — that skill is motion
+principles, not a player, so it costs no bundle.
+
+**Brand motion identity** (`frontend/src/motion/tokens.ts`) — archetype Premium:
+signature easing `cubic-bezier(0.32,0.72,0,1)` (already the CSS `ease-spring`),
+durations quick 160 / standard 320 / slow 620ms, entrance = rise 16px + fade,
+zero overshoot. `staggerFor(n)` clamps any cascade to the 500ms stagger budget.
+Clinical rule on top: motion never delays or hides a result.
+
+**`useReveal()`** (`frontend/src/motion/useReveal.ts`) — `useGSAP` with a scope
+ref, `gsap.matchMedia()` for `prefers-reduced-motion`, animating *from* an offset
+so content is never left invisible. Applied to FaceReportView + AnalyticsDashboard.
+
+**3D zone map** (`FaceZoneMap3D.tsx`, behind `ZoneMap.tsx`) — a schematic head
+painting per-zone severity from `report.dimensions[d].perZone`. Zones are declared
+as `[yaw°, pitch°]` directions and *projected onto the head surface* rather than
+hand-typed xyz; the first hand-typed version buried 2 of 7 markers inside the mesh
+and made the eyes/mouth invisible. Positive yaw = the patient's LEFT = viewer's
+right, matching a frontal photograph.
+
+Guardrails, given the earlier iOS OOM: three.js is a `React.lazy` chunk
+(135 kB gz) that never enters the main bundle and is only fetched when
+`isMemoryConstrained()` is false AND WebGL exists — so iPhones/iPads never load
+it. Pixel ratio capped at 2, rAF stopped via IntersectionObserver + visibility.
+The zone bars are always rendered and are the source of truth; the head is a
+garnish.
+
+**Bundle cost, measured:** GSAP adds **+29.5 kB gz** to the main chunk
+(123.6 → 153.1). three.js adds 0 to it. If that 29.5 kB is unwelcome, `useReveal`
+is the only GSAP consumer and could be lazy-loaded or swapped for the existing
+CSS `animate-rise`.
+
+Test-env note: jsdom implements no `matchMedia`, which GSAP needs, so
+`frontend/src/test/setup.ts` now polyfills it (reporting "no preference").
+
+last Claude session: 2026-07-28 11:30
 
 ## Progress 2026-07-21 (recommended-steps batch)
 
@@ -301,4 +379,43 @@ from the scan. Postgres now filters `archived_at IS NULL`.
 `npm run lint` fails repo-wide — there is no `eslint.config.js` (pre-existing,
 unrelated to this work).
 
-last Claude session: 2026-07-28 09:20
+### Motion system + 3D zone map (2026-07-28)
+
+Installed 19 skills (`.claude/skills/`, tracked in `skills-lock.json`): CloudAI-X
+three.js ×10, GreenSock GSAP ×8, LottieFiles motion-design ×1. Note the GSAP repo
+is `greensock/gsap-skills`. No Lottie *runtime* was added — that skill is motion
+principles, not a player, so it costs no bundle.
+
+**Brand motion identity** (`frontend/src/motion/tokens.ts`) — archetype Premium:
+signature easing `cubic-bezier(0.32,0.72,0,1)` (already the CSS `ease-spring`),
+durations quick 160 / standard 320 / slow 620ms, entrance = rise 16px + fade,
+zero overshoot. `staggerFor(n)` clamps any cascade to the 500ms stagger budget.
+Clinical rule on top: motion never delays or hides a result.
+
+**`useReveal()`** (`frontend/src/motion/useReveal.ts`) — `useGSAP` with a scope
+ref, `gsap.matchMedia()` for `prefers-reduced-motion`, animating *from* an offset
+so content is never left invisible. Applied to FaceReportView + AnalyticsDashboard.
+
+**3D zone map** (`FaceZoneMap3D.tsx`, behind `ZoneMap.tsx`) — a schematic head
+painting per-zone severity from `report.dimensions[d].perZone`. Zones are declared
+as `[yaw°, pitch°]` directions and *projected onto the head surface* rather than
+hand-typed xyz; the first hand-typed version buried 2 of 7 markers inside the mesh
+and made the eyes/mouth invisible. Positive yaw = the patient's LEFT = viewer's
+right, matching a frontal photograph.
+
+Guardrails, given the earlier iOS OOM: three.js is a `React.lazy` chunk
+(135 kB gz) that never enters the main bundle and is only fetched when
+`isMemoryConstrained()` is false AND WebGL exists — so iPhones/iPads never load
+it. Pixel ratio capped at 2, rAF stopped via IntersectionObserver + visibility.
+The zone bars are always rendered and are the source of truth; the head is a
+garnish.
+
+**Bundle cost, measured:** GSAP adds **+29.5 kB gz** to the main chunk
+(123.6 → 153.1). three.js adds 0 to it. If that 29.5 kB is unwelcome, `useReveal`
+is the only GSAP consumer and could be lazy-loaded or swapped for the existing
+CSS `animate-rise`.
+
+Test-env note: jsdom implements no `matchMedia`, which GSAP needs, so
+`frontend/src/test/setup.ts` now polyfills it (reporting "no preference").
+
+last Claude session: 2026-07-28 11:30
