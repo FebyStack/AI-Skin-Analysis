@@ -31,7 +31,7 @@ type View = "capture" | "saving" | "result" | "history";
 // yaw — and "front" is a ±12° window that almost any glance satisfies.
 const CHECK_MS = 350;
 const HOLD_CHECKS = 5;        // ~1.75s of CONTINUOUS good pose
-const ARM_DELAY_MS = 1600;    // grace after each step appears, to read + get set
+const ARM_DELAY_MS = 1000;    // grace after each step appears, to read + get set
 const CENTER_MAX = 0.32;      // face must be near frame centre, not just facing it
 
 // Face bbox (pixel coords, 15% margin) from normalized MediaPipe landmarks.
