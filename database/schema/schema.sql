@@ -144,3 +144,22 @@ CREATE TABLE IF NOT EXISTS model_releases (
     CHECK (deployment IN ('candidate', 'production', 'archived'))
 );
 CREATE INDEX IF NOT EXISTS model_releases_deployment ON model_releases (deployment, trained_at DESC);
+
+-- Image lifecycle + audit trail. One append-only row per event, so a scan's
+-- history (captured → analysed → reviewed → approved → dataset → trained) and
+-- every consistency warning share the same log and can never disagree.
+CREATE TABLE IF NOT EXISTS scan_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  scan_id UUID NOT NULL REFERENCES scans(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  detail JSONB NOT NULL DEFAULT '{}',
+  actor TEXT,
+  at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS scan_events_scan ON scan_events (scan_id, at);
+CREATE INDEX IF NOT EXISTS scan_events_kind ON scan_events (kind, at DESC);
+
+-- Archive instead of destroy: a deleted image is hidden for a retention window
+-- and can be restored, then purged. NULL = live.
+ALTER TABLE scan_images ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS scan_images_archived ON scan_images (archived_at);

@@ -3,6 +3,7 @@ import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import path from "node:path";
 import type { AppDeps } from "../../shared/deps";
 import { ANNOTATION_FIELDS } from "../../../shared/training-queue";
+import { checkConsistency } from "../../../shared/label-consistency";
 
 // Every field of the Training Queue annotation panel. Vocabularies come from the
 // shared contract so the UI, this validator, and the training export can't drift.
@@ -74,7 +75,39 @@ export function createTrainingRoutes(deps: AppDeps, auth: RequestHandler): Route
       return;
     }
     await deps.scans.setLabel(scan.id, dimension, label);
-    res.json({ ok: true, dimension, label });
+
+    // Compare against this patient's most recent APPROVED visit. A big jump in a
+    // short window is usually an annotation slip, not real skin change — surface
+    // it, log it for audit, but never block the reviewer.
+    let inconsistencies: unknown[] = [];
+    try {
+      const siblings = (await deps.scans.listByPatient(scan.patientId))
+        .filter((s) => s.id !== scan.id && s.createdAt < scan.createdAt)
+        .sort((a, b) => b.createdAt - a.createdAt);
+      for (const prev of siblings) {
+        const entry = await deps.scans.getQueueEntry(prev.id);
+        if (entry?.status !== "approved") continue;
+        const prevLabels = Object.fromEntries(
+          (await deps.scans.getLabels(prev.id)).map((l) => [l.dimension, l.label]),
+        );
+        const curLabels = Object.fromEntries(
+          (await deps.scans.getLabels(scan.id)).map((l) => [l.dimension, l.label]),
+        );
+        inconsistencies = checkConsistency({
+          current: curLabels,
+          previous: prevLabels,
+          currentAt: scan.createdAt,
+          previousAt: prev.createdAt,
+        });
+        for (const w of inconsistencies) {
+          await deps.scans.recordEvent(scan.id, "warning", { ...(w as object), previousScanId: prev.id });
+        }
+        break; // most recent approved visit only
+      }
+    } catch {
+      /* consistency is advisory — never fail the save */
+    }
+    res.json({ ok: true, dimension, label, inconsistencies });
   });
 
   router.get("/api/scans/:id/labels", auth, async (req, res) => {

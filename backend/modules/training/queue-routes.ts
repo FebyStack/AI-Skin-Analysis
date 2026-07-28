@@ -147,17 +147,30 @@ export function createQueueRoutes(deps: AppDeps, auth: RequestHandler): Router {
       res.status(404).json({ error: "not in queue" });
       return;
     }
+    await deps.scans.recordEvent(
+      req.params.scanId,
+      typeof status === "string" ? status : "reviewed",
+      { note: note ?? null },
+      typeof reviewerName === "string" ? reviewerName : null,
+    );
     res.json({ ok: true, status: status ?? null });
   });
 
+  /** Full audit trail for one scan — the lifecycle timeline. */
+  router.get("/api/training-queue/:scanId/events", auth, async (req, res) => {
+    res.json({ events: await deps.scans.listEvents(req.params.scanId) });
+  });
+
   // Delete ONE angle — the rest of the scan survives.
+  // Archived, not destroyed: recoverable for the retention window, then purged.
   router.delete("/api/training-queue/:scanId/images/:angle", auth, async (req, res) => {
-    const ok = await deps.scans.deleteImage(req.params.scanId, req.params.angle);
+    const ok = await deps.scans.archiveImage(req.params.scanId, req.params.angle);
     if (!ok) {
       res.status(404).json({ error: "image not found" });
       return;
     }
-    res.json({ ok: true });
+    await deps.scans.recordEvent(req.params.scanId, "archived", { angle: req.params.angle });
+    res.json({ ok: true, archived: true });
   });
 
   // Delete the whole scan: images, AI prediction and annotations cascade.

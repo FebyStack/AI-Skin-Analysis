@@ -13,6 +13,9 @@ import { ImageManager } from "./ImageManager";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { DUPLICATE_THRESHOLD } from "@shared/training-queue";
 import { ELIGIBILITY_LABEL, type Eligibility } from "@shared/training-governance";
+import type { LabelInconsistency } from "@shared/label-consistency";
+import { ConsistencyBanner } from "./ConsistencyBanner";
+import { LifecycleTimeline } from "./LifecycleTimeline";
 
 /** The AI's suggested label + its confidence for one field. Never written to. */
 function aiPrediction(report: FaceReport | null, key: string): { value: string | null; confidence: number | null } {
@@ -41,6 +44,8 @@ export function AnnotationPanel({ scanId, onClose }: { scanId: string; onClose: 
   const [dupDismissed, setDupDismissed] = useState(false);
   const [angles, setAngles] = useState<QueueDetail["angles"]>([]);
   const [confirmDeleteDup, setConfirmDeleteDup] = useState(false);
+  const [inconsistencies, setInconsistencies] = useState<LabelInconsistency[]>([]);
+  const [focusField, setFocusField] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -83,9 +88,13 @@ export function AnnotationPanel({ scanId, onClose }: { scanId: string; onClose: 
     setVerified((v) => ({ ...v, [key]: value }));
     setSaving(key);
     setMsg("");
-    const ok = await saveLabel(scanId, key, value);
+    const warnings = await saveLabel(scanId, key, value);
     setSaving(null);
-    if (!ok) setMsg(`Could not save ${key}.`);
+    if (!warnings) {
+      setMsg(`Could not save ${key}.`);
+      return;
+    }
+    setInconsistencies(warnings);
   };
 
   /** Save Draft (no status) or a review decision. Labels are persisted either way. */
@@ -214,6 +223,13 @@ export function AnnotationPanel({ scanId, onClose }: { scanId: string; onClose: 
                     <ConfidenceBadge confidence={ai.confidence} label={f.label} />
                   </div>
                   <select
+                    ref={(el) => {
+                      // "Edit label" on a consistency warning jumps straight to the field.
+                      if (el && focusField === f.key) {
+                        el.focus();
+                        setFocusField(null);
+                      }
+                    }}
                     value={verified[f.key] ?? ""}
                     onChange={(e) => change(f.key, e.target.value)}
                     disabled={saving === f.key}
@@ -252,6 +268,13 @@ export function AnnotationPanel({ scanId, onClose }: { scanId: string; onClose: 
         </section>
       </div>
 
+      <ConsistencyBanner
+        warnings={inconsistencies}
+        onReview={() => setStatus("needs_expert")}
+        onEdit={() => setFocusField(inconsistencies[0]?.field ?? null)}
+        onDismiss={() => setInconsistencies([])}
+      />
+
       {/* Reviewer notes — part of the training metadata */}
       <section className="card p-4">
         <h4 className="text-sm font-semibold text-ink">Reviewer Notes</h4>
@@ -283,6 +306,12 @@ export function AnnotationPanel({ scanId, onClose }: { scanId: string; onClose: 
             </dd>
           </dl>
         </div>
+      </section>
+
+      {/* Where this image has been */}
+      <section className="card p-4">
+        <h4 className="mb-3 text-sm font-semibold text-ink">Image lifecycle</h4>
+        <LifecycleTimeline scanId={scanId} />
       </section>
 
       {/* Workflow */}

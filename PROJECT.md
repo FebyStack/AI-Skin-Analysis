@@ -57,7 +57,41 @@ Plans 1–4 executed and merged. Plan 5 (results/report UI) + Plan 6 (patients/h
 
 Brainstorm → spec → writing-plans → subagent-driven execution with one final opus review before merge. Verify camera/browser changes live in the preview tool, not just unit tests. `git push` to `https://github.com/FebyStack/AI-Skin-Analysis.git` was configured via `gh auth git-credential` but never confirmed pushed.
 
-last Claude session: 2026-07-27 14:38
+### Consistency, archive, lifecycle + analytics (2026-07-28)
+
+Five features on top of the queue/governance stack:
+
+- **Label Consistency Checker** (`shared/label-consistency.ts`). Compares a saved
+  label against the patient's most recent APPROVED visit. Flags a jump of
+  `LEVEL_JUMP = 2` severity levels inside `SHORT_PERIOD_DAYS = 30`. Skips
+  `skintype` — it's categorical, so oily→dry is not a "jump". Advisory only: the
+  reviewer sees a banner (Review again / Edit label / Approve anyway) and every
+  warning is written to `scan_events` as kind `warning` for audit.
+- **Image Lifecycle Tracking** (`shared/lifecycle.ts` + `scan_events` table). An
+  append-only event log: captured → analyzed → reviewed/approved/rejected →
+  dataset → trained, plus archived/restored/purged/warning. Timeline renders in
+  the annotation panel; feed is `GET /api/training-queue/:scanId/events`.
+- **Image Archive** (30-day retention). Deleting an angle now ARCHIVES it —
+  `scan_images.archived_at` is stamped, and `listImages` excludes archived rows in
+  both repo impls, so it vanishes from the scan but stays recoverable. Expiry is
+  swept lazily on `GET /api/archive` (a clinic laptop isn't always on, so a timer
+  would miss days). Restore + permanent delete under `/api/archive/...`.
+- **Clinic Analytics** (`GET /api/analytics`): patients, visits, analyses, modal
+  skin type + acne severity, mean confidence, mean review time, queue counts, plus
+  dataset-growth and model-performance series. Charts are inline CSS bars — no
+  chart library, no bundle weight. Lives at the top of the Training view.
+- **Training Sandbox**: already satisfied by the existing candidate/production/
+  archived model-release states + the deploy gate (`candidateBeatsProduction`), so
+  no new surface was added — a candidate IS the isolated experiment.
+
+Bug found and fixed while testing: `listImages` returned archived angles in both
+`MemoryScanRepo` and `PgScanRepo`, so archiving would not have removed the image
+from the scan. Postgres now filters `archived_at IS NULL`.
+
+`npm run lint` fails repo-wide — there is no `eslint.config.js` (pre-existing,
+unrelated to this work).
+
+last Claude session: 2026-07-28 09:20
 
 ## Recent updates (2026-07-12)
 
@@ -91,7 +125,41 @@ Complete state audit filed in Obsidian: `Claude Code/AI Skin Analysis Status 202
 Headlines: both AI branches functional (face on-device pipeline + lesion EfficientNet-B1 w/ MobileSAM refinement + localization confidence); model distribution platform + admin UI landed via PR #4.
 **Dormant/missing:** PWA icons never generated (`node scripts/generate-icons.mjs`); face-parsing ONNX never downloaded (`.venv/bin/python -m ai.models.fetch_models face-parsing`) so segmentation silently falls back to landmark polygons; MobileSAM real-weights path never run on an actual photo; upload→promote→download integration test missing; main 1 commit ahead of origin; stale `feat/face-analysis` branch to delete after confirming superseded.
 
-last Claude session: 2026-07-27 14:38
+### Consistency, archive, lifecycle + analytics (2026-07-28)
+
+Five features on top of the queue/governance stack:
+
+- **Label Consistency Checker** (`shared/label-consistency.ts`). Compares a saved
+  label against the patient's most recent APPROVED visit. Flags a jump of
+  `LEVEL_JUMP = 2` severity levels inside `SHORT_PERIOD_DAYS = 30`. Skips
+  `skintype` — it's categorical, so oily→dry is not a "jump". Advisory only: the
+  reviewer sees a banner (Review again / Edit label / Approve anyway) and every
+  warning is written to `scan_events` as kind `warning` for audit.
+- **Image Lifecycle Tracking** (`shared/lifecycle.ts` + `scan_events` table). An
+  append-only event log: captured → analyzed → reviewed/approved/rejected →
+  dataset → trained, plus archived/restored/purged/warning. Timeline renders in
+  the annotation panel; feed is `GET /api/training-queue/:scanId/events`.
+- **Image Archive** (30-day retention). Deleting an angle now ARCHIVES it —
+  `scan_images.archived_at` is stamped, and `listImages` excludes archived rows in
+  both repo impls, so it vanishes from the scan but stays recoverable. Expiry is
+  swept lazily on `GET /api/archive` (a clinic laptop isn't always on, so a timer
+  would miss days). Restore + permanent delete under `/api/archive/...`.
+- **Clinic Analytics** (`GET /api/analytics`): patients, visits, analyses, modal
+  skin type + acne severity, mean confidence, mean review time, queue counts, plus
+  dataset-growth and model-performance series. Charts are inline CSS bars — no
+  chart library, no bundle weight. Lives at the top of the Training view.
+- **Training Sandbox**: already satisfied by the existing candidate/production/
+  archived model-release states + the deploy gate (`candidateBeatsProduction`), so
+  no new surface was added — a candidate IS the isolated experiment.
+
+Bug found and fixed while testing: `listImages` returned archived angles in both
+`MemoryScanRepo` and `PgScanRepo`, so archiving would not have removed the image
+from the scan. Postgres now filters `archived_at IS NULL`.
+
+`npm run lint` fails repo-wide — there is no `eslint.config.js` (pre-existing,
+unrelated to this work).
+
+last Claude session: 2026-07-28 09:20
 
 ## Progress 2026-07-21 (recommended-steps batch)
 
@@ -199,4 +267,38 @@ TASKS (that's where redness/wrinkles/etc. belong once real labeled scans exist).
 falls back to the old per-task acne/skintype models until it exists; once it does,
 `frontend/public/models/{acne,skintype}/` are dead weight and can be deleted.
 
-last Claude session: 2026-07-27 (mobile OOM fix + single multi-head model)
+### Consistency, archive, lifecycle + analytics (2026-07-28)
+
+Five features on top of the queue/governance stack:
+
+- **Label Consistency Checker** (`shared/label-consistency.ts`). Compares a saved
+  label against the patient's most recent APPROVED visit. Flags a jump of
+  `LEVEL_JUMP = 2` severity levels inside `SHORT_PERIOD_DAYS = 30`. Skips
+  `skintype` — it's categorical, so oily→dry is not a "jump". Advisory only: the
+  reviewer sees a banner (Review again / Edit label / Approve anyway) and every
+  warning is written to `scan_events` as kind `warning` for audit.
+- **Image Lifecycle Tracking** (`shared/lifecycle.ts` + `scan_events` table). An
+  append-only event log: captured → analyzed → reviewed/approved/rejected →
+  dataset → trained, plus archived/restored/purged/warning. Timeline renders in
+  the annotation panel; feed is `GET /api/training-queue/:scanId/events`.
+- **Image Archive** (30-day retention). Deleting an angle now ARCHIVES it —
+  `scan_images.archived_at` is stamped, and `listImages` excludes archived rows in
+  both repo impls, so it vanishes from the scan but stays recoverable. Expiry is
+  swept lazily on `GET /api/archive` (a clinic laptop isn't always on, so a timer
+  would miss days). Restore + permanent delete under `/api/archive/...`.
+- **Clinic Analytics** (`GET /api/analytics`): patients, visits, analyses, modal
+  skin type + acne severity, mean confidence, mean review time, queue counts, plus
+  dataset-growth and model-performance series. Charts are inline CSS bars — no
+  chart library, no bundle weight. Lives at the top of the Training view.
+- **Training Sandbox**: already satisfied by the existing candidate/production/
+  archived model-release states + the deploy gate (`candidateBeatsProduction`), so
+  no new surface was added — a candidate IS the isolated experiment.
+
+Bug found and fixed while testing: `listImages` returned archived angles in both
+`MemoryScanRepo` and `PgScanRepo`, so archiving would not have removed the image
+from the scan. Postgres now filters `archived_at IS NULL`.
+
+`npm run lint` fails repo-wide — there is no `eslint.config.js` (pre-existing,
+unrelated to this work).
+
+last Claude session: 2026-07-28 09:20

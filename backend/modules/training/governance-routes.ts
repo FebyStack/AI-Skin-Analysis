@@ -79,6 +79,9 @@ export function createGovernanceRoutes(deps: AppDeps, auth: RequestHandler): Rou
       written++;
     }
     await deps.scans.markExported(complete.map((s) => s.scanId));
+    for (const s of complete) {
+      await deps.scans.recordEvent(s.scanId, "dataset", { version }).catch(() => undefined);
+    }
     res.json({ ok: true, version, imageCount: complete.length, written, missing });
   });
 
@@ -144,6 +147,12 @@ export function createGovernanceRoutes(deps: AppDeps, auth: RequestHandler): Rou
       sizeBytes,
       deployment: "candidate",
     });
+    // Every sample in the current dataset contributed to this model.
+    if (currentDataset) {
+      for (const s of await deps.scans.readySamples()) {
+        await deps.scans.recordEvent(s.scanId, "trained", { version }).catch(() => undefined);
+      }
+    }
     res.json({ ok: true, version, datasetVersion: currentDataset?.version ?? null });
   });
 

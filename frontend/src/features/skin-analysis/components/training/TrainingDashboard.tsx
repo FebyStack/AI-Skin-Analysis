@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { GovernancePanel } from "./GovernancePanel";
+import { AnalyticsDashboard } from "./AnalyticsDashboard";
+import { ArchivePanel } from "./ArchivePanel";
 
 // Mirrors the JSON the trainer + evaluator write (train.py / history.py).
 interface EpochPoint {
@@ -193,10 +195,12 @@ export function TrainingDashboard() {
         On-device model training — live progress and how each model improved across retrains. For detailed
         curves, run <code className="text-gold">tensorboard --logdir ai/models/runs</code>.
       </p>
+      <AnalyticsDashboard />
       <GovernancePanel />
       {MODELS.map((m) => (
         <ModelPanel key={m.dim} dim={m.dim} label={m.label} />
       ))}
+      <ArchivePanel />
     </div>
   );
 }

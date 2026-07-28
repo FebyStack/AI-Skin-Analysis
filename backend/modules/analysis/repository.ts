@@ -85,6 +85,45 @@ export interface ScanRepo {
   setDeployment(version: string, deployment: string): Promise<boolean>;
   /** Approved samples whose review landed after the last production model. */
   approvedSinceLastTraining(): Promise<number>;
+
+  // ----- Lifecycle audit, archive, analytics -----
+  recordEvent(scanId: string, kind: string, detail?: unknown, actor?: string | null): Promise<void>;
+  listEvents(scanId: string): Promise<EventRow[]>;
+  /** Soft-delete one angle; recoverable until the retention window lapses. */
+  archiveImage(scanId: string, angle: string): Promise<boolean>;
+  restoreImage(scanId: string, angle: string): Promise<boolean>;
+  listArchived(): Promise<ArchivedRow[]>;
+  purgeImage(scanId: string, angle: string): Promise<boolean>;
+  /** Hard-delete everything past the retention window. Returns rows removed. */
+  purgeExpired(olderThanMs: number): Promise<number>;
+  analytics(): Promise<AnalyticsRow>;
+}
+
+export interface EventRow {
+  id: string;
+  scanId: string;
+  kind: string;
+  detail: Record<string, unknown>;
+  actor: string | null;
+  at: number;
+}
+
+export interface ArchivedRow {
+  scanId: string;
+  angle: string;
+  archivedAt: number;
+  patientName: string | null;
+}
+
+export interface AnalyticsRow {
+  totalPatients: number;
+  totalVisits: number;
+  totalAnalyses: number;
+  topSkinType: string | null;
+  topAcneSeverity: string | null;
+  avgConfidence: number | null;
+  /** Mean ms between a scan entering the queue and its review decision. */
+  avgReviewMs: number | null;
 }
 
 export interface DatasetVersionRow {
@@ -186,7 +225,9 @@ export class MemoryScanRepo implements ScanRepo {
     return rows;
   }
   async listImages(scanId: string): Promise<Omit<FaceScanImage, "imageJpeg">[]> {
-    return (this.imagesByScan.get(scanId) ?? []).map(({ imageJpeg: _img, ...rest }) => rest);
+    return (this.imagesByScan.get(scanId) ?? [])
+      .filter((i) => !this.archived.has(this.key(scanId, i.angle)))
+      .map(({ imageJpeg: _img, ...rest }) => rest);
   }
   async getScanImage(scanId: string, angle: string): Promise<{ jpeg: Uint8Array } | null> {
     const hit = (this.imagesByScan.get(scanId) ?? []).find((i) => i.angle === angle);
@@ -359,6 +400,79 @@ export class MemoryScanRepo implements ScanRepo {
     hit.deployment = deployment;
     return true;
   }
+  private events: EventRow[] = [];
+  private archived = new Map<string, { scanId: string; angle: string; archivedAt: number }>();
+  private key(scanId: string, angle: string) { return `${scanId}::${angle}`; }
+
+  async recordEvent(scanId: string, kind: string, detail?: unknown, actor?: string | null) {
+    this.events.push({
+      id: randomUUID(), scanId, kind,
+      detail: (detail as Record<string, unknown>) ?? {},
+      actor: actor ?? null, at: Date.now(),
+    });
+  }
+  async listEvents(scanId: string): Promise<EventRow[]> {
+    return this.events.filter((e) => e.scanId === scanId).sort((a, b) => a.at - b.at);
+  }
+  async archiveImage(scanId: string, angle: string): Promise<boolean> {
+    const imgs = this.imagesByScan.get(scanId) ?? [];
+    if (!imgs.some((i) => i.angle === angle)) return false;
+    this.archived.set(this.key(scanId, angle), { scanId, angle, archivedAt: Date.now() });
+    return true;
+  }
+  async restoreImage(scanId: string, angle: string): Promise<boolean> {
+    return this.archived.delete(this.key(scanId, angle));
+  }
+  async listArchived(): Promise<ArchivedRow[]> {
+    return [...this.archived.values()]
+      .map((a) => ({ ...a, patientName: null }))
+      .sort((x, y) => y.archivedAt - x.archivedAt);
+  }
+  async purgeImage(scanId: string, angle: string): Promise<boolean> {
+    this.archived.delete(this.key(scanId, angle));
+    return this.deleteImage(scanId, angle);
+  }
+  async purgeExpired(olderThanMs: number): Promise<number> {
+    const cutoff = Date.now() - olderThanMs;
+    let n = 0;
+    for (const [k, a] of [...this.archived]) {
+      if (a.archivedAt <= cutoff) {
+        this.archived.delete(k);
+        if (await this.deleteImage(a.scanId, a.angle)) n++;
+      }
+    }
+    return n;
+  }
+  async analytics(): Promise<AnalyticsRow> {
+    const scans = [...this.rows.values()];
+    const conf: number[] = [];
+    const skin: Record<string, number> = {};
+    for (const s of scans) {
+      const r = s.report as { overall?: { confidence?: number }; skinType?: { type?: string } } | null;
+      if (typeof r?.overall?.confidence === "number") conf.push(r.overall.confidence);
+      if (r?.skinType?.type) skin[r.skinType.type] = (skin[r.skinType.type] ?? 0) + 1;
+    }
+    const acne: Record<string, number> = {};
+    for (const byDim of this.labels.values()) {
+      const a = byDim.get("acne");
+      if (a) acne[a] = (acne[a] ?? 0) + 1;
+    }
+    const top = (m: Record<string, number>) =>
+      Object.entries(m).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+    const reviewed = [...this.queue.values()].filter((e) => e.reviewedAt);
+    return {
+      totalPatients: new Set(scans.map((s) => s.patientId)).size,
+      totalVisits: scans.length,
+      totalAnalyses: scans.filter((s) => s.report).length,
+      topSkinType: top(skin),
+      topAcneSeverity: top(acne),
+      avgConfidence: conf.length ? conf.reduce((a, b) => a + b, 0) / conf.length : null,
+      avgReviewMs: reviewed.length
+        ? reviewed.reduce((a, e) => a + ((e.reviewedAt ?? 0) - e.createdAt), 0) / reviewed.length
+        : null,
+    };
+  }
+
   async approvedSinceLastTraining(): Promise<number> {
     const last = this.releases
       .filter((r) => r.deployment === "production")
@@ -508,7 +622,7 @@ export class PgScanRepo implements ScanRepo {
     if (!isValidUuid(scanId)) return [];
     const { rows } = await this.pool.query(
       `SELECT id, scan_id, angle, image_width, image_height, quality, created_at
-       FROM scan_images WHERE scan_id = $1 ORDER BY created_at`,
+       FROM scan_images WHERE scan_id = $1 AND archived_at IS NULL ORDER BY created_at`,
       [scanId],
     );
     return rows.map((r) => {
@@ -810,6 +924,112 @@ export class PgScanRepo implements ScanRepo {
       [version, deployment],
     );
     return (rowCount ?? 0) > 0;
+  }
+
+  // ----- Lifecycle audit, archive, analytics -----
+
+  async recordEvent(scanId: string, kind: string, detail?: unknown, actor?: string | null) {
+    if (!isValidUuid(scanId)) return;
+    await this.pool.query(
+      `INSERT INTO scan_events (scan_id, kind, detail, actor) VALUES ($1,$2,$3::jsonb,$4)`,
+      [scanId, kind, JSON.stringify(detail ?? {}), actor ?? null],
+    );
+  }
+
+  async listEvents(scanId: string): Promise<EventRow[]> {
+    if (!isValidUuid(scanId)) return [];
+    const { rows } = await this.pool.query(
+      `SELECT id, scan_id, kind, detail, actor, at FROM scan_events
+        WHERE scan_id = $1 ORDER BY at ASC`,
+      [scanId],
+    );
+    return rows.map((r) => ({
+      id: String(r.id),
+      scanId: String(r.scan_id),
+      kind: String(r.kind),
+      detail: (r.detail as Record<string, unknown>) ?? {},
+      actor: (r.actor as string | null) ?? null,
+      at: new Date(r.at as string).getTime(),
+    }));
+  }
+
+  async archiveImage(scanId: string, angle: string): Promise<boolean> {
+    if (!isValidUuid(scanId)) return false;
+    const { rowCount } = await this.pool.query(
+      `UPDATE scan_images SET archived_at = now()
+        WHERE scan_id = $1 AND angle = $2 AND archived_at IS NULL`,
+      [scanId, angle],
+    );
+    return (rowCount ?? 0) > 0;
+  }
+
+  async restoreImage(scanId: string, angle: string): Promise<boolean> {
+    if (!isValidUuid(scanId)) return false;
+    const { rowCount } = await this.pool.query(
+      `UPDATE scan_images SET archived_at = NULL WHERE scan_id = $1 AND angle = $2`,
+      [scanId, angle],
+    );
+    return (rowCount ?? 0) > 0;
+  }
+
+  async listArchived(): Promise<ArchivedRow[]> {
+    const { rows } = await this.pool.query(
+      `SELECT i.scan_id, i.angle, i.archived_at, p.name AS patient_name
+         FROM scan_images i
+         JOIN scans s ON s.id = i.scan_id
+         LEFT JOIN patients p ON p.id = s.patient_id
+        WHERE i.archived_at IS NOT NULL
+        ORDER BY i.archived_at DESC`,
+    );
+    return rows.map((r) => ({
+      scanId: String(r.scan_id),
+      angle: String(r.angle),
+      archivedAt: new Date(r.archived_at as string).getTime(),
+      patientName: (r.patient_name as string | null) ?? null,
+    }));
+  }
+
+  async purgeImage(scanId: string, angle: string): Promise<boolean> {
+    return this.deleteImage(scanId, angle);
+  }
+
+  async purgeExpired(olderThanMs: number): Promise<number> {
+    const { rowCount } = await this.pool.query(
+      `DELETE FROM scan_images
+        WHERE archived_at IS NOT NULL
+          AND archived_at < now() - ($1::bigint * INTERVAL '1 millisecond')`,
+      [Math.round(olderThanMs)],
+    );
+    return rowCount ?? 0;
+  }
+
+  async analytics(): Promise<AnalyticsRow> {
+    const { rows } = await this.pool.query(
+      `SELECT
+         (SELECT count(DISTINCT patient_id)::int FROM scans)                       AS patients,
+         (SELECT count(*)::int FROM scans)                                          AS visits,
+         (SELECT count(*)::int FROM scans WHERE report IS NOT NULL)                 AS analyses,
+         (SELECT avg((report->'overall'->>'confidence')::float)
+            FROM scans WHERE report->'overall'->>'confidence' IS NOT NULL)          AS avg_conf,
+         (SELECT report->'skinType'->>'type' FROM scans
+           WHERE report->'skinType'->>'type' IS NOT NULL
+           GROUP BY 1 ORDER BY count(*) DESC LIMIT 1)                               AS top_skin,
+         (SELECT label FROM scan_labels WHERE dimension = 'acne'
+           GROUP BY 1 ORDER BY count(*) DESC LIMIT 1)                               AS top_acne,
+         (SELECT avg(EXTRACT(EPOCH FROM (reviewed_at - created_at)) * 1000)
+            FROM training_queue WHERE reviewed_at IS NOT NULL)                      AS avg_review_ms`,
+    );
+    const r = rows[0] ?? {};
+    const num = (v: unknown) => (v === null || v === undefined ? null : Number(v));
+    return {
+      totalPatients: Number(r.patients ?? 0),
+      totalVisits: Number(r.visits ?? 0),
+      totalAnalyses: Number(r.analyses ?? 0),
+      topSkinType: (r.top_skin as string | null) ?? null,
+      topAcneSeverity: (r.top_acne as string | null) ?? null,
+      avgConfidence: num(r.avg_conf),
+      avgReviewMs: num(r.avg_review_ms),
+    };
   }
 
   async approvedSinceLastTraining(): Promise<number> {

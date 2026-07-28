@@ -16,6 +16,7 @@ import { createModelsRoutes } from "../modules/models/routes";
 import { createTrainingRoutes } from "../modules/training/routes";
 import { createQueueRoutes } from "../modules/training/queue-routes";
 import { createGovernanceRoutes } from "../modules/training/governance-routes";
+import { createArchiveRoutes } from "../modules/training/archive-routes";
 import { createModelUploadRouter } from "../modules/models/upload-route";
 
 const errMessage = (err: unknown): string =>
@@ -69,6 +70,7 @@ export function createApp(deps: AppDeps): Express {
   app.use(createTrainingRoutes(deps, auth));
   app.use(createQueueRoutes(deps, auth));
   app.use(createGovernanceRoutes(deps, auth));
+  app.use(createArchiveRoutes(deps, auth));
 
   try {
     app.use(

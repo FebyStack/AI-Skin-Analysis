@@ -107,6 +107,13 @@ export function createFaceScanRoutes(deps: AppDeps, auth: RequestHandler): Route
       training: consent?.training === true,
     };
     await deps.scans.setConsent(scan.id, scanConsent).catch(() => undefined);
+    // Opening entries of the lifecycle timeline.
+    await deps.scans.recordEvent(scan.id, "captured", { angles: images.length }).catch(() => undefined);
+    if (report) {
+      await deps.scans
+        .recordEvent(scan.id, "analyzed", { model: report.modelVersions?.acne ?? null })
+        .catch(() => undefined);
+    }
 
     // ONLY training-consented scans enter the Training Queue. Without consent the
     // scan is still saved and shown in history — it just can never become

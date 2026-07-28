@@ -98,7 +98,7 @@ export function ImageManager({
   };
 
   if (angles.length === 0) {
-    return <p className="text-sm text-ink-secondary">All images for this scan have been deleted.</p>;
+    return <p className="text-sm text-ink-secondary">All images for this scan have been archived.</p>;
   }
 
   return (
@@ -149,7 +149,7 @@ export function ImageManager({
             disabled={busy}
             className="min-h-[32px] rounded-lg border border-urgent-edge bg-urgent-surface px-2 text-xs font-medium text-urgent disabled:opacity-50"
           >
-            Delete Image
+            Archive Image
           </button>
           <button
             onClick={() => setConfirm("scan")}
@@ -199,8 +199,8 @@ export function ImageManager({
 
       {confirm === "image" && (
         <ConfirmDialog
-          title="Delete only this image?"
-          body="This action cannot be undone. The other angles in this scan are kept."
+          title="Archive only this image?"
+          body="It is removed from this scan but recoverable from the Archive for 30 days, after which it is deleted permanently. The other angles are kept."
           onCancel={() => setConfirm(null)}
           onConfirm={deleteImage}
         />

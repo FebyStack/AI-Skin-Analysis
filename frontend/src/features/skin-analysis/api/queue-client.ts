@@ -2,6 +2,8 @@ import type { FaceReport } from "@shared/face";
 import type { QueueEntry, QueueStats, QueueStatus } from "@shared/training-queue";
 import type { QualityResult } from "@shared/image-quality";
 import type { Eligibility, ScanConsent } from "@shared/training-governance";
+import type { LabelInconsistency } from "@shared/label-consistency";
+import type { ScanEvent, ArchivedImage, ArchiveStats } from "@shared/lifecycle";
 
 export interface QueueDetail {
   entry: QueueEntry;
@@ -69,13 +71,69 @@ export async function deleteScan(scanId: string): Promise<boolean> {
   return r.ok;
 }
 
-/** Human-verified label for one field — stored separately from the AI prediction. */
-export async function saveLabel(scanId: string, dimension: string, label: string): Promise<boolean> {
+/**
+ * Human-verified label for one field — stored separately from the AI prediction.
+ * Returns any consistency warnings raised against the patient's last approved
+ * visit; `null` means the save itself failed.
+ */
+export async function saveLabel(
+  scanId: string,
+  dimension: string,
+  label: string,
+): Promise<LabelInconsistency[] | null> {
   const r = await fetch(`/api/scans/${scanId}/label`, {
     method: "POST",
     credentials: "include",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ dimension, label }),
   });
+  if (!r.ok) return null;
+  const body = await r.json().catch(() => ({}));
+  return Array.isArray(body.inconsistencies) ? body.inconsistencies : [];
+}
+
+/** Audit trail for one scan, oldest first. */
+export async function scanEvents(scanId: string): Promise<ScanEvent[]> {
+  return (await getJSON<{ events: ScanEvent[] }>(`/api/training-queue/${scanId}/events`))?.events ?? [];
+}
+
+export type ArchiveEntry = ArchivedImage;
+
+export async function listArchive(): Promise<{ images: ArchiveEntry[]; stats: ArchiveStats } | null> {
+  return getJSON(`/api/archive`);
+}
+
+export async function restoreArchived(scanId: string, angle: string): Promise<boolean> {
+  const r = await fetch(`/api/archive/${scanId}/${angle}/restore`, {
+    method: "POST",
+    credentials: "include",
+  });
   return r.ok;
+}
+
+/** Permanent — no recovery after this. */
+export async function purgeArchived(scanId: string, angle: string): Promise<boolean> {
+  const r = await fetch(`/api/archive/${scanId}/${angle}`, { method: "DELETE", credentials: "include" });
+  return r.ok;
+}
+
+export interface ClinicAnalytics {
+  totalPatients: number;
+  totalVisits: number;
+  totalAnalyses: number;
+  topSkinType: string | null;
+  topAcneSeverity: string | null;
+  avgConfidence: number | null;
+  avgReviewMs: number | null;
+  queueSize: number;
+  approved: number;
+  rejected: number;
+  pending: number;
+  needsExpert: number;
+  datasetGrowth: { version: string; at: number; imageCount: number }[];
+  modelHistory: { version: string; at: number; macroF1: number | null; deployment: string }[];
+}
+
+export async function clinicAnalytics(): Promise<ClinicAnalytics | null> {
+  return getJSON(`/api/analytics`);
 }
