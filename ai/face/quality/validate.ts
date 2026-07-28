@@ -37,14 +37,14 @@ function frameLumaStats(px: Pixels): { mean: number; hf: number } {
   return { mean: sum / (width * height), hf: cnt ? hf / cnt : 0 };
 }
 
-function faceFraction(g: FaceGeometry): number {
+export function faceFraction(g: FaceGeometry): number {
   let minY = 1, maxY = 0;
   for (const l of g.landmarks) { if (l.y < minY) minY = l.y; if (l.y > maxY) maxY = l.y; }
   return maxY - minY;
 }
 
 /** How far the face centre sits from the frame centre, 0 (centred) .. ~1. */
-function centerOffset(g: FaceGeometry): number {
+export function centerOffset(g: FaceGeometry): number {
   let minX = 1, minY = 1, maxX = 0, maxY = 0;
   for (const l of g.landmarks) {
     if (l.x < minX) minX = l.x;

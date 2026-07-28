@@ -14,17 +14,25 @@ import { refineAcneWithModel } from "@ai/face/analyzers/acne-model";
 import { refineSkinTypeWithModel } from "@ai/face/analyzers/skintype-model";
 import { ensureFaceModel, refineFaceWithModel } from "@ai/face/analyzers/face-model";
 import { detectGeometry } from "@ai/face/landmarks/mediapipe";
-import { ANGLE_YAW_WINDOWS } from "@ai/face/quality/validate";
+import {
+  ANGLE_YAW_WINDOWS,
+  FACE_MIN_FRACTION,
+  centerOffset,
+  faceFraction,
+} from "@ai/face/quality/validate";
 import type { FaceGeometry, Pixels } from "@ai/face/types";
 import { FACE_ANGLES, type FaceReport, type FaceAngle } from "@shared/face";
 import type { CapturedAngle } from "../../api/face-client";
 
 type View = "capture" | "saving" | "result" | "history";
 
-// Auto-capture: this many consecutive good pose checks (at CHECK_MS apart)
-// triggers the shot — roughly a one-second steady hold.
-const HOLD_CHECKS = 3;
+// Auto-capture tuning. Previously this fired ~1s after the camera went live
+// while the patient was still reading the instruction, because it only checked
+// yaw — and "front" is a ±12° window that almost any glance satisfies.
 const CHECK_MS = 350;
+const HOLD_CHECKS = 5;        // ~1.75s of CONTINUOUS good pose
+const ARM_DELAY_MS = 1600;    // grace after each step appears, to read + get set
+const CENTER_MAX = 0.32;      // face must be near frame centre, not just facing it
 
 // Face bbox (pixel coords, 15% margin) from normalized MediaPipe landmarks.
 function faceRect(g: FaceGeometry, w: number, h: number) {
@@ -151,7 +159,13 @@ export function GuidedFaceFlow() {
   // head". The Capture button stays as a manual fallback.
   const [holdStreak, setHoldStreak] = useState(0);
   const poseCheckBusy = useRef(false);
-  useEffect(() => setHoldStreak(0), [scan.stepIndex]); // new step → re-arm
+  // Auto-capture stays disarmed for ARM_DELAY_MS after a step appears so the
+  // patient can read the instruction and settle before anything can fire.
+  const armedAt = useRef(Date.now() + ARM_DELAY_MS);
+  useEffect(() => {
+    setHoldStreak(0);
+    armedAt.current = Date.now() + ARM_DELAY_MS;
+  }, [scan.stepIndex, camera.status]);
   useEffect(() => {
     if (view !== "capture" || camera.status !== "live") return;
     const id = setInterval(async () => {
@@ -160,11 +174,19 @@ export function GuidedFaceFlow() {
       const el = camera.videoRef.current;
       const angle = scan.currentAngle as FaceAngle | undefined;
       if (!el || !el.videoWidth || !angle) return;
+      if (Date.now() < armedAt.current) return; // still in the grace period
       poseCheckBusy.current = true;
       try {
         const g = await detectGeometry(el, performance.now());
         const [lo, hi] = ANGLE_YAW_WINDOWS[angle];
-        const good = g !== null && g.yawDeg >= lo && g.yawDeg <= hi;
+        // Facing the right way is NOT enough — the patient must also be close
+        // enough and centred, or we shoot someone sitting back reading the screen.
+        const good =
+          g !== null &&
+          g.yawDeg >= lo &&
+          g.yawDeg <= hi &&
+          faceFraction(g) >= FACE_MIN_FRACTION &&
+          centerOffset(g) <= CENTER_MAX;
         setHoldStreak((s) => (good ? s + 1 : 0));
       } catch {
         setHoldStreak(0);
@@ -291,8 +313,9 @@ export function GuidedFaceFlow() {
       ? "right"
       : "none";
   const holding = holdStreak > 0;
+  const countdown = Math.max(0, HOLD_CHECKS - holdStreak);
   const positionCue = holding
-    ? "Hold still…"
+    ? `Hold still — capturing in ${countdown}…`
     : turnDir === "none"
       ? "Center your face in the oval"
       : `Turn ${turnDir} — keep your face in the oval`;
@@ -349,6 +372,21 @@ export function GuidedFaceFlow() {
                   strokeWidth={holding ? 1.5 : 0.7}
                   strokeDasharray={holding ? undefined : "3 2"}
                 />
+                {/* Hold progress traces the oval as the countdown runs. */}
+                {holding && (
+                  <ellipse
+                    cx="50" cy="58" rx="29" ry="38"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    className="text-ok transition-[stroke-dashoffset] duration-300 ease-linear"
+                    pathLength={100}
+                    strokeDasharray="100"
+                    strokeDashoffset={100 - (holdStreak / HOLD_CHECKS) * 100}
+                    strokeLinecap="round"
+                    transform="rotate(-90 50 58)"
+                  />
+                )}
               </svg>
 
               {/* Directional chevron for the current step (front shows none). */}
@@ -413,7 +451,7 @@ export function GuidedFaceFlow() {
       </button>
 
       <p className="relative mt-3 text-xs text-ink-tertiary">
-        Hold the pose and it captures on its own.
+        Hold the pose for a moment and it captures on its own.
       </p>
 
       <button
