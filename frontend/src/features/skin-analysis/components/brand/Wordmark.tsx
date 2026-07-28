@@ -30,8 +30,8 @@ export function Wordmark({ size = "sm", tagline = true }: Props) {
         </span>
         {tagline && (
           <span
-            className={`font-serif italic text-ink-secondary ${
-              lg ? "mt-2 text-sm tracking-[0.1em]" : "mt-0.5 text-[0.6875rem] tracking-[0.06em]"
+            className={`font-serif italic text-gold/90 ${
+              lg ? "mt-1.5 text-sm tracking-[0.14em]" : "mt-0.5 text-[0.6875rem] tracking-[0.08em]"
             }`}
           >
             Family · Lifestyle · Aesthetics

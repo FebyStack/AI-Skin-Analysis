@@ -296,90 +296,129 @@ export function GuidedFaceFlow() {
     : turnDir === "none"
       ? "Center your face in the oval"
       : `Turn ${turnDir} — keep your face in the oval`;
+  const stepLabel = `Step ${scan.stepIndex + 1} of ${scan.totalSteps}`;
+
   return (
-    <div className="flex w-full flex-col items-center gap-4">
-      <div className="relative aspect-[3/4] w-full max-w-sm overflow-hidden rounded-2xl border border-hairline bg-black shadow-card">
-        <video
-          ref={camera.videoRef}
-          playsInline
-          muted
-          className="h-full w-full object-cover scale-x-[-1]" /* selfie preview mirror */
-        />
-        {/* Face-positioning guide: dim everything outside a centred oval + dashed outline. */}
-        {camera.status === "live" && (
-          <div className="pointer-events-none absolute inset-0">
-            <svg viewBox="0 0 100 133" preserveAspectRatio="none" className="h-full w-full text-gold">
-              <defs>
-                <mask id="faceHole">
-                  <rect width="100" height="133" fill="white" />
-                  <ellipse cx="50" cy="58" rx="29" ry="38" fill="black" />
-                </mask>
-              </defs>
-              <rect width="100" height="133" fill="rgba(0,0,0,0.5)" mask="url(#faceHole)" />
-              <ellipse
-                cx="50" cy="58" rx="29" ry="38"
-                fill="none" stroke="currentColor"
-                strokeWidth={holding ? 1.4 : 0.7}
-                strokeDasharray={holding ? undefined : "3 2"}
-              />
-            </svg>
-            {/* Directional chevron for the current step (front shows none). */}
-            {turnDir !== "none" && (
-              <div
-                className={`absolute top-1/2 -translate-y-1/2 animate-pulse text-gold ${turnDir === "left" ? "left-2" : "right-2"}`}
-              >
-                <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  {turnDir === "left" ? <polyline points="15 18 9 12 15 6" /> : <polyline points="9 18 15 12 9 6" />}
-                </svg>
-              </div>
-            )}
-            <p className="absolute inset-x-0 top-3 px-4 text-center text-xs font-medium text-white/90">
-              {positionCue}
-            </p>
-          </div>
-        )}
-        {camera.status !== "live" && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/70 text-sm text-ink">
-            {camera.status === "denied" && "Camera permission denied"}
-            {camera.status === "no-camera" && "No camera available"}
-            {camera.status === "starting" && "Starting camera…"}
-            {camera.status === "idle" && "Waiting…"}
-          </div>
-        )}
+    <div className="relative flex w-full animate-reveal flex-col items-center">
+      {/* Local ambient glow behind the camera — brand warmth without competing
+          with the live preview. Fixed layers are reserved for the login screen. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute left-1/2 top-8 h-[26rem] w-[26rem] -translate-x-1/2 rounded-full bg-[radial-gradient(circle,rgba(201,162,75,0.13),transparent_68%)] blur-3xl"
+      />
+
+      {/* Editorial instruction — the patient reads this, so it leads. */}
+      <div className="relative mb-5 text-center">
+        <span className="inline-flex items-center gap-2 rounded-full border border-hairline-strong bg-surface/60 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.2em] text-ink-secondary">
+          <span className={`h-1 w-1 rounded-full ${holding ? "bg-ok" : "bg-gold"}`} />
+          {stepLabel}
+        </span>
+        <p className="mx-auto mt-3 max-w-[22ch] font-serif text-[clamp(1.35rem,4.5vw,1.75rem)] font-semibold leading-tight tracking-tight text-ink [text-wrap:balance]">
+          {scan.instruction}
+        </p>
       </div>
 
-      <div className="flex flex-col items-center gap-2">
-        {/* Per-step progress: one segment per angle (done / current / pending). */}
-        <div className="flex items-center gap-1.5">
-          {FACE_ANGLES.map((a, i) => (
-            <span
-              key={a}
-              className={`h-1.5 rounded-full transition-all ${
-                i < scan.stepIndex ? "w-4 bg-gold" : i === scan.stepIndex ? "w-6 bg-gold-bright" : "w-4 bg-hairline"
-              }`}
-            />
-          ))}
+      {/* Camera: double-bezel tray so the preview reads as a machined plate. */}
+      <div className="relative w-full max-w-sm rounded-[2rem] border border-hairline bg-white/[0.04] p-2 shadow-card">
+        <div className="relative aspect-[3/4] w-full overflow-hidden rounded-[1.5rem] bg-black">
+          <video
+            ref={camera.videoRef}
+            playsInline
+            muted
+            className="h-full w-full object-cover scale-x-[-1]" /* selfie preview mirror */
+          />
+
+          {/* Face-positioning guide: dim outside a centred oval; the outline goes
+              solid and gold-bright once the pose is held, so the patient can see
+              the shot is about to fire. */}
+          {camera.status === "live" && (
+            <div className="pointer-events-none absolute inset-0">
+              <svg viewBox="0 0 100 133" preserveAspectRatio="none" className="h-full w-full">
+                <defs>
+                  <mask id="faceHole">
+                    <rect width="100" height="133" fill="white" />
+                    <ellipse cx="50" cy="58" rx="29" ry="38" fill="black" />
+                  </mask>
+                </defs>
+                <rect width="100" height="133" fill="rgba(0,0,0,0.52)" mask="url(#faceHole)" />
+                <ellipse
+                  cx="50" cy="58" rx="29" ry="38"
+                  fill="none"
+                  className={`transition-all duration-500 ease-spring ${holding ? "text-gold-bright" : "text-gold/70"}`}
+                  stroke="currentColor"
+                  strokeWidth={holding ? 1.5 : 0.7}
+                  strokeDasharray={holding ? undefined : "3 2"}
+                />
+              </svg>
+
+              {/* Directional chevron for the current step (front shows none). */}
+              {turnDir !== "none" && (
+                <div
+                  className={`absolute top-1/2 -translate-y-1/2 animate-pulse text-gold ${turnDir === "left" ? "left-3" : "right-3"}`}
+                >
+                  <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    {turnDir === "left" ? <polyline points="15 18 9 12 15 6" /> : <polyline points="9 18 15 12 9 6" />}
+                  </svg>
+                </div>
+              )}
+
+              <p className="absolute inset-x-0 bottom-4 px-4 text-center text-xs font-medium tracking-wide text-white/90">
+                {positionCue}
+              </p>
+            </div>
+          )}
+
+          {camera.status !== "live" && (
+            <div className="absolute inset-0 grid place-items-center bg-black/70 px-6 text-center text-sm text-ink">
+              {camera.status === "denied" && "Camera permission denied"}
+              {camera.status === "no-camera" && "No camera available"}
+              {camera.status === "starting" && "Starting camera…"}
+              {camera.status === "idle" && "Waiting…"}
+            </div>
+          )}
         </div>
-        <div className="text-xs font-semibold uppercase tracking-[0.1em] text-gold">
-          Step {scan.stepIndex + 1} of {scan.totalSteps}
-        </div>
-        <p className="max-w-sm text-center text-sm text-ink">{scan.instruction}</p>
-        {scan.lastIssues.length > 0 && (
-          <p className="text-xs text-soon">Please retake: {scan.lastIssues.join(", ")}</p>
-        )}
       </div>
 
+      {/* Progress: one segment per angle (done / current / pending). */}
+      <div className="relative mt-5 flex items-center gap-1.5" aria-label={stepLabel}>
+        {FACE_ANGLES.map((a, i) => (
+          <span
+            key={a}
+            className={`h-1.5 rounded-full transition-all duration-500 ease-spring ${
+              i < scan.stepIndex ? "w-5 bg-gold" : i === scan.stepIndex ? "w-8 bg-gold-bright" : "w-5 bg-hairline"
+            }`}
+          />
+        ))}
+      </div>
+
+      {scan.lastIssues.length > 0 && (
+        <p className="relative mt-3 rounded-xl border border-soon-edge bg-soon-surface px-3 py-1.5 text-xs text-soon">
+          Please retake: {scan.lastIssues.join(", ")}
+        </p>
+      )}
+
+      {/* Auto-capture fires on a steady hold; this stays as the manual fallback. */}
       <button
         onClick={captureNow}
         disabled={camera.status !== "live" || scan.busy}
-        className="btn-primary rounded-full px-8"
+        className="group btn-primary relative mt-6 w-full max-w-[16rem] justify-between rounded-full py-3 pl-6 pr-2"
       >
-        {scan.busy ? "Analyzing…" : "Capture"}
+        <span>{scan.busy ? "Analyzing…" : "Capture"}</span>
+        <span className="grid h-8 w-8 place-items-center rounded-full bg-gold-ink/10 transition-transform duration-500 ease-spring group-hover:-translate-y-px group-hover:scale-105">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <circle cx="12" cy="13" r="3.5" />
+            <path d="M3 8.5A1.5 1.5 0 0 1 4.5 7h2.2a1.5 1.5 0 0 0 1.25-.67l.8-1.2A1.5 1.5 0 0 1 10 4.5h4a1.5 1.5 0 0 1 1.25.67l.8 1.2A1.5 1.5 0 0 0 17.3 7h2.2A1.5 1.5 0 0 1 21 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5Z" />
+          </svg>
+        </span>
       </button>
+
+      <p className="relative mt-3 text-xs text-ink-tertiary">
+        Hold the pose and it captures on its own.
+      </p>
 
       <button
         onClick={() => setView("history")}
-        className="text-sm font-medium text-gold-bright underline-offset-2 hover:underline"
+        className="relative mt-5 text-sm font-medium text-gold-bright underline-offset-4 transition-colors hover:text-gold hover:underline"
       >
         View scan history
       </button>
