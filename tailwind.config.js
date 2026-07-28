@@ -35,10 +35,23 @@ export default {
       keyframes: {
         rise: { "0%": { opacity: "0", transform: "translateY(8px)" }, "100%": { opacity: "1", transform: "translateY(0)" } },
         shimmer: { "0%": { backgroundPosition: "-200% 0" }, "100%": { backgroundPosition: "200% 0" } },
+        // Heavier cinematic entry for brand surfaces (login). Resolves out of blur
+        // + offset; one-shot on a handful of nodes, never on scroll.
+        reveal: {
+          "0%": { opacity: "0", transform: "translateY(22px)", filter: "blur(6px)" },
+          "100%": { opacity: "1", transform: "translateY(0)", filter: "blur(0)" },
+        },
+        // Slow ambient drift for the background mesh — transform only.
+        drift: {
+          "0%,100%": { transform: "translate3d(0,0,0) scale(1)" },
+          "50%": { transform: "translate3d(0,-3%,0) scale(1.06)" },
+        },
       },
       animation: {
         rise: "rise 320ms cubic-bezier(0.32,0.72,0,1) both",
         shimmer: "shimmer 1.6s linear infinite",
+        reveal: "reveal 800ms cubic-bezier(0.32,0.72,0,1) both",
+        drift: "drift 18s cubic-bezier(0.44,0,0.56,1) infinite",
       },
     },
   },

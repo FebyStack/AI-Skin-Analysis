@@ -40,7 +40,11 @@
            focus-visible:ring-offset-canvas disabled:pointer-events-none disabled:opacity-40;
   }
   .btn-primary {
-    @apply btn bg-gold text-gold-ink hover:bg-gold-bright;
+    /* Disabled: an outline, not 40%-opacity gold — tinted gold over the dark
+       canvas turns muddy olive and reads as broken rather than unavailable. */
+    @apply btn bg-gold text-gold-ink hover:bg-gold-bright
+           disabled:border disabled:border-hairline-strong disabled:bg-transparent
+           disabled:text-ink-tertiary disabled:opacity-100;
   }
   .btn-secondary {
     @apply btn border border-hairline-strong bg-surface-raised text-ink hover:bg-surface-raised/80;
@@ -90,6 +94,12 @@
   }
   .gold-tile {
     background-image: linear-gradient(155deg, #EAD6A0 0%, #C9A24B 45%, #A9772F 100%);
+  }
+
+  /* Brand surfaces (login): fixed, pointer-events-none texture layers. Kept
+     fixed so they never repaint with scrolling content. */
+  .grain {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.42'/%3E%3C/svg%3E");
   }
 
   /* Skeleton shimmer */
