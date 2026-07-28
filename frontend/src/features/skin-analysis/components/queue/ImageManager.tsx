@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { QUALITY_MIN_SCORE, type QualityResult } from "@shared/image-quality";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { CheckIcon, CrossIcon, WarningIcon } from "../ui/icons";
 
 export interface QueueAngle {
   angle: string;
@@ -20,7 +21,7 @@ function QualityPanel({ result }: { result: QualityResult | null }) {
         {result.checks.map((c) => (
           <li key={c.key} className="flex items-center justify-between gap-2 text-xs">
             <span className="flex items-center gap-1.5">
-              <span className={c.ok ? "text-emerald-400" : "text-urgent"}>{c.ok ? "✓" : "✕"}</span>
+              <span className={c.ok ? "text-ok" : "text-urgent"}>{c.ok ? <CheckIcon /> : <CrossIcon />}</span>
               <span className="text-ink-secondary">{c.label}</span>
             </span>
             <span className="font-mono tabular-nums text-ink-tertiary">{c.detail}</span>
@@ -39,8 +40,8 @@ function QualityPanel({ result }: { result: QualityResult | null }) {
           </span>
         </div>
         {low && (
-          <p className="mt-1 text-[11px] text-urgent">
-            ⚠ Below the {QUALITY_MIN_SCORE}/100 threshold — consider retaking before approving.
+          <p className="mt-1 flex items-center gap-1 text-[11px] text-urgent"><WarningIcon size={10} />
+            Below the {QUALITY_MIN_SCORE}/100 threshold — consider retaking before approving.
           </p>
         )}
       </div>
@@ -146,14 +147,14 @@ export function ImageManager({
           <button
             onClick={() => setConfirm("image")}
             disabled={busy}
-            className="min-h-[32px] rounded-lg border border-urgent/40 bg-urgent/10 px-2 text-xs font-medium text-urgent disabled:opacity-50"
+            className="min-h-[32px] rounded-lg border border-urgent-edge bg-urgent-surface px-2 text-xs font-medium text-urgent disabled:opacity-50"
           >
             Delete Image
           </button>
           <button
             onClick={() => setConfirm("scan")}
             disabled={busy}
-            className="min-h-[32px] rounded-lg border border-urgent/40 bg-urgent/10 px-2 text-xs font-medium text-urgent disabled:opacity-50"
+            className="min-h-[32px] rounded-lg border border-urgent-edge bg-urgent-surface px-2 text-xs font-medium text-urgent disabled:opacity-50"
           >
             Delete Scan
           </button>
@@ -181,7 +182,7 @@ export function ImageManager({
                   className="h-16 w-12 rounded object-cover"
                 />
                 <span className="mt-0.5 block text-center text-[10px] text-ink-tertiary">
-                  {low && <span className="text-urgent">⚠ </span>}
+                  {low && <WarningIcon size={9} />}
                   {a.angle}
                 </span>
               </button>

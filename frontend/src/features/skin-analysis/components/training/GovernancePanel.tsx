@@ -5,6 +5,7 @@ import type {
   TrainingReadiness,
 } from "@shared/training-governance";
 import type { QueueStats } from "@shared/training-queue";
+import { StatCard } from "../ui/StatCard";
 
 async function getJSON<T>(url: string): Promise<T | null> {
   try {
@@ -25,23 +26,12 @@ async function post(url: string, body?: unknown): Promise<{ ok: boolean; error?:
   return { ok: r.ok, error: j.error };
 }
 
-function Stat({ label, value, accent }: { label: string; value: string | number; accent?: boolean }) {
-  return (
-    <div className="card px-4 py-3">
-      <div className={`font-mono text-xl font-semibold tabular-nums ${accent ? "text-gold-bright" : "text-ink"}`}>
-        {value}
-      </div>
-      <div className="mt-0.5 text-[11px] uppercase tracking-[0.08em] text-ink-tertiary">{label}</div>
-    </div>
-  );
-}
-
 const pct = (n: number | null | undefined) =>
   typeof n === "number" ? `${Math.round(n * 100)}%` : "—";
 const mb = (n: number | null) => (typeof n === "number" ? `${Math.round(n / 1_000_000)} MB` : "—");
 
 const DEPLOY_PILL: Record<string, string> = {
-  production: "border-emerald-500/40 bg-emerald-500/10 text-emerald-400",
+  production: "border-ok-edge bg-ok-surface text-ok",
   candidate: "border-soon-edge bg-soon-surface text-soon",
   archived: "border-hairline-strong bg-surface-raised text-ink-tertiary",
 };
@@ -77,14 +67,14 @@ export function GovernancePanel() {
   const createDataset = async () => {
     setMsg("Creating…");
     const r = await post("/api/datasets");
-    setMsg(r.ok ? "New dataset version created." : r.error ?? "Could not create dataset.");
+    setMsg(r.ok ? "Dataset version frozen." : r.error ?? "Could not create dataset.");
     void load();
   };
 
   const registerCandidate = async () => {
     setMsg("Registering…");
     const r = await post("/api/model-releases");
-    setMsg(r.ok ? "Candidate registered — deploy it below when you're happy." : r.error ?? "Could not register.");
+    setMsg(r.ok ? "Candidate registered. Check its scores below before deploying." : r.error ?? "Could not register.");
     void load();
   };
 
@@ -102,19 +92,19 @@ export function GovernancePanel() {
     <div className="space-y-5">
       {/* Headline numbers */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Stat label="Dataset Size" value={currentDataset?.imageCount ?? 0} accent />
-        <Stat label="Pending Reviews" value={stats?.pending ?? 0} />
-        <Stat label="Approved" value={stats?.approved ?? 0} />
-        <Stat label="Rejected" value={stats?.rejected ?? 0} />
-        <Stat label="Needs Expert" value={stats?.needs_expert ?? 0} />
-        <Stat label="Dataset Version" value={currentDataset?.version ?? "—"} />
-        <Stat label="Model Version" value={production?.version ?? "none"} />
-        <Stat label="Macro F1" value={pct(production?.macroF1)} accent />
+        <StatCard label="Dataset Size" value={currentDataset?.imageCount ?? 0} accent />
+        <StatCard label="Pending Reviews" value={stats?.pending ?? 0} />
+        <StatCard label="Approved" value={stats?.approved ?? 0} />
+        <StatCard label="Rejected" value={stats?.rejected ?? 0} />
+        <StatCard label="Needs Expert" value={stats?.needs_expert ?? 0} />
+        <StatCard label="Dataset Version" value={currentDataset?.version ?? "—"} />
+        <StatCard label="Model Version" value={production?.version ?? "none"} />
+        <StatCard label="Macro F1" value={pct(production?.macroF1)} accent />
       </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <Stat label="Acne F1" value={pct(production?.acneF1)} />
-        <Stat label="Skin Type F1" value={pct(production?.skintypeF1)} />
-        <Stat
+        <StatCard label="Acne F1" value={pct(production?.acneF1)} />
+        <StatCard label="Skin Type F1" value={pct(production?.skintypeF1)} />
+        <StatCard
           label="Training Date"
           value={production ? new Date(production.trainedAt).toLocaleDateString() : "—"}
         />
@@ -130,7 +120,7 @@ export function GovernancePanel() {
         </div>
         <div className="mt-2 h-2 overflow-hidden rounded-full bg-hairline">
           <div
-            className={`h-full rounded-full transition-all ${readiness?.ready ? "bg-emerald-500" : "bg-gold"}`}
+            className={`h-full rounded-full transition-all ${readiness?.ready ? "bg-ok" : "bg-gold"}`}
             style={{ width: `${pctReady}%` }}
           />
         </div>
@@ -138,7 +128,7 @@ export function GovernancePanel() {
           Approved since the last deployed model.{" "}
           {readiness?.ready
             ? "Threshold reached — you can create a dataset version and train a candidate."
-            : "Training stays available, but this is the point where a retrain is worth it."}
+            : "You can train at any time; this is the point where a retrain usually pays off."}
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
           <button onClick={createDataset} className="btn-primary text-sm">

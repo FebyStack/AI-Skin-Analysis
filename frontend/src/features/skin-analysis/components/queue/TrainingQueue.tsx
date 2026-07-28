@@ -10,24 +10,14 @@ import { listQueue, queueStats } from "../../api/queue-client";
 import { ELIGIBILITY_LABEL, type Eligibility } from "@shared/training-governance";
 import { AnnotationPanel } from "./AnnotationPanel";
 import { ConfidenceBadge } from "./ConfidenceBadge";
+import { StatCard } from "../ui/StatCard";
 
 const STATUS_PILL: Record<QueueStatus, string> = {
   pending: "border-hairline-strong bg-surface-raised text-ink-secondary",
-  approved: "border-emerald-500/40 bg-emerald-500/10 text-emerald-400",
-  rejected: "border-urgent/40 bg-urgent/10 text-urgent",
+  approved: "border-ok-edge bg-ok-surface text-ok",
+  rejected: "border-urgent-edge bg-urgent-surface text-urgent",
   needs_expert: "border-soon-edge bg-soon-surface text-soon",
 };
-
-function StatCard({ label, value, accent }: { label: string; value: number; accent?: boolean }) {
-  return (
-    <div className="card px-4 py-3">
-      <div className={`font-mono text-2xl font-semibold tabular-nums ${accent ? "text-gold-bright" : "text-ink"}`}>
-        {value}
-      </div>
-      <div className="mt-0.5 text-[11px] uppercase tracking-[0.08em] text-ink-tertiary">{label}</div>
-    </div>
-  );
-}
 
 export function TrainingQueue() {
   const [tab, setTab] = useState<QueueStatus>("pending");
@@ -166,7 +156,7 @@ export function TrainingQueue() {
                         <span
                           className={`rounded-full border px-2 py-0.5 ${
                             e.eligibility === "ready"
-                              ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400"
+                              ? "border-ok-edge bg-ok-surface text-ok"
                               : "border-hairline-strong bg-surface-raised text-ink-tertiary"
                           }`}
                         >

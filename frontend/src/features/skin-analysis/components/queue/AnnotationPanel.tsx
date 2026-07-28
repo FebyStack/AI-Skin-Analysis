@@ -128,8 +128,8 @@ export function AnnotationPanel({ scanId, onClose }: { scanId: string; onClose: 
             <span
               className={`rounded-full border px-2 py-0.5 ${
                 detail.consent?.training
-                  ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400"
-                  : "border-urgent/40 bg-urgent/10 text-urgent"
+                  ? "border-ok-edge bg-ok-surface text-ok"
+                  : "border-urgent-edge bg-urgent-surface text-urgent"
               }`}
             >
               {detail.consent?.training ? "Training consent given" : "No training consent"}
@@ -137,7 +137,7 @@ export function AnnotationPanel({ scanId, onClose }: { scanId: string; onClose: 
             <span
               className={`rounded-full border px-2 py-0.5 ${
                 detail.eligibility === "ready"
-                  ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400"
+                  ? "border-ok-edge bg-ok-surface text-ok"
                   : "border-hairline-strong bg-surface-raised text-ink-tertiary"
               }`}
             >
@@ -177,7 +177,7 @@ export function AnnotationPanel({ scanId, onClose }: { scanId: string; onClose: 
             </button>
             <button
               onClick={() => setConfirmDeleteDup(true)}
-              className="min-h-[32px] rounded-lg border border-urgent/40 bg-urgent/10 px-2 text-xs font-medium text-urgent"
+              className="min-h-[32px] rounded-lg border border-urgent-edge bg-urgent-surface px-2 text-xs font-medium text-urgent"
             >
               Delete Duplicate
             </button>
@@ -217,7 +217,7 @@ export function AnnotationPanel({ scanId, onClose }: { scanId: string; onClose: 
                     value={verified[f.key] ?? ""}
                     onChange={(e) => change(f.key, e.target.value)}
                     disabled={saving === f.key}
-                    className={`field capitalize sm:w-36 ${edited.has(f.key) ? "border-gold text-gold-bright" : ""}`}
+                    className={`field-select capitalize sm:w-36 ${edited.has(f.key) ? "border-gold text-gold-bright" : ""}`}
                   >
                     {f.options.map((o) => (
                       <option key={o} value={o}>{o}</option>
@@ -259,7 +259,7 @@ export function AnnotationPanel({ scanId, onClose }: { scanId: string; onClose: 
           value={note}
           onChange={(e) => setNote(e.target.value)}
           rows={3}
-          placeholder="Observations, disagreements with the AI, anything the next reviewer should know…"
+          placeholder="What you saw, where you disagreed with the AI, anything the next reviewer needs."
           className="field mt-2 w-full resize-y"
         />
         <div className="mt-2 grid gap-2 sm:grid-cols-2">
@@ -292,7 +292,7 @@ export function AnnotationPanel({ scanId, onClose }: { scanId: string; onClose: 
           <button onClick={() => commit("approved")} className="btn-primary px-4">Approve</button>
           <button
             onClick={() => commit("rejected")}
-            className="min-h-[40px] rounded-lg border border-urgent/40 bg-urgent/10 px-4 text-sm font-medium text-urgent"
+            className="min-h-[40px] rounded-lg border border-urgent-edge bg-urgent-surface px-4 text-sm font-medium text-urgent"
           >
             Reject
           </button>

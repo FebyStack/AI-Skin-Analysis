@@ -55,6 +55,18 @@
            text-ink placeholder:text-ink-tertiary outline-none transition
            focus:border-gold focus:ring-2 focus:ring-gold/30;
   }
+  /* Native select: strip OS chrome (renders light on some platforms) and draw
+     our own chevron so it matches the inline SVG icon language. */
+  .field-select {
+    @apply field appearance-none bg-no-repeat pr-10;
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236E6E73' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-position: right 0.7rem center;
+  }
+  .field-select option {
+    background-color: #161619;
+    color: #F5F5F7;
+  }
+
   .field-label {
     @apply block text-[0.8125rem] font-medium text-ink-secondary;
   }

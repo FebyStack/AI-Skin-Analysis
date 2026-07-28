@@ -100,7 +100,7 @@ function ModelPanel({ dim, label }: { dim: string; label: string }) {
           <span className="text-xs text-ink-secondary">
             latest F1 <span className="font-mono text-ink">{pct(latest)}</span>
             {delta != null && delta !== 0 && (
-              <span className={delta > 0 ? "text-emerald-500" : "text-urgent"}>
+              <span className={delta > 0 ? "text-ok" : "text-urgent"}>
                 {" "}
                 ({delta > 0 ? "+" : ""}
                 {Math.round(delta * 100)} pts)

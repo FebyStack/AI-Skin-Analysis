@@ -10,7 +10,8 @@ export default {
         ink: { DEFAULT: "#F5F5F7", secondary: "#A1A1A6", tertiary: "#6E6E73" },
         gold: { DEFAULT: "#C9A24B", bright: "#E4C36B", ink: "#141210" },
         hairline: { DEFAULT: "rgba(255,255,255,0.10)", strong: "rgba(255,255,255,0.16)" },
-        urgent: { DEFAULT: "#FF6B60", surface: "rgba(255,69,58,0.14)", edge: "rgba(255,69,58,0.34)" },
+        urgent: { DEFAULT: "#FF6B60", surface: "rgba(255,69,58,0.14)", edge: "rgba(255,69,58,0.34)", ink: "#2A0D0B" },
+        ok: { DEFAULT: "#6FBF8F", surface: "rgba(111,191,143,0.14)", edge: "rgba(111,191,143,0.32)" },
         soon: { DEFAULT: "#FFA23A", surface: "rgba(255,159,64,0.14)", edge: "rgba(255,159,64,0.32)" },
         routine: { DEFAULT: "#C7C7CC", surface: "rgba(255,255,255,0.05)", edge: "rgba(255,255,255,0.12)" },
         // legacy tokens kept so out-of-scope screens still build until they're migrated

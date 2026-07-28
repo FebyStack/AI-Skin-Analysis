@@ -1,25 +1,13 @@
 import { confidenceBand } from "@shared/training-queue";
+import { WarningIcon } from "../ui/icons";
 
 // Green ≥90% · Yellow 70–89% · Red <70%, with a warning icon on low confidence
 // so a reviewer can't miss a prediction that needs checking.
 const STYLES: Record<string, string> = {
-  high: "border-emerald-500/40 bg-emerald-500/10 text-emerald-400",
+  high: "border-ok-edge bg-ok-surface text-ok",
   medium: "border-soon-edge bg-soon-surface text-soon",
-  low: "border-urgent/40 bg-urgent/10 text-urgent",
+  low: "border-urgent-edge bg-urgent-surface text-urgent",
 };
-
-function WarningIcon() {
-  return (
-    <svg
-      width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden
-    >
-      <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
-      <line x1="12" y1="9" x2="12" y2="13" />
-      <line x1="12" y1="17" x2="12.01" y2="17" />
-    </svg>
-  );
-}
 
 export function ConfidenceBadge({
   confidence,
@@ -41,7 +29,7 @@ export function ConfidenceBadge({
           : `${label ?? "Confidence"} ${Math.round(confidence * 100)}%`
       }
     >
-      {band === "low" && <WarningIcon />}
+      {band === "low" && <WarningIcon size={11} />}
       {Math.round(confidence * 100)}%
     </span>
   );
