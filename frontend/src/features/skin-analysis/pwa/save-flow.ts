@@ -89,7 +89,7 @@ export async function saveFaceScanWithFallback(
       id: scan.id,
       kind: "face",
       createdAt: scan.createdAt,
-      report: scan.report,
+      report: scan.report ?? localReport,
       synced: true,
       patientId,
     });
@@ -101,7 +101,11 @@ export async function saveFaceScanWithFallback(
         createdAt: scan.createdAt,
       });
     }
-    return { scan, offline: false, localReport: scan.report };
+    // The server echoes the report back (possibly upgraded with a Gemini
+    // explanation), but the scan is already persisted either way — never hand
+    // back a null report just because the echo was missing, or the caller has
+    // nothing to render.
+    return { scan, offline: false, localReport: scan.report ?? localReport };
   } catch (err) {
     if (err instanceof FaceFailedError || err instanceof TypeError) {
       const id = tmpId();

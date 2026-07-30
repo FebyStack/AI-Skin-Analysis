@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { GUIDE, OUTER, maskSegments, orthoFraming, outerPathD, svgGuide } from "./phi-mask";
+import { GUIDE, OUTER, maskPaths, maskSegments, orthoFraming, outerPathD, svgGuide } from "./phi-mask";
 
 describe("phi mask geometry", () => {
   it("is left-right symmetric", () => {
@@ -41,6 +41,31 @@ describe("phi mask geometry", () => {
     // ...and sits at the same height: both offsets agree on centreY.
     expect(cy / 133).toBeCloseTo(GUIDE.centerY, 6);
     expect((halfHeight - offsetY) / (2 * halfHeight)).toBeCloseTo(GUIDE.centerY, 6);
+  });
+
+  it("draws the whole construction, not just the silhouette", () => {
+    const { cx, cy, scale } = svgGuide(100, 133);
+    const paths = maskPaths(cx, cy, scale);
+    // Eyes, irises, brows, nose, lips, chin and the phi grid — the iPhone path
+    // renders these, so an empty or silhouette-only result is the bug that
+    // shipped a bare outline to the clinic's own phones.
+    expect(paths.length).toBeGreaterThan(30);
+    for (const kind of ["structure", "feature", "construction"]) {
+      expect(paths.some((p) => p.ink === kind), kind).toBe(true);
+    }
+    // The silhouette is drawn separately, at a gentler yaw.
+    const outline = outerPathD(cx, cy, scale);
+    expect(paths.some((p) => p.d === outline)).toBe(false);
+  });
+
+  it("turns the interior further than the framing outline", () => {
+    const { cx, cy, scale } = svgGuide(100, 133);
+    const xs = (d: string) => (d.match(/[ML](-?[\d.]+)/g) ?? []).map((m) => Number(m.slice(1)));
+    const spread = (d: string) => Math.max(...xs(d)) - Math.min(...xs(d));
+    // At profile yaw the face compresses; the head-width framing must not.
+    const front = spread(outerPathD(cx, cy, scale, 0));
+    const turned = spread(outerPathD(cx, cy, scale, 67.5 * 0.35));
+    expect(turned).toBeGreaterThan(front * 0.75);
   });
 
   it("draws a closed path that stays inside the viewBox", () => {

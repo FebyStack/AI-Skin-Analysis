@@ -1,8 +1,9 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useCamera } from "../../hooks/use-camera";
 import { useFaceScan } from "../../hooks/use-face-scan";
 import { makeAnalyzeFrame, FACE_MODEL_VERSIONS } from "./frame-adapter";
 import { FaceReportView } from "../results/FaceReportView";
+import { ReportBoundary } from "../results/ReportBoundary";
 import { saveFaceScanWithFallback } from "../../pwa/save-flow";
 import { HistoryView } from "../history/HistoryView";
 import { ScanLabelControl } from "../patients/ScanLabelControl";
@@ -23,14 +24,8 @@ import {
 import type { FaceGeometry, Pixels } from "@ai/face/types";
 import { FACE_ANGLES, type FaceReport, type FaceAngle } from "@shared/face";
 import type { CapturedAngle } from "../../api/face-client";
-import { isMemoryConstrained } from "@ai/face/segmentation/parser";
-import { SILHOUETTE_YAW_RATIO, outerPathD, svgGuide } from "./phi-mask";
+import { SILHOUETTE_YAW_RATIO, maskPaths, outerPathD, svgGuide } from "./phi-mask";
 import { useEasedYaw } from "./use-eased-yaw";
-
-// The wireframe is a WebGL layer over a live camera feed — the app's tightest
-// memory moment. Low-memory phones get the SVG mask alone, which already shows
-// the same silhouette, scrim and hold progress.
-const PhiMaskOverlay = lazy(() => import("./PhiMaskOverlay"));
 
 type View = "capture" | "saving" | "result" | "history";
 
@@ -145,16 +140,6 @@ export function GuidedFaceFlow() {
   // doesn't advance past a failed capture, that last one is guaranteed good.
   const capturedByAngle = useRef<Map<FaceAngle, Blob>>(new Map());
   const [view, setView] = useState<View>("capture");
-  // Device capability, not render state — decide once.
-  const [show3DGuide] = useState(() => {
-    if (typeof window === "undefined" || isMemoryConstrained()) return false;
-    try {
-      const c = document.createElement("canvas");
-      return Boolean(c.getContext("webgl2") ?? c.getContext("webgl"));
-    } catch {
-      return false;
-    }
-  });
   const [saved, setSaved] = useState<FaceReport | null>(null);
   const [savedScanId, setSavedScanId] = useState<string | null>(null);
   const [offline, setOffline] = useState(false);
@@ -303,7 +288,9 @@ export function GuidedFaceFlow() {
             {error}
           </p>
         )}
-        <FaceReportView report={saved} />
+        <ReportBoundary onViewHistory={() => setView("history")}>
+          <FaceReportView report={saved} />
+        </ReportBoundary>
         {savedScanId && (
           <>
             <ScanLabelControl scanId={savedScanId} dimension="acne" title="Clinician acne grade" labels={ACNE_CLASSES} />
@@ -315,6 +302,22 @@ export function GuidedFaceFlow() {
           <button onClick={reset} className="btn-primary px-6">New scan</button>
           <button onClick={() => setView("history")} className="btn-secondary px-6">History</button>
         </div>
+      </div>
+    );
+  }
+
+  // Reached "result" with no report to show. The scan itself is saved, so send
+  // the user to history rather than falling through to the capture UI — whose
+  // camera has already been torn down, which just renders as a black rectangle.
+  if (view === "result") {
+    return (
+      <div className="mx-auto max-w-lg space-y-3 p-6 text-center">
+        <p className="text-sm text-ink-secondary">
+          Your scan was saved, but the report could not be loaded.
+        </p>
+        <button onClick={() => setView("history")} className="btn-primary px-5">
+          View scan history
+        </button>
       </div>
     );
   }
@@ -343,9 +346,13 @@ export function GuidedFaceFlow() {
   const holding = holdStreak > 0;
   // One eased angle drives the scrim, the outline and the wireframe together.
   const easedYaw = useEasedYaw(guideYaw);
-  const maskPath = useMemo(() => {
+  const { maskPath, innerPaths } = useMemo(() => {
     const { cx, cy, scale } = svgGuide(100, 133);
-    return outerPathD(cx, cy, scale, easedYaw * SILHOUETTE_YAW_RATIO);
+    return {
+      // The framing silhouette only leans; the face inside turns the whole way.
+      maskPath: outerPathD(cx, cy, scale, easedYaw * SILHOUETTE_YAW_RATIO),
+      innerPaths: maskPaths(cx, cy, scale, easedYaw),
+    };
   }, [easedYaw]);
   const countdown = Math.max(0, HOLD_CHECKS - holdStreak);
   const positionCue = holding
@@ -398,6 +405,30 @@ export function GuidedFaceFlow() {
                   </mask>
                 </defs>
                 <rect width="100" height="133" fill="rgba(0,0,0,0.52)" mask="url(#faceHole)" />
+
+                {/* The construction drawing. Kept faint deliberately: it has to
+                    read as the phi mask without hiding the skin being framed. */}
+                {innerPaths.map((p, i) => (
+                  <path
+                    key={i}
+                    d={p.d}
+                    fill="none"
+                    stroke="currentColor"
+                    strokeLinejoin="round"
+                    className={
+                      holding
+                        ? "text-ok"
+                        : p.ink === "construction"
+                          ? "text-gold/25"
+                          : p.ink === "feature"
+                            ? "text-gold/60"
+                            : "text-gold/70"
+                    }
+                    strokeOpacity={holding ? (p.ink === "construction" ? 0.3 : 0.7) : 1}
+                    strokeWidth={p.ink === "construction" ? 0.28 : 0.42}
+                  />
+                ))}
+
                 <path
                   d={maskPath}
                   fill="none"
@@ -423,16 +454,6 @@ export function GuidedFaceFlow() {
                   />
                 )}
               </svg>
-
-              {show3DGuide && (
-                <Suspense fallback={null}>
-                  <PhiMaskOverlay
-                    yawDeg={easedYaw}
-                    holding={holding}
-                    progress={holdStreak / HOLD_CHECKS}
-                  />
-                </Suspense>
-              )}
 
               {/* Directional chevron for the current step (front shows none). */}
               {turnDir !== "none" && (

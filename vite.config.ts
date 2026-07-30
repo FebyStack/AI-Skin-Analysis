@@ -45,6 +45,13 @@ export default defineConfig({
     // host:true binds to 0.0.0.0 so phones on the same Wi-Fi can reach vite.
     // The proxy still targets the local backend running on this machine.
     host: true,
+    fs: {
+      // Deps have lived outside the project root (iCloud evicts node_modules on
+      // this Desktop, so they were moved out and symlinked). Vite refuses to
+      // serve files outside the root unless they are allow-listed, which broke
+      // its own client at /skin-analysis-deps/.../vite/dist/client/env.mjs.
+      allow: [resolve(__dirname), "/Users/febrielotud/skin-analysis-deps"],
+    },
     https: httpsOption(),
     proxy: {
       "/api": "http://localhost:3001",
