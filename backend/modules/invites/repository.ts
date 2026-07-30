@@ -1,11 +1,12 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
-import { DEFAULT_MAX_SCANS, DEFAULT_TTL_DAYS, type Invite } from "../../../shared/invites";
+import { CLAIM_WINDOW_MINUTES, DEFAULT_MAX_SCANS, DEFAULT_TTL_MINUTES, type Invite } from "../../../shared/invites";
 
 export interface CreateInvite {
   label?: string | null;
   maxScans?: number;
-  ttlDays?: number;
+  /** Minutes to OPEN the link. 0 = never expires unopened. */
+  ttlMinutes?: number;
 }
 
 export interface InviteRepo {
@@ -20,6 +21,14 @@ export interface InviteRepo {
    * moment must not both get through a last remaining slot.
    */
   consume(id: string): Promise<Invite | null>;
+  /**
+   * Bind the link to the first caller. Returns the claimed invite, or null when
+   * it was already claimed, revoked, or its open-by deadline had passed.
+   *
+   * MUST be atomic: two devices opening a forwarded link at the same instant
+   * must not both come away believing they own it.
+   */
+  claim(id: string, claimId: string): Promise<Invite | null>;
   list(): Promise<Invite[]>;
   revoke(id: string): Promise<boolean>;
 }
@@ -29,9 +38,14 @@ export function newInviteToken(): string {
   return randomBytes(32).toString("base64url");
 }
 
-function expiryFrom(ttlDays: number | undefined, now: number): number | null {
-  const days = ttlDays ?? DEFAULT_TTL_DAYS;
-  return days <= 0 ? null : now + days * 86_400_000;
+function expiryFrom(ttlMinutes: number | undefined, now: number): number | null {
+  const mins = ttlMinutes ?? DEFAULT_TTL_MINUTES;
+  return mins <= 0 ? null : now + mins * 60_000;
+}
+
+/** Claim secret. Separate from the token so a leaked link still cannot forge it. */
+export function newClaimId(): string {
+  return randomBytes(16).toString("base64url");
 }
 
 export class MemoryInviteRepo implements InviteRepo {
@@ -46,7 +60,9 @@ export class MemoryInviteRepo implements InviteRepo {
       label: input.label ?? null,
       maxScans: input.maxScans ?? DEFAULT_MAX_SCANS,
       usedScans: 0,
-      expiresAt: expiryFrom(input.ttlDays, this.now()),
+      expiresAt: expiryFrom(input.ttlMinutes, this.now()),
+      claimedAt: null,
+      claimId: null,
       revokedAt: null,
       createdAt: this.now(),
     };
@@ -68,10 +84,23 @@ export class MemoryInviteRepo implements InviteRepo {
     if (!r) return null;
     const now = this.now();
     if (r.revokedAt !== null) return null;
-    if (r.expiresAt !== null && r.expiresAt <= now) return null;
     if (r.usedScans >= r.maxScans) return null;
+    // Once claimed, the claim window governs; before that, the open-by deadline.
+    const deadline =
+      r.claimedAt === null ? r.expiresAt : r.claimedAt + CLAIM_WINDOW_MINUTES * 60_000;
+    if (deadline !== null && deadline <= now) return null;
     // Single-threaded here, so read-modify-write is already atomic.
     const next = { ...r, usedScans: r.usedScans + 1 };
+    this.rows.set(id, next);
+    return next;
+  }
+
+  async claim(id: string, claimId: string): Promise<Invite | null> {
+    const r = this.rows.get(id);
+    if (!r || r.revokedAt !== null || r.claimedAt !== null) return null;
+    const now = this.now();
+    if (r.expiresAt !== null && r.expiresAt <= now) return null;
+    const next = { ...r, claimedAt: now, claimId };
     this.rows.set(id, next);
     return next;
   }
@@ -95,6 +124,8 @@ interface Row {
   max_scans: number;
   used_scans: number;
   expires_at: string | null;
+  claimed_at: string | null;
+  claim_id: string | null;
   revoked_at: string | null;
   created_at: string;
 }
@@ -106,20 +137,29 @@ const toInvite = (r: Row): Invite => ({
   maxScans: r.max_scans,
   usedScans: r.used_scans,
   expiresAt: r.expires_at ? new Date(r.expires_at).getTime() : null,
+  claimedAt: r.claimed_at ? new Date(r.claimed_at).getTime() : null,
+  claimId: r.claim_id,
   revokedAt: r.revoked_at ? new Date(r.revoked_at).getTime() : null,
   createdAt: new Date(r.created_at).getTime(),
 });
 
-const COLS = `id, token, label, max_scans, used_scans, expires_at, revoked_at, created_at`;
+const COLS = `id, token, label, max_scans, used_scans, expires_at, claimed_at, claim_id, revoked_at, created_at`;
+
+/** Still live: unclaimed and within its open-by window, or claimed and inside the claim window. */
+const LIVE = `revoked_at IS NULL
+  AND CASE WHEN claimed_at IS NULL
+           THEN (expires_at IS NULL OR expires_at > now())
+           ELSE claimed_at + (${CLAIM_WINDOW_MINUTES} * INTERVAL '1 minute') > now()
+      END`;
 
 export class PgInviteRepo implements InviteRepo {
   constructor(private pool: Pool) {}
 
   async create(input: CreateInvite): Promise<Invite> {
-    const ttl = input.ttlDays ?? DEFAULT_TTL_DAYS;
+    const ttl = input.ttlMinutes ?? DEFAULT_TTL_MINUTES;
     const { rows } = await this.pool.query<Row>(
       `INSERT INTO scan_invites (token, label, max_scans, expires_at)
-       VALUES ($1, $2, $3, CASE WHEN $4::int > 0 THEN now() + ($4::int * INTERVAL '1 day') ELSE NULL END)
+       VALUES ($1, $2, $3, CASE WHEN $4::int > 0 THEN now() + ($4::int * INTERVAL '1 minute') ELSE NULL END)
        RETURNING ${COLS}`,
       [newInviteToken(), input.label ?? null, input.maxScans ?? DEFAULT_MAX_SCANS, ttl],
     );
@@ -148,11 +188,28 @@ export class PgInviteRepo implements InviteRepo {
       `UPDATE scan_invites
           SET used_scans = used_scans + 1
         WHERE id = $1
-          AND revoked_at IS NULL
-          AND (expires_at IS NULL OR expires_at > now())
           AND used_scans < max_scans
+          AND ${LIVE}
         RETURNING ${COLS}`,
       [id],
+    );
+    return rows[0] ? toInvite(rows[0]) : null;
+  }
+
+  /**
+   * `claimed_at IS NULL` in the WHERE clause is the whole mechanism: exactly one
+   * concurrent caller can flip it, so a forwarded link cannot be claimed twice.
+   */
+  async claim(id: string, claimId: string): Promise<Invite | null> {
+    const { rows } = await this.pool.query<Row>(
+      `UPDATE scan_invites
+          SET claimed_at = now(), claim_id = $2
+        WHERE id = $1
+          AND claimed_at IS NULL
+          AND revoked_at IS NULL
+          AND (expires_at IS NULL OR expires_at > now())
+        RETURNING ${COLS}`,
+      [id, claimId],
     );
     return rows[0] ? toInvite(rows[0]) : null;
   }

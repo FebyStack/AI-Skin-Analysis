@@ -6,20 +6,26 @@ import { createApp } from "../../app/app";
 import { makeTestDeps } from "../../shared/testing";
 import { goldenFaceReport } from "../../../shared/testing/face-fixtures";
 
-const app = createApp(makeTestDeps());
+const deps = makeTestDeps();
+const app = createApp(deps);
 let clinic = "";
 let image = "";
 
-/** Create a link and return the patient-side session cookie for it. */
-async function inviteSession(maxScans = 2): Promise<{ cookie: string; id: string }> {
+async function makeLink(maxScans = 2, ttlMinutes?: number) {
   const made = await request(app)
     .post("/api/invites")
     .set("Cookie", clinic)
-    .send({ label: "Remote patient", maxScans });
+    .send({ label: "Remote patient", maxScans, ttlMinutes });
   expect(made.status).toBe(200);
-  const used = await request(app).post("/api/auth/invite").send({ token: made.body.token });
+  return { token: made.body.token as string, id: made.body.invite.id as string };
+}
+
+/** Create a link and claim it, as the first device would. */
+async function inviteSession(maxScans = 2): Promise<{ cookie: string; id: string; token: string }> {
+  const { token, id } = await makeLink(maxScans);
+  const used = await request(app).post("/api/auth/invite").send({ token });
   expect(used.status).toBe(200);
-  return { cookie: used.headers["set-cookie"][0], id: made.body.invite.id };
+  return { cookie: used.headers["set-cookie"][0], id, token };
 }
 
 const scan = (cookie: string) =>
@@ -96,6 +102,64 @@ describe("invite links", () => {
 
     const after = await request(app).get("/api/auth/status").set("Cookie", cleared);
     expect(after.body.authenticated).toBe(false);
+  });
+
+  it("binds to the first device and refuses a forwarded link", async () => {
+    const { token } = await makeLink();
+
+    const first = await request(app).post("/api/auth/invite").send({ token });
+    expect(first.status).toBe(200);
+
+    // Someone else opening the same URL — no cookie, so no claim.
+    const second = await request(app).post("/api/auth/invite").send({ token });
+    expect(second.status).toBe(409);
+    expect(second.body.error).toMatch(/already opened on another device/i);
+
+    // And a stranger's own invite cookie is not a substitute for the claim.
+    const other = await inviteSession();
+    const third = await request(app)
+      .post("/api/auth/invite")
+      .set("Cookie", other.cookie)
+      .send({ token });
+    expect(third.status).toBe(409);
+  });
+
+  it("lets the device that claimed it re-open its own link", async () => {
+    const { cookie, token } = await inviteSession();
+    // Reload, or tapping the link again in the message thread.
+    const again = await request(app).post("/api/auth/invite").set("Cookie", cookie).send({ token });
+    expect(again.status).toBe(200);
+  });
+
+  it("refuses a link that was never opened within its window", async () => {
+    // ttlMinutes 0 means "no expiry", so use a real deadline and move past it.
+    const { token } = await makeLink(2, 15);
+    const invite = await deps.invites!.getByToken(token);
+    // Rewind the clock on the row rather than waiting 15 real minutes.
+    (invite as { expiresAt: number | null }).expiresAt = Date.now() - 1;
+
+    const res = await request(app).post("/api/auth/invite").send({ token });
+    expect(res.status).toBe(403);
+    expect(res.body.inviteState).toBe("expired");
+  });
+
+  it("keeps working past the open-by deadline once claimed, so a scan can finish", async () => {
+    const { cookie, token } = await inviteSession();
+    const invite = await deps.invites!.getByToken(token);
+    // The open-by deadline has passed, but this device already claimed the link.
+    (invite as { expiresAt: number | null }).expiresAt = Date.now() - 1;
+
+    expect((await scan(cookie)).status).toBe(200);
+  });
+
+  it("expires the claimed session once its window closes", async () => {
+    const { cookie, token } = await inviteSession();
+    const invite = await deps.invites!.getByToken(token);
+    (invite as { claimedAt: number | null }).claimedAt = Date.now() - 61 * 60_000;
+
+    const res = await scan(cookie);
+    expect(res.status).toBe(403);
+    expect(res.body.inviteState).toBe("expired");
   });
 
   it("rejects an unknown token", async () => {

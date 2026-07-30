@@ -183,3 +183,9 @@ CREATE INDEX IF NOT EXISTS scan_invites_token_idx ON scan_invites(token);
 -- scans it created (and so the clinic can audit where a scan came from).
 ALTER TABLE scans ADD COLUMN IF NOT EXISTS invite_id UUID REFERENCES scan_invites(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS scans_invite_idx ON scans(invite_id);
+
+-- Single-device binding. The first browser to open a link claims it; `claim_id`
+-- is a random secret embedded in that device's session, so a forwarded link
+-- cannot produce it and is refused.
+ALTER TABLE scan_invites ADD COLUMN IF NOT EXISTS claimed_at TIMESTAMPTZ;
+ALTER TABLE scan_invites ADD COLUMN IF NOT EXISTS claim_id TEXT;

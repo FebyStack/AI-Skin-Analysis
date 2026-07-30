@@ -1,16 +1,25 @@
 import { useCallback, useEffect, useState } from "react";
 import {
+  CLAIM_WINDOW_MINUTES,
   DEFAULT_MAX_SCANS,
-  DEFAULT_TTL_DAYS,
+  DEFAULT_TTL_MINUTES,
   INVITE_STATE_LABEL,
   inviteUrl,
+  isUsable,
   type Invite,
   type InviteState,
 } from "@shared/invites";
 
-type Row = Omit<Invite, "token"> & { state: InviteState; scansLeft: number };
+type Row = Omit<Invite, "token" | "claimId"> & { state: InviteState; scansLeft: number };
+
+/** Whole minutes remaining, floored — never rounds up into a promise it can't keep. */
+function minsLeft(at: number): string {
+  const mins = Math.floor((at - Date.now()) / 60_000);
+  return mins <= 0 ? "<1 min left" : `${mins} min left`;
+}
 
 const TONE: Record<InviteState, string> = {
+  unopened: "text-gold",
   active: "text-ok",
   exhausted: "text-ink-tertiary",
   expired: "text-ink-tertiary",
@@ -26,6 +35,7 @@ export function InviteManager() {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [label, setLabel] = useState("");
   const [maxScans, setMaxScans] = useState(DEFAULT_MAX_SCANS);
+  const [ttl, setTtl] = useState(DEFAULT_TTL_MINUTES);
   const [fresh, setFresh] = useState<{ url: string; label: string | null } | null>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -53,7 +63,7 @@ export function InviteManager() {
         method: "POST",
         credentials: "include",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ label, maxScans, ttlDays: DEFAULT_TTL_DAYS }),
+        body: JSON.stringify({ label, maxScans, ttlMinutes: ttl }),
       });
       const body = await res.json();
       if (!res.ok) {
@@ -90,11 +100,16 @@ export function InviteManager() {
     <section className="card p-5">
       <h3 className="text-base font-semibold text-ink">Private scan links</h3>
       <p className="mt-1 text-xs leading-relaxed text-ink-secondary">
-        For patients who are not on the clinic network. A link runs the scan flow and nothing else —
-        no history, no queue, no other patients — and stops working once its scans are used.
+        For patients who are not on the clinic network. A link opens on ONE device — the first to
+        open it — so forwarding it does not work. It runs the scan flow and nothing else: no
+        history, no queue, no other patients.
+      </p>
+      <p className="mt-1 text-xs leading-relaxed text-ink-secondary">
+        It must be opened within the window below, and once opened that device has{" "}
+        {CLAIM_WINDOW_MINUTES} minutes to finish its scans.
       </p>
 
-      <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_7rem_auto] sm:items-end">
+      <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_5rem_7rem_auto] sm:items-end">
         <label className="text-xs text-ink-secondary">
           Who it's for
           <input
@@ -115,6 +130,18 @@ export function InviteManager() {
             className="field mt-1 w-full tabular-nums"
           />
         </label>
+        <label className="text-xs text-ink-secondary">
+          Opens within
+          <select
+            value={ttl}
+            onChange={(e) => setTtl(Number(e.target.value))}
+            className="field-select mt-1 w-full"
+          >
+            <option value={15}>15 min</option>
+            <option value={60}>1 hour</option>
+            <option value={1440}>1 day</option>
+          </select>
+        </label>
         <button onClick={create} disabled={busy} className="btn-primary px-4">
           Create link
         </button>
@@ -124,6 +151,9 @@ export function InviteManager() {
         <div className="mt-4 rounded-xl border border-gold/40 bg-gold/[0.06] p-3">
           <p className="text-xs font-medium text-gold-bright">
             Copy this now — it is not shown again.
+          </p>
+          <p className="mt-1 text-[11px] text-ink-secondary">
+            Works on the first device that opens it. Send it to one person only.
           </p>
           <p className="mt-2 break-all font-mono text-[11px] text-ink">{fresh.url}</p>
           <div className="mt-2 flex items-center gap-2">
@@ -153,8 +183,11 @@ export function InviteManager() {
             <span className="text-[11px] tabular-nums text-ink-tertiary">
               {r.usedScans}/{r.maxScans} used
             </span>
+            {r.expiresAt !== null && (r.state === "unopened" || r.state === "active") && (
+              <span className="text-[11px] tabular-nums text-ink-tertiary">{minsLeft(r.expiresAt)}</span>
+            )}
             <span className={`text-[11px] ${TONE[r.state]}`}>{INVITE_STATE_LABEL[r.state]}</span>
-            {r.state === "active" && (
+            {isUsable(r.state) && (
               <button
                 onClick={() => revoke(r.id)}
                 className="min-h-[28px] rounded-lg border border-urgent-edge bg-urgent-surface px-2 text-[11px] font-medium text-urgent"

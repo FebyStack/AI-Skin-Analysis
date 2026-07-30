@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import { parseSession, parseCookies, type Session } from "../modules/auth/service";
 import type { InviteRepo } from "../modules/invites/repository";
-import { inviteDeniedMessage, inviteState } from "../../shared/invites";
+import { inviteDeniedMessage, inviteState, isUsable } from "../../shared/invites";
 
 declare module "express-serve-static-core" {
   interface Request {
@@ -29,12 +29,14 @@ export function requireSession(secret: string, now: () => number, invites?: Invi
       // No repo wired → an invite token cannot be checked, so it is not
       // honoured. Fail closed rather than trust the cookie.
       const invite = invites ? await invites.get(session.inviteId) : null;
-      if (!invite) {
+      // A mismatched claim means this cookie belongs to a device that no longer
+      // owns the link (it was re-issued, or the row was reset). Not authorised.
+      if (!invite || invite.claimId !== session.claimId) {
         res.status(401).json({ error: "login required" });
         return;
       }
       const state = inviteState(invite, now());
-      if (state !== "active") {
+      if (!isUsable(state)) {
         res.status(403).json({ error: inviteDeniedMessage(state), inviteState: state });
         return;
       }

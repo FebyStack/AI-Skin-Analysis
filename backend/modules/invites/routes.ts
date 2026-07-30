@@ -1,19 +1,39 @@
 import { Router, type RequestHandler } from "express";
 import type { AppDeps } from "../../shared/deps";
-import { makeInviteSessionToken } from "../auth/service";
+import { makeInviteSessionToken, parseCookies, parseSession } from "../auth/service";
+import { newClaimId } from "./repository";
 import {
+  ALREADY_CLAIMED_MESSAGE,
+  CLAIM_WINDOW_MINUTES,
   DEFAULT_MAX_SCANS,
-  DEFAULT_TTL_DAYS,
+  DEFAULT_TTL_MINUTES,
+  claimDeadline,
   inviteDeniedMessage,
   inviteState,
+  isUsable,
   scansLeft,
   type Invite,
 } from "../../../shared/invites";
 
-/** The token is the secret in the URL — never send it back on list/status. */
+/**
+ * The token AND the claim secret are withheld: the token is the URL secret, and
+ * the claim id is what proves a device owns the link.
+ */
 function publicInvite(i: Invite, nowMs: number) {
-  const { token: _token, ...rest } = i;
-  return { ...rest, state: inviteState(i, nowMs), scansLeft: scansLeft(i) };
+  const { token: _token, claimId: _claim, ...rest } = i;
+  return {
+    ...rest,
+    state: inviteState(i, nowMs),
+    scansLeft: scansLeft(i),
+    expiresAt: i.claimedAt === null ? i.expiresAt : claimDeadline(i),
+  };
+}
+
+const CLAIM_WINDOW_MS = CLAIM_WINDOW_MINUTES * 60_000;
+
+function inviteCookie(secret: string, now: number, inviteId: string, claimId: string): string {
+  const token = makeInviteSessionToken(secret, now, inviteId, claimId, CLAIM_WINDOW_MS);
+  return `session=${token}; HttpOnly; Path=/; SameSite=Strict; Max-Age=${Math.floor(CLAIM_WINDOW_MS / 1000)}`;
 }
 
 export function createInviteRoutes(
@@ -29,21 +49,21 @@ export function createInviteRoutes(
       res.status(503).json({ error: "invites unavailable" });
       return;
     }
-    const { label, maxScans, ttlDays } = req.body ?? {};
+    const { label, maxScans, ttlMinutes } = req.body ?? {};
     const scans = maxScans === undefined ? DEFAULT_MAX_SCANS : Number(maxScans);
     if (!Number.isInteger(scans) || scans < 1 || scans > 50) {
       res.status(400).json({ error: "maxScans must be a whole number from 1 to 50" });
       return;
     }
-    const ttl = ttlDays === undefined ? DEFAULT_TTL_DAYS : Number(ttlDays);
-    if (!Number.isFinite(ttl) || ttl < 0 || ttl > 365) {
-      res.status(400).json({ error: "ttlDays must be between 0 and 365" });
+    const ttl = ttlMinutes === undefined ? DEFAULT_TTL_MINUTES : Number(ttlMinutes);
+    if (!Number.isFinite(ttl) || ttl < 0 || ttl > 43_200) {
+      res.status(400).json({ error: "ttlMinutes must be between 0 and 43200" });
       return;
     }
     const invite = await deps.invites.create({
       label: typeof label === "string" && label.trim() ? label.trim() : null,
       maxScans: scans,
-      ttlDays: ttl,
+      ttlMinutes: ttl,
     });
     // The only time the token is ever returned — it cannot be recovered later.
     res.json({ invite: publicInvite(invite, deps.now()), token: invite.token });
@@ -68,7 +88,15 @@ export function createInviteRoutes(
   });
 
   // ── patient side ──────────────────────────────────────────────────────────
-  /** Exchange the link's token for an invite session. Unauthenticated by design. */
+  /**
+   * Exchange the link's token for a session. Unauthenticated by design.
+   *
+   * First caller CLAIMS the link and is handed a session carrying the claim
+   * secret. Anyone opening the same URL afterwards is refused — that is what
+   * makes a forwarded link useless. The original device may re-open its own link
+   * (a reload, or tapping it again in the message thread) because it still holds
+   * a cookie with the matching claim.
+   */
   router.post("/api/auth/invite", async (req, res) => {
     const token = req.body?.token;
     if (!deps.invites || typeof token !== "string" || !token) {
@@ -76,22 +104,55 @@ export function createInviteRoutes(
       return;
     }
     const invite = await deps.invites.getByToken(token);
-    // Same response for "no such token" and "dead token": a wrong guess must not
-    // be distinguishable from a real link that has run out.
     if (!invite) {
       res.status(404).json({ error: "This link is not valid." });
       return;
     }
-    const state = inviteState(invite, deps.now());
-    if (state !== "active") {
+
+    const now = deps.now();
+    const state = inviteState(invite, now);
+    if (!isUsable(state)) {
       res.status(403).json({ error: inviteDeniedMessage(state), inviteState: state });
       return;
     }
-    res.setHeader(
-      "Set-Cookie",
-      `session=${makeInviteSessionToken(deps.sessionSecret, deps.now(), invite.id)}; HttpOnly; Path=/; SameSite=Strict; Max-Age=43200`,
-    );
-    res.json({ ok: true, scansLeft: scansLeft(invite), maxScans: invite.maxScans });
+
+    if (invite.claimedAt !== null) {
+      // Already opened. Only the device holding the matching claim gets back in.
+      const existing = parseSession(
+        parseCookies(req.headers.cookie)["session"],
+        deps.sessionSecret,
+        now,
+      );
+      const sameDevice =
+        existing?.role === "invite" &&
+        existing.inviteId === invite.id &&
+        existing.claimId === invite.claimId;
+      if (!sameDevice) {
+        res.status(409).json({ error: ALREADY_CLAIMED_MESSAGE, inviteState: "claimed" });
+        return;
+      }
+      res.setHeader(
+        "Set-Cookie",
+        inviteCookie(deps.sessionSecret, now, invite.id, invite.claimId as string),
+      );
+      res.json({ ok: true, scansLeft: scansLeft(invite), maxScans: invite.maxScans });
+      return;
+    }
+
+    const claimId = newClaimId();
+    const claimed = await deps.invites.claim(invite.id, claimId);
+    if (!claimed) {
+      // Lost the race to another device opening the same link this instant.
+      res.status(409).json({ error: ALREADY_CLAIMED_MESSAGE, inviteState: "claimed" });
+      return;
+    }
+    res.setHeader("Set-Cookie", inviteCookie(deps.sessionSecret, now, claimed.id, claimId));
+    res.json({
+      ok: true,
+      scansLeft: scansLeft(claimed),
+      maxScans: claimed.maxScans,
+      expiresAt: claimDeadline(claimed),
+    });
   });
 
   /** How many scans the current link has left, for the patient's own UI. */
@@ -110,6 +171,7 @@ export function createInviteRoutes(
         scansLeft: scansLeft(invite),
         maxScans: invite.maxScans,
         state: inviteState(invite, deps.now()),
+        expiresAt: claimDeadline(invite),
       },
     });
   });

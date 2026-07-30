@@ -40,13 +40,23 @@ function signaturesMatch(payload: string, sig: string | undefined, secret: strin
  */
 export type Session =
   | { role: "clinic" }
-  | { role: "invite"; inviteId: string };
+  | { role: "invite"; inviteId: string; claimId: string };
 
 const INVITE_PREFIX = "v2";
 
-/** Session cookie for an invite link. Same TTL — the invite row is the real gate. */
-export function makeInviteSessionToken(secret: string, nowMs: number, inviteId: string): string {
-  const payload = `${INVITE_PREFIX}.${nowMs + SESSION_TTL_MS}.invite.${inviteId}`;
+/**
+ * Session cookie for an invite link, carrying the claim secret minted when the
+ * link was opened. The middleware requires it to still match the invite row, so
+ * this cookie is only good for the one device that claimed the link.
+ */
+export function makeInviteSessionToken(
+  secret: string,
+  nowMs: number,
+  inviteId: string,
+  claimId: string,
+  ttlMs = SESSION_TTL_MS,
+): string {
+  const payload = `${INVITE_PREFIX}.${nowMs + ttlMs}.invite.${inviteId}.${claimId}`;
   return `${payload}.${createHmac("sha256", secret).update(payload).digest("hex")}`;
 }
 
@@ -59,12 +69,13 @@ export function parseSession(
   const parts = token.split(".");
 
   if (parts[0] === INVITE_PREFIX) {
-    const [, expiresStr, role, inviteId, sig] = parts;
-    if (parts.length !== 5 || role !== "invite" || !inviteId) return null;
+    const [, expiresStr, role, inviteId, claimId, sig] = parts;
+    if (parts.length !== 6 || role !== "invite" || !inviteId || !claimId) return null;
     const expires = Number(expiresStr);
     if (!Number.isFinite(expires) || expires < nowMs) return null;
-    if (!signaturesMatch(`${INVITE_PREFIX}.${expiresStr}.${role}.${inviteId}`, sig, secret)) return null;
-    return { role: "invite", inviteId };
+    const payload = `${INVITE_PREFIX}.${expiresStr}.${role}.${inviteId}.${claimId}`;
+    if (!signaturesMatch(payload, sig, secret)) return null;
+    return { role: "invite", inviteId, claimId };
   }
 
   // Legacy two-part clinic token: `<expires>.<sig>`. Kept as-is so sessions
