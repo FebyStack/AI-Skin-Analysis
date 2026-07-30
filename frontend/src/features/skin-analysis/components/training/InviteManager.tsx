@@ -12,6 +12,17 @@ import {
 
 type Row = Omit<Invite, "token" | "claimId"> & { state: InviteState; scansLeft: number };
 
+/**
+ * Links are built from the origin this page was opened on. Creating one from
+ * localhost or a LAN address produces a URL that only resolves on this network —
+ * it looks fine, sends fine, and fails for the patient. Worth interrupting for.
+ */
+function reachOnlyLocally(origin: string): boolean {
+  return /^https?:\/\/(localhost|127\.|0\.0\.0\.0|\[?::1|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(
+    origin,
+  );
+}
+
 /** Whole minutes remaining, floored — never rounds up into a promise it can't keep. */
 function minsLeft(at: number): string {
   const mins = Math.floor((at - Date.now()) / 60_000);
@@ -32,6 +43,7 @@ const TONE: Record<InviteState, string> = {
  * retrievable, so a lost link has to be replaced rather than looked up.
  */
 export function InviteManager() {
+  const localOnly = typeof window !== "undefined" && reachOnlyLocally(window.location.origin);
   const [rows, setRows] = useState<Row[] | null>(null);
   const [label, setLabel] = useState("");
   const [maxScans, setMaxScans] = useState(DEFAULT_MAX_SCANS);
@@ -108,6 +120,15 @@ export function InviteManager() {
         It must be opened within the window below, and once opened that device has{" "}
         {CLAIM_WINDOW_MINUTES} minutes to finish its scans.
       </p>
+
+      {localOnly && (
+        <p className="mt-3 rounded-xl border border-soon-edge bg-soon-surface p-3 text-xs leading-relaxed text-soon">
+          You opened this page on <span className="font-mono">{window.location.origin}</span>, which
+          only works on this network. A link made here will not open for a remote patient — start{" "}
+          <span className="font-mono">make share</span> and create the link from the public
+          address instead.
+        </p>
+      )}
 
       <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_5rem_7rem_auto] sm:items-end">
         <label className="text-xs text-ink-secondary">

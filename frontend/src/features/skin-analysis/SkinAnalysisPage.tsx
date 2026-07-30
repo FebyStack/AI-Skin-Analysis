@@ -16,10 +16,29 @@ import type { SessionRole } from "./hooks/use-auth";
 
 type View = "scan" | "history" | "queue" | "training";
 
+const VIEWS: View[] = ["scan", "history", "queue", "training"];
+
+/** Deep-linkable view, so "the page where I make invite links" is a real URL. */
+function viewFromUrl(): View | null {
+  if (typeof window === "undefined") return null;
+  const v = new URL(window.location.href).searchParams.get("view");
+  return VIEWS.includes(v as View) ? (v as View) : null;
+}
+
 export function SkinAnalysisPage({ role = "clinic" }: { role?: SessionRole }) {
   const isInvite = role === "invite";
   const [mode, setMode] = useState<CaptureMode>("face");
-  const [view, setView] = useState<View>("scan");
+  // Deep link wins on load; invite sessions are pinned to the scan flow.
+  const [view, setView] = useState<View>(() => (role === "invite" ? "scan" : viewFromUrl() ?? "scan"));
+
+  // Keep ?view= in step with the tab so the URL stays shareable and reloadable.
+  useEffect(() => {
+    if (role === "invite" || typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (view === "scan") url.searchParams.delete("view");
+    else url.searchParams.set("view", view);
+    window.history.replaceState({}, "", url.toString());
+  }, [view, role]);
 
   useEffect(() => {
     void requestPersistence();
