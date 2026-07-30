@@ -45,6 +45,10 @@ export default defineConfig({
     // host:true binds to 0.0.0.0 so phones on the same Wi-Fi can reach vite.
     // The proxy still targets the local backend running on this machine.
     host: true,
+    // Vite 5.4+ rejects requests whose Host header it does not recognise, which
+    // blocks every tunnel hostname. Trust the two tunnel providers rather than
+    // disabling the check outright.
+    allowedHosts: [".trycloudflare.com", ".ngrok-free.app", ".ngrok.io", "localhost"],
     fs: {
       // Deps have lived outside the project root (iCloud evicts node_modules on
       // this Desktop, so they were moved out and symlinked). Vite refuses to
@@ -54,8 +58,10 @@ export default defineConfig({
     },
     https: httpsOption(),
     proxy: {
-      "/api": "http://localhost:3001",
-      "/capture": "http://localhost:3001",
+      // Override with VITE_API_TARGET to point the dev frontend at a different
+      // backend (a second instance, a staging box) without editing this file.
+      "/api": process.env.VITE_API_TARGET ?? "http://localhost:3001",
+      "/capture": process.env.VITE_API_TARGET ?? "http://localhost:3001",
     },
   },
   preview: {

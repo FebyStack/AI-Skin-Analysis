@@ -8,6 +8,7 @@ import { LlmLesionProvider } from "../modules/analysis/lesion-client";
 import { explainLesion } from "../../ai/llm/lesion-explainer";
 import { explainFace } from "../../ai/llm/face-explainer";
 import { PgPatientRepo } from "../modules/patients/repository";
+import { PgInviteRepo } from "../modules/invites/repository";
 import { PgScanRepo } from "../modules/analysis/repository";
 import { PgSettingsRepo } from "../modules/settings/repository";
 import { callGemini } from "../../ai/llm/providers/gemini";
@@ -59,6 +60,7 @@ async function main() {
     pool,
     patients: new PgPatientRepo(pool),
     scans: new PgScanRepo(pool),
+    invites: new PgInviteRepo(pool),
     settings,
     pipeline: pipelineDeps,
     lesion: lesionProvider,

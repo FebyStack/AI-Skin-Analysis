@@ -1,10 +1,11 @@
-import { Router, type RequestHandler } from "express";
+import { Router, type Request, type RequestHandler } from "express";
 import type { AppDeps } from "../../shared/deps";
 import { validateFaceReport, type FaceReport } from "../../../shared/face";
 import { builtinFaceExplanation } from "../../../ai/llm/fallback/face-education";
 import { compressToJpeg } from "../../utils/image";
 import { dHash } from "../../utils/image-hash";
 import { resolveScanPatient } from "../patients/resolve";
+import { inviteDeniedMessage, inviteState } from "../../../shared/invites";
 
 interface IncomingImage {
   angle?: string;
@@ -20,6 +21,16 @@ const VALID_ANGLES = new Set(["front", "left-45", "right-45", "left-profile", "r
 function preferBuiltin(): boolean {
   const v = process.env.PREFER_BUILTIN_EXPLANATION;
   return v === "1" || v === "true";
+}
+
+/**
+ * Clinic staff see every scan; an invite link sees only what it created. 404
+ * rather than 403 on a mismatch — a link holder should not be able to probe
+ * which scan ids exist.
+ */
+function ownedBySession(req: Request, scan: { inviteId?: string | null }): boolean {
+  if (req.session?.role !== "invite") return true;
+  return scan.inviteId === req.session.inviteId;
 }
 
 export function createFaceScanRoutes(deps: AppDeps, auth: RequestHandler): Router {
@@ -69,6 +80,21 @@ export function createFaceScanRoutes(deps: AppDeps, auth: RequestHandler): Route
       return;
     }
 
+    // Spend the invite's scan allowance BEFORE writing anything. Doing it after
+    // would let a crash mid-save hand back a free scan, and doing it in the UI
+    // would not survive someone calling this endpoint directly.
+    const inviteId = req.session?.role === "invite" ? req.session.inviteId : null;
+    if (inviteId) {
+      const spent = await deps.invites?.consume(inviteId);
+      if (!spent) {
+        const current = await deps.invites?.get(inviteId);
+        const state = current ? inviteState(current, deps.now()) : "revoked";
+        res.status(403).json({ error: inviteDeniedMessage(state), inviteState: state });
+        return;
+      }
+      res.setHeader("x-scans-left", String(Math.max(0, spent.maxScans - spent.usedScans)));
+    }
+
     // Compress the front angle (or first available) as the scan's headline image.
     const front =
       (images as IncomingImage[]).find((i) => i.angle === "front") ?? (images as IncomingImage[])[0];
@@ -84,6 +110,7 @@ export function createFaceScanRoutes(deps: AppDeps, auth: RequestHandler): Route
       partial: false,
       classifierFindings: [],
       promptVersion: report.explanation?.promptVersion ?? null,
+      inviteId,
     });
 
     // Compress and persist every angle.
@@ -142,6 +169,14 @@ export function createFaceScanRoutes(deps: AppDeps, auth: RequestHandler): Route
   // History for a patient. ?patientId=<id> scopes to that patient; omitted (or
   // "walk-in") falls back to the shared walk-in patient for back-compat.
   router.get("/api/face-scans", auth, async (req, res) => {
+    // An invite link only ever sees the scans it created itself.
+    if (req.session?.role === "invite") {
+      const mine = (await deps.scans.listByInvite(req.session.inviteId)).filter(
+        (s) => s.mode === "face",
+      );
+      res.json({ scans: mine });
+      return;
+    }
     const q = req.query.patientId;
     const patient =
       typeof q === "string" && q.length > 0 && q !== "walk-in"
@@ -157,7 +192,7 @@ export function createFaceScanRoutes(deps: AppDeps, auth: RequestHandler): Route
 
   router.get("/api/face-scans/:id", auth, async (req, res) => {
     const scan = await deps.scans.get(req.params.id);
-    if (!scan || scan.mode !== "face") {
+    if (!scan || scan.mode !== "face" || !ownedBySession(req, scan)) {
       res.status(404).json({ error: "not found" });
       return;
     }
@@ -168,6 +203,11 @@ export function createFaceScanRoutes(deps: AppDeps, auth: RequestHandler): Route
 
   router.get("/api/face-scans/:id/images/:angle", auth, async (req, res) => {
     if (!VALID_ANGLES.has(req.params.angle)) {
+      res.status(404).end();
+      return;
+    }
+    const owner = await deps.scans.get(req.params.id);
+    if (!owner || !ownedBySession(req, owner)) {
       res.status(404).end();
       return;
     }
@@ -183,7 +223,7 @@ export function createFaceScanRoutes(deps: AppDeps, auth: RequestHandler): Route
   // Idempotent explanation upgrade: swap builtin → gemini once online. 503 offline.
   router.post("/api/face-scans/:id/enhance", auth, async (req, res) => {
     const scan = await deps.scans.get(req.params.id);
-    if (!scan || scan.mode !== "face" || !scan.report) {
+    if (!scan || scan.mode !== "face" || !scan.report || !ownedBySession(req, scan)) {
       res.status(404).json({ error: "not found" });
       return;
     }

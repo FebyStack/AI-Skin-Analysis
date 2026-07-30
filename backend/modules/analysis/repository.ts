@@ -24,6 +24,8 @@ export interface ScanRecord {
   partial: boolean;
   classifierFindings: unknown[];
   promptVersion: number | null;
+  /** Set when the scan came from a scan-invite link, which scopes reads to it. */
+  inviteId?: string | null;
 }
 
 // One captured angle attached to a face scan (Plan 12). Bytes travel in memory
@@ -43,6 +45,8 @@ export interface ScanRepo {
   create(s: Omit<ScanRecord, "id" | "createdAt">): Promise<ScanRecord>;
   get(id: string): Promise<ScanRecord | null>;
   listByPatient(patientId: string): Promise<Omit<ScanRecord, "imageJpeg">[]>;
+  /** Scans created by one invite link — the only scans that link may read. */
+  listByInvite(inviteId: string): Promise<Omit<ScanRecord, "imageJpeg">[]>;
   getImage(id: string): Promise<{ jpeg: Uint8Array } | null>;
   updateReport(id: string, report: StoredReport, promptVersion: number | null): Promise<boolean>;
   remove(id: string): Promise<boolean>;
@@ -197,6 +201,12 @@ export class MemoryScanRepo implements ScanRepo {
   async listByPatient(patientId: string) {
     return [...this.rows.values()]
       .filter((s) => s.patientId === patientId)
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .map(({ imageJpeg: _img, ...rest }) => rest);
+  }
+  async listByInvite(inviteId: string) {
+    return [...this.rows.values()]
+      .filter((s) => s.inviteId === inviteId)
       .sort((a, b) => b.createdAt - a.createdAt)
       .map(({ imageJpeg: _img, ...rest }) => rest);
   }
@@ -501,6 +511,7 @@ function rowToScan(r: Record<string, unknown>): ScanRecord {
     partial: Boolean(r.partial),
     classifierFindings: (r.classifier_findings as unknown[]) ?? [],
     promptVersion: (r.prompt_version as number | null) ?? null,
+    inviteId: (r.invite_id as string | null) ?? null,
   };
 }
 
@@ -541,8 +552,8 @@ export class PgScanRepo implements ScanRepo {
   async create(s: Omit<ScanRecord, "id" | "createdAt">): Promise<ScanRecord> {
     const { rows } = await this.pool.query(
       `INSERT INTO scans (patient_id, mode, image_jpeg, image_width, image_height,
-                          report, partial, classifier_findings, prompt_version)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+                          report, partial, classifier_findings, prompt_version, invite_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
       [
         s.patientId,
         s.mode,
@@ -553,6 +564,7 @@ export class PgScanRepo implements ScanRepo {
         s.partial,
         JSON.stringify(s.classifierFindings),
         s.promptVersion,
+        s.inviteId ?? null,
       ],
     );
     return rowToScan(rows[0]);
@@ -566,9 +578,22 @@ export class PgScanRepo implements ScanRepo {
     if (!isValidUuid(patientId)) return [];
     const { rows } = await this.pool.query(
       `SELECT id, patient_id, mode, created_at, image_width, image_height,
-              report, partial, classifier_findings, prompt_version
+              report, partial, classifier_findings, prompt_version, invite_id
        FROM scans WHERE patient_id = $1 ORDER BY created_at DESC`,
       [patientId],
+    );
+    return rows.map((r) => {
+      const { imageJpeg: _img, ...rest } = rowToScan({ ...r, image_jpeg: new Uint8Array() });
+      return rest;
+    });
+  }
+  async listByInvite(inviteId: string) {
+    if (!isValidUuid(inviteId)) return [];
+    const { rows } = await this.pool.query(
+      `SELECT id, patient_id, mode, created_at, image_width, image_height,
+              report, partial, classifier_findings, prompt_version, invite_id
+       FROM scans WHERE invite_id = $1 ORDER BY created_at DESC`,
+      [inviteId],
     );
     return rows.map((r) => {
       const { imageJpeg: _img, ...rest } = rowToScan({ ...r, image_jpeg: new Uint8Array() });

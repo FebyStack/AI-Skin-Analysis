@@ -26,6 +26,7 @@ import { FACE_ANGLES, type FaceReport, type FaceAngle } from "@shared/face";
 import type { CapturedAngle } from "../../api/face-client";
 import { SILHOUETTE_YAW_RATIO, maskPaths, outerPathD, svgGuide } from "./phi-mask";
 import { useEasedYaw } from "./use-eased-yaw";
+import { useInviteAllowance } from "../../hooks/use-invite-allowance";
 
 type View = "capture" | "saving" | "result" | "history";
 
@@ -119,7 +120,7 @@ async function blobToPixels(blob: Blob, geometry: FaceGeometry | null): Promise<
   }
 }
 
-export function GuidedFaceFlow() {
+export function GuidedFaceFlow({ isInvite = false }: { isInvite?: boolean }) {
   const camera = useCamera("face");
   // Face geometry per captured angle — used to crop saved frames to the face
   // bbox before the learned models see them.
@@ -144,6 +145,8 @@ export function GuidedFaceFlow() {
   const [savedScanId, setSavedScanId] = useState<string | null>(null);
   const [offline, setOffline] = useState(false);
   const [error, setError] = useState<string>("");
+  const { allowance, refresh: refreshAllowance } = useInviteAllowance(isInvite);
+  const inviteExhausted = isInvite && allowance !== null && allowance.scansLeft <= 0;
 
   useEffect(() => {
     void camera.start();
@@ -251,6 +254,7 @@ export function GuidedFaceFlow() {
         setSavedScanId(outcome.scan?.id ?? null);
         setOffline(outcome.offline);
         setView("result");
+        void refreshAllowance();
       } catch (err) {
         setError(err instanceof Error ? err.message : "Save failed.");
         setSaved(report);
@@ -288,10 +292,10 @@ export function GuidedFaceFlow() {
             {error}
           </p>
         )}
-        <ReportBoundary onViewHistory={() => setView("history")}>
+        <ReportBoundary onViewHistory={isInvite ? undefined : () => setView("history")}>
           <FaceReportView report={saved} />
         </ReportBoundary>
-        {savedScanId && (
+        {savedScanId && !isInvite && (
           <>
             <ScanLabelControl scanId={savedScanId} dimension="acne" title="Clinician acne grade" labels={ACNE_CLASSES} />
             <ScanLabelControl scanId={savedScanId} dimension="skintype" title="Clinician skin type" labels={SKINTYPE_CLASSES} />
@@ -299,8 +303,12 @@ export function GuidedFaceFlow() {
           </>
         )}
         <div className="mx-auto mt-6 flex max-w-3xl justify-center gap-3 px-4">
-          <button onClick={reset} className="btn-primary px-6">New scan</button>
-          <button onClick={() => setView("history")} className="btn-secondary px-6">History</button>
+          {!inviteExhausted && (
+            <button onClick={reset} className="btn-primary px-6">New scan</button>
+          )}
+          {!isInvite && (
+            <button onClick={() => setView("history")} className="btn-secondary px-6">History</button>
+          )}
         </div>
       </div>
     );
@@ -315,9 +323,23 @@ export function GuidedFaceFlow() {
         <p className="text-sm text-ink-secondary">
           Your scan was saved, but the report could not be loaded.
         </p>
-        <button onClick={() => setView("history")} className="btn-primary px-5">
-          View scan history
-        </button>
+        {!isInvite && (
+          <button onClick={() => setView("history")} className="btn-primary px-5">
+            View scan history
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  if (inviteExhausted && view === "capture") {
+    return (
+      <div className="mx-auto max-w-md animate-reveal space-y-3 p-6 text-center">
+        <h2 className="font-serif text-xl font-semibold text-ink">This link is used up</h2>
+        <p className="text-sm leading-relaxed text-ink-secondary">
+          All {allowance?.maxScans} scans on this link have been completed. Ask the clinic for a new
+          link if you need another.
+        </p>
       </div>
     );
   }
@@ -383,6 +405,13 @@ export function GuidedFaceFlow() {
       </div>
 
       {/* Camera: double-bezel tray so the preview reads as a machined plate. */}
+      {isInvite && allowance && (
+        <p className="mb-3 text-[11px] uppercase tracking-[0.14em] text-ink-tertiary">
+          {allowance.scansLeft} of {allowance.maxScans} scan{allowance.maxScans === 1 ? "" : "s"} left
+          on this link
+        </p>
+      )}
+
       <div className="relative w-full max-w-sm rounded-[2rem] border border-hairline bg-white/[0.04] p-2 shadow-card">
         <div className="relative aspect-[3/4] w-full overflow-hidden rounded-[1.5rem] bg-black">
           <video
@@ -520,12 +549,14 @@ export function GuidedFaceFlow() {
         Hold the pose for a moment and it captures on its own.
       </p>
 
-      <button
-        onClick={() => setView("history")}
-        className="relative mt-5 text-sm font-medium text-gold-bright underline-offset-4 transition-colors hover:text-gold hover:underline"
-      >
-        View scan history
-      </button>
+      {!isInvite && (
+        <button
+          onClick={() => setView("history")}
+          className="relative mt-5 text-sm font-medium text-gold-bright underline-offset-4 transition-colors hover:text-gold hover:underline"
+        >
+          View scan history
+        </button>
+      )}
     </div>
   );
 }

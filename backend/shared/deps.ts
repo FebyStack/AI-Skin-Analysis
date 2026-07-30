@@ -2,6 +2,7 @@ import type { Pool } from "pg";
 import type { PatientRepo } from "../modules/patients/repository";
 import type { ScanRepo } from "../modules/analysis/repository";
 import type { SettingsRepo } from "../modules/settings/repository";
+import type { InviteRepo } from "../modules/invites/repository";
 import type { PipelineDeps } from "../../ai/llm/pipeline";
 import type { LesionProvider } from "../modules/analysis/lesion-client";
 import type { LesionAnalysis, LesionExplanation } from "../../shared/lesion";
@@ -12,6 +13,9 @@ export interface AppDeps {
   patients: PatientRepo;
   scans: ScanRepo;
   settings: SettingsRepo;
+  // Scan-invite links. Optional so older harnesses still construct; absent means
+  // invite tokens are refused rather than silently trusted.
+  invites?: InviteRepo;
   pipeline: PipelineDeps;
   lesion: LesionProvider; // Python lesion service (HTTP), or Fake in dev/test
   // Optional online explainer (Gemini). Undefined/failing → route uses the builtin

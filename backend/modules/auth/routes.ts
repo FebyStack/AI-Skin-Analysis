@@ -4,7 +4,7 @@ import {
   verifyOrBootstrapPassword,
   makeSessionToken,
   parseCookies,
-  isValidSession,
+  parseSession,
 } from "./service";
 
 export function createAuthRoutes(deps: AppDeps): Router {
@@ -24,10 +24,23 @@ export function createAuthRoutes(deps: AppDeps): Router {
     res.json({ ok: true });
   });
 
+  /**
+   * The session cookie is HttpOnly, so the client CANNOT clear it — the previous
+   * client-side logout was a no-op and left the session live. This is the only
+   * way to actually end one, which matters most for an invite link opened on a
+   * shared or family device.
+   */
+  router.post("/api/auth/logout", (_req, res) => {
+    res.setHeader("Set-Cookie", "session=; HttpOnly; Path=/; SameSite=Strict; Max-Age=0");
+    res.json({ ok: true });
+  });
+
   router.get("/api/auth/status", (req, res) => {
     const token = parseCookies(req.headers.cookie)["session"];
-    const authenticated = isValidSession(token, deps.sessionSecret, deps.now());
-    res.json({ authenticated });
+    const session = parseSession(token, deps.sessionSecret, deps.now());
+    // The role scopes the UI. It is advisory only — every clinician route is
+    // gated server-side regardless of what the client chooses to render.
+    res.json({ authenticated: session !== null, role: session?.role ?? null });
   });
 
   return router;

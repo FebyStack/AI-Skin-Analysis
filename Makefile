@@ -1,4 +1,4 @@
-.PHONY: up down lan build backup restore retrain retrain-acne retrain-skintype retrain-dim retrain-dims retrain-face
+.PHONY: share up down lan build backup restore retrain retrain-acne retrain-skintype retrain-dim retrain-dims retrain-face
 
 # Compose lives in infrastructure/docker/; --env-file keeps root .env interpolation working.
 COMPOSE = docker compose -f infrastructure/docker/docker-compose.yml --env-file .env
@@ -62,3 +62,16 @@ backup:
 restore:
 	@test -n "$(FILE)" || (echo "usage: make restore FILE=database/backups/backup-....sql" && exit 1)
 	cat $(FILE) | $(COMPOSE) exec -T db psql -U skin skin
+
+# Expose the local dev server on a public HTTPS URL so remote patients can use a
+# private scan link. Cloudflare's quick tunnel needs no account. HTTPS matters:
+# getUserMedia refuses to hand over the camera on a plain-http origin.
+#
+# This machine must stay awake and keep `npm run dev:lite` running for the URL to
+# work. The URL is public — the clinic password and the invite tokens are the
+# only things gating it, so create links with `Scans` set to what you actually
+# want and revoke them when done.
+share:
+	@command -v cloudflared >/dev/null || { echo "cloudflared not found. Install it: brew install cloudflared"; exit 1; }
+	@echo "Start the app first (npm run dev:lite), then share the https:// URL below."
+	cloudflared tunnel --url https://localhost:5173 --no-tls-verify

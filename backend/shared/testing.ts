@@ -1,5 +1,6 @@
 import { MemoryPatientRepo } from "../modules/patients/repository";
 import { MemoryScanRepo } from "../modules/analysis/repository";
+import { MemoryInviteRepo } from "../modules/invites/repository";
 import { MemorySettingsRepo } from "../modules/settings/repository";
 import { FakeLesionProvider } from "../modules/analysis/lesion-client";
 import type { AppDeps } from "./deps";
@@ -10,6 +11,7 @@ export function makeTestDeps(overrides: Partial<AppDeps> = {}): AppDeps {
     patients: new MemoryPatientRepo(),
     scans: new MemoryScanRepo(),
     settings: new MemorySettingsRepo(),
+    invites: new MemoryInviteRepo(),
     pipeline: {
       config: {
         apiKey: "sk-test",

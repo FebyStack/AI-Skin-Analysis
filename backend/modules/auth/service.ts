@@ -25,14 +25,59 @@ export function makeSessionToken(secret: string, nowMs: number): string {
   return `${expires}.${sig}`;
 }
 
-export function isValidSession(token: string | undefined, secret: string, nowMs: number): boolean {
-  if (!token) return false;
-  const [expiresStr, sig] = token.split(".");
-  const expires = Number(expiresStr);
-  if (!Number.isFinite(expires) || expires < nowMs) return false;
-  const expected = createHmac("sha256", secret).update(expiresStr).digest("hex");
+function signaturesMatch(payload: string, sig: string | undefined, secret: string): boolean {
+  const expected = createHmac("sha256", secret).update(payload).digest("hex");
+  // timingSafeEqual throws on a length mismatch, so screen that first.
   if (sig?.length !== expected.length) return false;
   return timingSafeEqual(Buffer.from(sig), Buffer.from(expected));
+}
+
+/**
+ * A session is either the shared clinic login or a scan-invite link. The role
+ * travels inside the signed token so it cannot be escalated client-side; the
+ * invite's remaining quota is NOT in here, because it changes — that is read
+ * from the database on every invite-authenticated request.
+ */
+export type Session =
+  | { role: "clinic" }
+  | { role: "invite"; inviteId: string };
+
+const INVITE_PREFIX = "v2";
+
+/** Session cookie for an invite link. Same TTL — the invite row is the real gate. */
+export function makeInviteSessionToken(secret: string, nowMs: number, inviteId: string): string {
+  const payload = `${INVITE_PREFIX}.${nowMs + SESSION_TTL_MS}.invite.${inviteId}`;
+  return `${payload}.${createHmac("sha256", secret).update(payload).digest("hex")}`;
+}
+
+export function parseSession(
+  token: string | undefined,
+  secret: string,
+  nowMs: number,
+): Session | null {
+  if (!token) return null;
+  const parts = token.split(".");
+
+  if (parts[0] === INVITE_PREFIX) {
+    const [, expiresStr, role, inviteId, sig] = parts;
+    if (parts.length !== 5 || role !== "invite" || !inviteId) return null;
+    const expires = Number(expiresStr);
+    if (!Number.isFinite(expires) || expires < nowMs) return null;
+    if (!signaturesMatch(`${INVITE_PREFIX}.${expiresStr}.${role}.${inviteId}`, sig, secret)) return null;
+    return { role: "invite", inviteId };
+  }
+
+  // Legacy two-part clinic token: `<expires>.<sig>`. Kept as-is so sessions
+  // issued before invites existed keep working.
+  const [expiresStr, sig] = parts;
+  const expires = Number(expiresStr);
+  if (parts.length !== 2 || !Number.isFinite(expires) || expires < nowMs) return null;
+  if (!signaturesMatch(expiresStr, sig, secret)) return null;
+  return { role: "clinic" };
+}
+
+export function isValidSession(token: string | undefined, secret: string, nowMs: number): boolean {
+  return parseSession(token, secret, nowMs) !== null;
 }
 
 export function parseCookies(header: string | undefined): Record<string, string> {

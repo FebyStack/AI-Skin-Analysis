@@ -10,6 +10,7 @@ import { explainFace } from "../../ai/llm/face-explainer";
 import { MemoryPatientRepo } from "../modules/patients/repository";
 import { MemoryScanRepo } from "../modules/analysis/repository";
 import { MemorySettingsRepo } from "../modules/settings/repository";
+import { MemoryInviteRepo } from "../modules/invites/repository";
 import { callGemini } from "../../ai/llm/providers/gemini";
 
 async function main() {
@@ -25,6 +26,7 @@ async function main() {
   const app = createApp({
     patients: new MemoryPatientRepo(),
     scans: new MemoryScanRepo(),
+    invites: new MemoryInviteRepo(),
     settings,
     pipeline: {
       config: {

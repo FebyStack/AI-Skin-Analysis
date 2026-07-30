@@ -163,3 +163,23 @@ CREATE INDEX IF NOT EXISTS scan_events_kind ON scan_events (kind, at DESC);
 -- and can be restored, then purged. NULL = live.
 ALTER TABLE scan_images ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS scan_images_archived ON scan_images (archived_at);
+
+-- Scan invites: a private link giving an outside patient a limited number of
+-- scans and nothing else. The quota lives here rather than in the token so it
+-- can be counted and revoked; the token is only a lookup key.
+CREATE TABLE IF NOT EXISTS scan_invites (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  token TEXT NOT NULL UNIQUE,
+  label TEXT,
+  max_scans INT NOT NULL DEFAULT 2 CHECK (max_scans > 0),
+  used_scans INT NOT NULL DEFAULT 0 CHECK (used_scans >= 0),
+  expires_at TIMESTAMPTZ,
+  revoked_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS scan_invites_token_idx ON scan_invites(token);
+
+-- Which invite produced a scan, so an invite session can be scoped to only the
+-- scans it created (and so the clinic can audit where a scan came from).
+ALTER TABLE scans ADD COLUMN IF NOT EXISTS invite_id UUID REFERENCES scan_invites(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS scans_invite_idx ON scans(invite_id);

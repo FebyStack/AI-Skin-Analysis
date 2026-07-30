@@ -12,10 +12,12 @@ import { Segmented } from "./components/ui/Segmented";
 import { installOnlineSync, syncPending } from "./pwa/sync";
 import { requestPersistence } from "./pwa/local-store";
 import type { CaptureMode } from "./types";
+import type { SessionRole } from "./hooks/use-auth";
 
 type View = "scan" | "history" | "queue" | "training";
 
-export function SkinAnalysisPage() {
+export function SkinAnalysisPage({ role = "clinic" }: { role?: SessionRole }) {
+  const isInvite = role === "invite";
   const [mode, setMode] = useState<CaptureMode>("face");
   const [view, setView] = useState<View>("scan");
 
@@ -43,26 +45,34 @@ export function SkinAnalysisPage() {
           </p>
         </div>
 
-        <div className="mt-6">
-          <PatientBar />
-        </div>
+        {!isInvite && (
+          <div className="mt-6">
+            <PatientBar />
+          </div>
+        )}
 
         <div className="mt-4 flex justify-center">
           <Segmented
             ariaLabel="View"
             value={view}
             onChange={setView}
-            options={[
-              { value: "scan", label: "Scan" },
-              { value: "history", label: "History" },
-              { value: "queue", label: "Queue" },
-              { value: "training", label: "Training" },
-            ]}
+            options={
+              // An invite link is scoped to its own scan; the clinic views are
+              // hidden here and refused by the server regardless.
+              isInvite
+                ? [{ value: "scan", label: "Scan" }]
+                : [
+                    { value: "scan", label: "Scan" },
+                    { value: "history", label: "History" },
+                    { value: "queue", label: "Queue" },
+                    { value: "training", label: "Training" },
+                  ]
+            }
           />
         </div>
 
         <div className="mt-8 animate-rise">
-          {view === "history" ? (
+          {view !== "scan" && isInvite ? null : view === "history" ? (
             <HistoryView onBack={() => setView("scan")} />
           ) : view === "queue" ? (
             <TrainingQueue />
@@ -75,14 +85,18 @@ export function SkinAnalysisPage() {
                   ariaLabel="Capture mode"
                   value={mode}
                   onChange={setMode}
-                  options={[
-                    { value: "face", label: "Face" },
-                    { value: "closeup", label: "Body / close-up" },
-                  ]}
+                  options={
+                    isInvite
+                      ? [{ value: "face", label: "Face" }]
+                      : [
+                          { value: "face", label: "Face" },
+                          { value: "closeup", label: "Body / close-up" },
+                        ]
+                  }
                 />
               </div>
               <div className="mt-8 flex justify-center">
-                {mode === "closeup" ? <LesionScanFlow /> : <GuidedFaceFlow />}
+                {mode === "closeup" && !isInvite ? <LesionScanFlow /> : <GuidedFaceFlow isInvite={isInvite} />}
               </div>
             </ScanConsentGate>
           )}

@@ -3,7 +3,7 @@ import path from "node:path";
 import fs from "node:fs";
 
 import type { AppDeps } from "../shared/deps";
-import { requireSession } from "../middleware/require-session";
+import { requireSession, requireClinician } from "../middleware/require-session";
 import { requireAdmin } from "../middleware/require-admin";
 
 import { CaptureSessionStore } from "../modules/capture/store";
@@ -17,6 +17,7 @@ import { createTrainingRoutes } from "../modules/training/routes";
 import { createQueueRoutes } from "../modules/training/queue-routes";
 import { createGovernanceRoutes } from "../modules/training/governance-routes";
 import { createArchiveRoutes } from "../modules/training/archive-routes";
+import { createInviteRoutes } from "../modules/invites/routes";
 import { createModelUploadRouter } from "../modules/models/upload-route";
 
 const errMessage = (err: unknown): string =>
@@ -36,7 +37,11 @@ export function createApp(deps: AppDeps): Express {
   fs.mkdirSync(modelsDir, { recursive: true });
   app.use("/models", express.static(modelsDir));
 
-  const auth = requireSession(deps.sessionSecret, deps.now);
+  // `auth` = clinic login OR a live scan-invite link. `clinician` = staff only.
+  // Anything an invited patient must never see uses `clinician`; only the face
+  // scan + its own result use `auth`.
+  const auth = requireSession(deps.sessionSecret, deps.now, deps.invites);
+  const clinician = requireClinician(deps.sessionSecret, deps.now);
 
   let admin: RequestHandler;
 
@@ -62,15 +67,21 @@ export function createApp(deps: AppDeps): Express {
   const captures = new CaptureSessionStore(deps.now);
 
   app.use(createAuthRoutes(deps));
-  app.use(createPatientRoutes(deps, auth));
-  app.use(createLesionRoutes(deps, auth));
+  app.use(createInviteRoutes(deps, clinician, auth));
+
+  // Invite links reach the face-scan routes (which scope reads to their own
+  // scans) and nothing else.
   app.use(createFaceScanRoutes(deps, auth));
-  app.use(createCaptureRoutes(captures, auth));
+
+  // Clinic staff only.
+  app.use(createPatientRoutes(deps, clinician));
+  app.use(createLesionRoutes(deps, clinician));
+  app.use(createCaptureRoutes(captures, clinician));
   app.use("/api/models", createModelsRoutes(deps, admin));
-  app.use(createTrainingRoutes(deps, auth));
-  app.use(createQueueRoutes(deps, auth));
-  app.use(createGovernanceRoutes(deps, auth));
-  app.use(createArchiveRoutes(deps, auth));
+  app.use(createTrainingRoutes(deps, clinician));
+  app.use(createQueueRoutes(deps, clinician));
+  app.use(createGovernanceRoutes(deps, clinician));
+  app.use(createArchiveRoutes(deps, clinician));
 
   try {
     app.use(

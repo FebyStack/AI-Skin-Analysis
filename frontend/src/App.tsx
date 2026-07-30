@@ -4,7 +4,7 @@ import { LoginScreen } from "@/features/skin-analysis/components/auth/LoginScree
 import { useAuth } from "@/features/skin-analysis/hooks/use-auth";
 
 export default function App() {
-  const { status, error, checkSession, login } = useAuth();
+  const { status, role, error, checkSession, login } = useAuth();
 
   useEffect(() => {
     checkSession();
@@ -22,5 +22,5 @@ export default function App() {
     return <LoginScreen onLogin={login} error={error} />;
   }
 
-  return <SkinAnalysisPage />;
+  return <SkinAnalysisPage role={role ?? "clinic"} />;
 }
