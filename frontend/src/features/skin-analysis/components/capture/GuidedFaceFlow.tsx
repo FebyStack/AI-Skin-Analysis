@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useCamera } from "../../hooks/use-camera";
 import { useFaceScan } from "../../hooks/use-face-scan";
 import { makeAnalyzeFrame, FACE_MODEL_VERSIONS } from "./frame-adapter";
@@ -23,6 +23,14 @@ import {
 import type { FaceGeometry, Pixels } from "@ai/face/types";
 import { FACE_ANGLES, type FaceReport, type FaceAngle } from "@shared/face";
 import type { CapturedAngle } from "../../api/face-client";
+import { isMemoryConstrained } from "@ai/face/segmentation/parser";
+import { SILHOUETTE_YAW_RATIO, outerPathD, svgGuide } from "./phi-mask";
+import { useEasedYaw } from "./use-eased-yaw";
+
+// The wireframe is a WebGL layer over a live camera feed — the app's tightest
+// memory moment. Low-memory phones get the SVG mask alone, which already shows
+// the same silhouette, scrim and hold progress.
+const PhiMaskOverlay = lazy(() => import("./PhiMaskOverlay"));
 
 type View = "capture" | "saving" | "result" | "history";
 
@@ -137,6 +145,16 @@ export function GuidedFaceFlow() {
   // doesn't advance past a failed capture, that last one is guaranteed good.
   const capturedByAngle = useRef<Map<FaceAngle, Blob>>(new Map());
   const [view, setView] = useState<View>("capture");
+  // Device capability, not render state — decide once.
+  const [show3DGuide] = useState(() => {
+    if (typeof window === "undefined" || isMemoryConstrained()) return false;
+    try {
+      const c = document.createElement("canvas");
+      return Boolean(c.getContext("webgl2") ?? c.getContext("webgl"));
+    } catch {
+      return false;
+    }
+  });
   const [saved, setSaved] = useState<FaceReport | null>(null);
   const [savedScanId, setSavedScanId] = useState<string | null>(null);
   const [offline, setOffline] = useState(false);
@@ -312,13 +330,29 @@ export function GuidedFaceFlow() {
     : currentAngle?.startsWith("right")
       ? "right"
       : "none";
+  // Turn the guide to the middle of the window this step actually accepts, so
+  // the mask and the validator can never disagree about the target pose.
+  //
+  // The signs work out to the same number, via two flips that cancel:
+  // the window is measured on the RAW camera frame, where the patient's left is
+  // image-right, so "left-45" is negative. The preview is CSS-mirrored, which
+  // puts the patient's left back on screen-left. And a negative Y-rotation of
+  // the mask swings its nose to screen-left. So the midpoint is used as-is.
+  const [yawLo, yawHi] = ANGLE_YAW_WINDOWS[currentAngle] ?? [0, 0];
+  const guideYaw = (yawLo + yawHi) / 2;
   const holding = holdStreak > 0;
+  // One eased angle drives the scrim, the outline and the wireframe together.
+  const easedYaw = useEasedYaw(guideYaw);
+  const maskPath = useMemo(() => {
+    const { cx, cy, scale } = svgGuide(100, 133);
+    return outerPathD(cx, cy, scale, easedYaw * SILHOUETTE_YAW_RATIO);
+  }, [easedYaw]);
   const countdown = Math.max(0, HOLD_CHECKS - holdStreak);
   const positionCue = holding
     ? `Hold still — capturing in ${countdown}…`
     : turnDir === "none"
-      ? "Center your face in the oval"
-      : `Turn ${turnDir} — keep your face in the oval`;
+      ? "Center your face in the guide"
+      : `Turn ${turnDir} — keep your face in the guide`;
   const stepLabel = `Step ${scan.stepIndex + 1} of ${scan.totalSteps}`;
 
   return (
@@ -351,31 +385,32 @@ export function GuidedFaceFlow() {
             className="h-full w-full object-cover scale-x-[-1]" /* selfie preview mirror */
           />
 
-          {/* Face-positioning guide: dim outside a centred oval; the outline goes
-              solid and gold-bright once the pose is held, so the patient can see
-              the shot is about to fire. */}
+          {/* Face-positioning guide: the golden-ratio mask. The SVG layer owns the
+              scrim, silhouette and hold progress; the WebGL layer adds the
+              wireframe interior and turns it to this step's target pose. */}
           {camera.status === "live" && (
             <div className="pointer-events-none absolute inset-0">
-              <svg viewBox="0 0 100 133" preserveAspectRatio="none" className="h-full w-full">
+              <svg viewBox="0 0 100 133" className="h-full w-full">
                 <defs>
                   <mask id="faceHole">
                     <rect width="100" height="133" fill="white" />
-                    <ellipse cx="50" cy="58" rx="29" ry="38" fill="black" />
+                    <path d={maskPath} fill="black" />
                   </mask>
                 </defs>
                 <rect width="100" height="133" fill="rgba(0,0,0,0.52)" mask="url(#faceHole)" />
-                <ellipse
-                  cx="50" cy="58" rx="29" ry="38"
+                <path
+                  d={maskPath}
                   fill="none"
                   className={`transition-all duration-500 ease-spring ${holding ? "text-gold-bright" : "text-gold/70"}`}
                   stroke="currentColor"
                   strokeWidth={holding ? 1.5 : 0.7}
                   strokeDasharray={holding ? undefined : "3 2"}
+                  strokeLinejoin="round"
                 />
-                {/* Hold progress traces the oval as the countdown runs. */}
+                {/* Hold progress traces the silhouette as the countdown runs. */}
                 {holding && (
-                  <ellipse
-                    cx="50" cy="58" rx="29" ry="38"
+                  <path
+                    d={maskPath}
                     fill="none"
                     stroke="currentColor"
                     strokeWidth="2.5"
@@ -384,10 +419,20 @@ export function GuidedFaceFlow() {
                     strokeDasharray="100"
                     strokeDashoffset={100 - (holdStreak / HOLD_CHECKS) * 100}
                     strokeLinecap="round"
-                    transform="rotate(-90 50 58)"
+                    strokeLinejoin="round"
                   />
                 )}
               </svg>
+
+              {show3DGuide && (
+                <Suspense fallback={null}>
+                  <PhiMaskOverlay
+                    yawDeg={easedYaw}
+                    holding={holding}
+                    progress={holdStreak / HOLD_CHECKS}
+                  />
+                </Suspense>
+              )}
 
               {/* Directional chevron for the current step (front shows none). */}
               {turnDir !== "none" && (
