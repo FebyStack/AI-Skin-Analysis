@@ -14,6 +14,24 @@ export class FaceFailedError extends Error {
   }
 }
 
+/**
+ * The server REFUSED the scan and always will — an invite link that is used up,
+ * expired or revoked.
+ *
+ * Distinct from FaceFailedError on purpose. A failure is transient, so the caller
+ * queues the scan for later sync; a refusal is permanent, and queueing it tells
+ * the patient "saved, will sync later" about a scan that can never sync.
+ */
+export class FaceRejectedError extends Error {
+  constructor(
+    message: string,
+    readonly inviteState?: string,
+  ) {
+    super(message);
+    this.name = "FaceRejectedError";
+  }
+}
+
 export interface FaceScanWire {
   id: string;
   patientId: string;
@@ -66,6 +84,13 @@ export async function saveFaceScan(
     body: JSON.stringify({ report, images, patientId, consent: scanConsent() }),
   });
   if (res.status === 401) throw new FaceAuthError();
+  if (res.status === 403 || res.status === 409) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string; inviteState?: string };
+    throw new FaceRejectedError(
+      body.error ?? "This scan was not accepted.",
+      body.inviteState,
+    );
+  }
   if (!res.ok) throw new FaceFailedError();
   return ((await res.json()) as { scan: FaceScanWire }).scan;
 }
@@ -86,6 +111,13 @@ export async function getFaceScan(id: string, fetchFn: FetchFn = fetch): Promise
   const res = await fetchFn(`/api/face-scans/${id}`, { credentials: "include" });
   if (res.status === 404) return null;
   if (res.status === 401) throw new FaceAuthError();
+  if (res.status === 403 || res.status === 409) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string; inviteState?: string };
+    throw new FaceRejectedError(
+      body.error ?? "This scan was not accepted.",
+      body.inviteState,
+    );
+  }
   if (!res.ok) throw new FaceFailedError();
   return ((await res.json()) as { scan: FaceScanWire }).scan;
 }

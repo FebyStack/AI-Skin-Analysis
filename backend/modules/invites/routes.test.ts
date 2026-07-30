@@ -168,6 +168,37 @@ describe("invite links", () => {
   });
 });
 
+describe("brute-force budget", () => {
+  it("throttles repeated bad passwords, but never a correct one", async () => {
+    const app2 = createApp(makeTestDeps());
+    // Bootstrap the password so later attempts are real comparisons.
+    await request(app2).post("/api/auth/login").send({ password: "the-real-password" });
+
+    let sawLimit = false;
+    for (let i = 0; i < 12; i++) {
+      const res = await request(app2).post("/api/auth/login").send({ password: `wrong-${i}` });
+      if (res.status === 429) {
+        expect(res.headers["retry-after"]).toBeTruthy();
+        sawLimit = true;
+        break;
+      }
+      expect(res.status).toBe(401);
+    }
+    expect(sawLimit, "expected a 429 within 12 attempts").toBe(true);
+  });
+
+  it("clears the budget once a login succeeds", async () => {
+    const app2 = createApp(makeTestDeps());
+    await request(app2).post("/api/auth/login").send({ password: "the-real-password" });
+    for (let i = 0; i < 5; i++) {
+      await request(app2).post("/api/auth/login").send({ password: "nope" });
+    }
+    expect((await request(app2).post("/api/auth/login").send({ password: "the-real-password" })).status).toBe(200);
+    // Budget reset, so there is room to fail again without an immediate 429.
+    expect((await request(app2).post("/api/auth/login").send({ password: "nope" })).status).toBe(401);
+  });
+});
+
 describe("invite links cannot reach clinic data", () => {
   it("is refused by every clinician-only route", async () => {
     const { cookie } = await inviteSession();
@@ -216,6 +247,18 @@ describe("invite links cannot reach clinic data", () => {
 
     // Its own scan is readable.
     expect((await request(app).get(`/api/face-scans/${myId}`).set("Cookie", cookie)).status).toBe(200);
+  });
+
+  it("refuses an exhausted link with 403 so the client cannot queue it offline", async () => {
+    const { cookie } = await inviteSession(1);
+    expect((await scan(cookie)).status).toBe(200);
+
+    const refused = await scan(cookie);
+    // 403, not 5xx: the client treats 403/409 as permanent and must NOT stash
+    // the scan for later sync, which would claim "saved" about a dead link.
+    expect(refused.status).toBe(403);
+    expect(refused.body.error).toBeTruthy();
+    expect(refused.body.inviteState).toBe("exhausted");
   });
 
   it("still lets clinic staff read everything", async () => {

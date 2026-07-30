@@ -2,6 +2,7 @@ import { Router, type RequestHandler } from "express";
 import type { AppDeps } from "../../shared/deps";
 import { makeInviteSessionToken, parseCookies, parseSession } from "../auth/service";
 import { newClaimId } from "./repository";
+import { createFailureLimiter } from "../../middleware/rate-limit";
 import {
   ALREADY_CLAIMED_MESSAGE,
   CLAIM_WINDOW_MINUTES,
@@ -42,6 +43,10 @@ export function createInviteRoutes(
   session: RequestHandler,
 ): Router {
   const router = Router();
+
+  // Token guessing is infeasible at 32 bytes of entropy, but an unauthenticated
+  // endpoint that hits the database on every call still should not be free.
+  const redeemLimit = createFailureLimiter({ max: 20, windowMs: 15 * 60_000 }, deps.now);
 
   // ── clinic side ───────────────────────────────────────────────────────────
   router.post("/api/invites", clinician, async (req, res) => {
@@ -97,7 +102,7 @@ export function createInviteRoutes(
    * (a reload, or tapping it again in the message thread) because it still holds
    * a cookie with the matching claim.
    */
-  router.post("/api/auth/invite", async (req, res) => {
+  router.post("/api/auth/invite", redeemLimit.guard, async (req, res) => {
     const token = req.body?.token;
     if (!deps.invites || typeof token !== "string" || !token) {
       res.status(400).json({ error: "invite token required" });
@@ -105,9 +110,11 @@ export function createInviteRoutes(
     }
     const invite = await deps.invites.getByToken(token);
     if (!invite) {
+      redeemLimit.fail(req);
       res.status(404).json({ error: "This link is not valid." });
       return;
     }
+    redeemLimit.succeed(req);
 
     const now = deps.now();
     const state = inviteState(invite, now);

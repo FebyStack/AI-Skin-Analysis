@@ -28,22 +28,32 @@ function stripInviteToken(): void {
  * the patient on the password screen. Caching the promise makes the second pass
  * await the same exchange instead of starting a competing one.
  */
-let redemption: Promise<Response> | null = null;
+let redemption: { token: string; res: Promise<Response> } | null = null;
 
 function redeemInvite(token: string): Promise<Response> {
-  redemption ??= fetch("/api/auth/invite", {
-    method: "POST",
-    credentials: "include",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ token }),
-  });
-  return redemption;
+  // Keyed by token: caching only the promise meant a second, different link
+  // pasted in the same page session got the FIRST link's stale result.
+  if (redemption?.token !== token) {
+    redemption = {
+      token,
+      res: fetch("/api/auth/invite", {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token }),
+      }),
+    };
+  }
+  return redemption.res;
 }
 
 export function useAuth() {
   const [status, setStatus] = useState<AuthStatus>("unknown");
   const [role, setRole] = useState<SessionRole | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // A link that was refused. Kept apart from `error` so the app can show the
+  // patient why their link failed instead of a clinician password prompt.
+  const [inviteError, setInviteError] = useState<string | null>(null);
 
   const checkSession = useCallback(async () => {
     // A link in the URL wins over any session already in the browser, so a
@@ -60,11 +70,11 @@ export function useAuth() {
         }
         const body = await res.clone().json().catch(() => ({}));
         stripInviteToken();
-        setError(body.error ?? "This link is not valid.");
+        setInviteError(body.error ?? "This link is not valid.");
         setStatus("logged-out");
         return;
       } catch {
-        setError("Cannot reach the server.");
+        setInviteError("Cannot reach the server. Check your connection and reopen the link.");
         setStatus("logged-out");
         return;
       }
@@ -115,8 +125,9 @@ export function useAuth() {
     );
     redemption = null;
     setRole(null);
+    setInviteError(null);
     setStatus("logged-out");
   }, []);
 
-  return { status, role, error, checkSession, login, logout };
+  return { status, role, error, inviteError, checkSession, login, logout };
 }

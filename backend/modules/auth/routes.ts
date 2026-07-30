@@ -1,5 +1,6 @@
 import { Router } from "express";
 import type { AppDeps } from "../../shared/deps";
+import { createFailureLimiter } from "../../middleware/rate-limit";
 import {
   verifyOrBootstrapPassword,
   makeSessionToken,
@@ -10,12 +11,18 @@ import {
 export function createAuthRoutes(deps: AppDeps): Router {
   const router = Router();
 
-  router.post("/api/auth/login", async (req, res) => {
+  // The clinic password is the only gate on a publicly reachable URL, so failed
+  // guesses are budgeted. 10 per 15 minutes per caller; a success clears it.
+  const loginLimit = createFailureLimiter({ max: 10, windowMs: 15 * 60_000 }, deps.now);
+
+  router.post("/api/auth/login", loginLimit.guard, async (req, res) => {
     const ok = await verifyOrBootstrapPassword(deps.settings, req.body?.password);
     if (!ok) {
+      loginLimit.fail(req);
       res.status(401).json({ error: "invalid password" });
       return;
     }
+    loginLimit.succeed(req);
     const token = makeSessionToken(deps.sessionSecret, deps.now());
     res.setHeader(
       "Set-Cookie",

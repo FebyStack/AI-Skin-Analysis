@@ -23,7 +23,7 @@ import {
 } from "@ai/face/quality/validate";
 import type { FaceGeometry, Pixels } from "@ai/face/types";
 import { FACE_ANGLES, type FaceReport, type FaceAngle } from "@shared/face";
-import type { CapturedAngle } from "../../api/face-client";
+import { FaceRejectedError, type CapturedAngle } from "../../api/face-client";
 import { SILHOUETTE_YAW_RATIO, maskPaths, outerPathD, svgGuide } from "./phi-mask";
 import { useEasedYaw } from "./use-eased-yaw";
 import { useInviteAllowance } from "../../hooks/use-invite-allowance";
@@ -145,6 +145,9 @@ export function GuidedFaceFlow({ isInvite = false }: { isInvite?: boolean }) {
   const [savedScanId, setSavedScanId] = useState<string | null>(null);
   const [offline, setOffline] = useState(false);
   const [error, setError] = useState<string>("");
+  // A permanent refusal (link used up / expired / revoked). Distinct from a
+  // transient error, because there is nothing to retry and no saved scan.
+  const [rejected, setRejected] = useState<string>("");
   const { allowance, refresh: refreshAllowance } = useInviteAllowance(isInvite);
   const inviteExhausted = isInvite && allowance !== null && allowance.scansLeft <= 0;
 
@@ -256,6 +259,14 @@ export function GuidedFaceFlow({ isInvite = false }: { isInvite?: boolean }) {
         setView("result");
         void refreshAllowance();
       } catch (err) {
+        if (err instanceof FaceRejectedError) {
+          // Nothing was stored and nothing will be. Say so instead of showing a
+          // report that implies the visit was recorded.
+          setRejected(err.message);
+          void refreshAllowance();
+          setView("capture");
+          return;
+        }
         setError(err instanceof Error ? err.message : "Save failed.");
         setSaved(report);
         setView("result");
@@ -328,6 +339,18 @@ export function GuidedFaceFlow({ isInvite = false }: { isInvite?: boolean }) {
             View scan history
           </button>
         )}
+      </div>
+    );
+  }
+
+  if (rejected) {
+    return (
+      <div className="mx-auto max-w-md animate-reveal space-y-3 p-6 text-center">
+        <h2 className="font-serif text-xl font-semibold text-ink">Scan not saved</h2>
+        <p className="text-sm leading-relaxed text-ink-secondary">{rejected}</p>
+        <p className="text-xs text-ink-tertiary">
+          Nothing was stored. Ask the clinic for a new link to try again.
+        </p>
       </div>
     );
   }

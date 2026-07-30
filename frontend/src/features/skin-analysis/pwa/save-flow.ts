@@ -3,7 +3,8 @@
 // reachable, and the queue drains any offline scans on reconnect.
 
 import { analyzeLesion, type LesionResult, LesionFailedError } from "../api/lesion-client";
-import { saveFaceScan, type CapturedAngle, type FaceScanWire, FaceFailedError } from "../api/face-client";
+import { saveFaceScan, type CapturedAngle, type FaceScanWire, FaceFailedError,
+  FaceRejectedError } from "../api/face-client";
 import type { FaceReport } from "@shared/face";
 import { builtinFaceExplanation } from "@ai/llm/fallback/face-education";
 import { builtinLesionExplanation } from "@ai/llm/fallback/lesion-education";
@@ -107,6 +108,9 @@ export async function saveFaceScanWithFallback(
     // nothing to render.
     return { scan, offline: false, localReport: scan.report ?? localReport };
   } catch (err) {
+    // A refusal is permanent. Queueing it would report "saved, will sync later"
+    // for a scan the server will reject every time.
+    if (err instanceof FaceRejectedError) throw err;
     if (err instanceof FaceFailedError || err instanceof TypeError) {
       const id = tmpId();
       const now = Date.now();

@@ -1,10 +1,11 @@
 import { useEffect } from "react";
 import { SkinAnalysisPage } from "@/features/skin-analysis/SkinAnalysisPage";
 import { LoginScreen } from "@/features/skin-analysis/components/auth/LoginScreen";
+import { InviteDeniedScreen } from "@/features/skin-analysis/components/auth/InviteDeniedScreen";
 import { useAuth } from "@/features/skin-analysis/hooks/use-auth";
 
 export default function App() {
-  const { status, role, error, checkSession, login } = useAuth();
+  const { status, role, error, inviteError, checkSession, login } = useAuth();
 
   useEffect(() => {
     checkSession();
@@ -16,6 +17,11 @@ export default function App() {
         <p className="text-sm text-ink-secondary">Checking session…</p>
       </main>
     );
+  }
+
+  // A refused scan link gets its own page — never the staff password prompt.
+  if (inviteError) {
+    return <InviteDeniedScreen message={inviteError} />;
   }
 
   if (status === "logged-out") {
