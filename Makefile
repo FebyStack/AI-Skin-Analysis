@@ -67,11 +67,29 @@ restore:
 # private scan link. Cloudflare's quick tunnel needs no account. HTTPS matters:
 # getUserMedia refuses to hand over the camera on a plain-http origin.
 #
-# This machine must stay awake and keep `npm run dev:lite` running for the URL to
-# work. The URL is public — the clinic password and the invite tokens are the
-# only things gating it, so create links with `Scans` set to what you actually
-# want and revoke them when done.
+# Wrapped in `caffeinate` because this Mac idles to sleep in ~1 minute, which
+# kills the tunnel while a patient is mid-scan. The assertion lasts exactly as
+# long as the tunnel runs, so normal sleep behaviour returns the moment you
+# Ctrl-C — no system settings are changed.
+#   -i  no idle sleep (works on battery too)
+#   -s  no system sleep (AC power only)
+#   -m  no disk idle sleep
+# The display is still allowed to sleep; that saves power and does not stop the
+# server. Closing the LID is a different thing entirely and always sleeps the
+# machine unless an external display is attached — the link dies with it.
+#
+# The URL is public. The clinic password and the invite tokens are the only gate,
+# so create links with the scan count you actually want and revoke them when done.
 share:
 	@command -v cloudflared >/dev/null || { echo "cloudflared not found. Install it: brew install cloudflared"; exit 1; }
-	@echo "Start the app first (npm run dev:lite), then share the https:// URL below."
-	cloudflared tunnel --url https://localhost:5173 --no-tls-verify
+	@pmset -g batt | grep -q "AC Power" || echo "\n⚠  On battery. Sharing keeps the Mac awake and will drain it — plug in for anything longer than a few minutes.\n"
+	@echo "Start the app first (npm run dev:all), then share the https:// URL below."
+	@echo "Keep this window open: the link dies when the tunnel stops.\n"
+	caffeinate -ism cloudflared tunnel --url https://localhost:5173 --no-tls-verify
+
+# Same wake-lock, without the tunnel — for when you are testing on the LAN and
+# just need the machine to stay up.
+.PHONY: awake
+awake:
+	@echo "Holding the Mac awake. Ctrl-C to release."
+	caffeinate -ism
