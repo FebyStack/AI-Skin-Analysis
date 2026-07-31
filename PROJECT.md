@@ -130,7 +130,7 @@ CSS `animate-rise`.
 Test-env note: jsdom implements no `matchMedia`, which GSAP needs, so
 `frontend/src/test/setup.ts` now polyfills it (reporting "no preference").
 
-last Claude session: 2026-07-30 09:41
+last Claude session: 2026-07-31 13:40
 
 ## Recent updates (2026-07-12)
 
@@ -237,7 +237,7 @@ CSS `animate-rise`.
 Test-env note: jsdom implements no `matchMedia`, which GSAP needs, so
 `frontend/src/test/setup.ts` now polyfills it (reporting "no preference").
 
-last Claude session: 2026-07-30 09:41
+last Claude session: 2026-07-31 13:40
 
 ## Progress 2026-07-21 (recommended-steps batch)
 
@@ -418,4 +418,4 @@ CSS `animate-rise`.
 Test-env note: jsdom implements no `matchMedia`, which GSAP needs, so
 `frontend/src/test/setup.ts` now polyfills it (reporting "no preference").
 
-last Claude session: 2026-07-30 09:41
+last Claude session: 2026-07-31 13:40
