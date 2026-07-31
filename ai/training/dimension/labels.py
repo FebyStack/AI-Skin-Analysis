@@ -1,44 +1,28 @@
-"""Per-face-dimension model registry.
+"""Severity vocabulary shared by every non-acne, non-skintype dimension.
 
-Each entry maps a FaceDimension (shared/face.ts FACE_DIMENSIONS) to its ordered
-class list. Order matters: the browser turns class probabilities into the
-dimension's 0..1 score via the ordinal expectation
-    score = sum(p_i * i) / (len(classes) - 1)
-so for binary ["absent", "present"] the score is exactly P(present), and for the
-5-level acne scale it's expected severity. Adding a dimension = one entry here.
+Kept identical to SEVERITY_LEVELS in shared/training-queue.ts — the clinician
+grades against that list, the backend exports folders named after it, and this
+reads those folders back. If the two ever drift, training silently loses rows.
 """
+from __future__ import annotations
 
-PRESENCE_CLASSES = ["absent", "present"]
+SEVERITY_CLASSES: list[str] = ["none", "mild", "moderate", "severe"]
 
-# Dimensions with a trainable model. acne keeps its 5-level ordinal scale
-# (ai/training/acne) — everything here is presence/absence to match the data we
-# have; upgrade a dimension to graded levels by listing them in order.
-DIMENSION_CLASSES: dict[str, list[str]] = {
-    "redness": PRESENCE_CLASSES,
-    "wrinkles": PRESENCE_CLASSES,
-    "pores": PRESENCE_CLASSES,
-    "pigmentation": PRESENCE_CLASSES,
-}
-
+# Tolerated spellings from external datasets. Clinic exports are already exact.
 _ALIASES = {
-    "absent": "absent", "none": "absent", "clear": "absent", "no": "absent", "0": "absent",
-    "present": "present", "yes": "present", "1": "present",
+    "clear": "none",
+    "absent": "none",
+    "minimal": "mild",
+    "slight": "mild",
+    "light": "mild",
+    "medium": "moderate",
+    "marked": "severe",
+    "very-severe": "severe",
 }
 
 
-def classes_for(dimension: str) -> list[str]:
-    if dimension not in DIMENSION_CLASSES:
-        raise KeyError(
-            f"unknown dimension '{dimension}'. Known: {sorted(DIMENSION_CLASSES)}"
-        )
-    return DIMENSION_CLASSES[dimension]
-
-
-def normalize_label(dimension: str, raw: str) -> str | None:
-    """Folder/CSV label → canonical class for this dimension (None if unusable)."""
-    valid = set(classes_for(dimension))
-    key = str(raw).strip().lower()
-    if key in valid:
+def normalize_severity(name: str) -> str | None:
+    key = name.strip().lower().replace("_", "-").replace(" ", "-")
+    if key in SEVERITY_CLASSES:
         return key
-    mapped = _ALIASES.get(key)
-    return mapped if mapped in valid else None
+    return _ALIASES.get(key)

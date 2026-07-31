@@ -36,6 +36,13 @@ export const ANNOTATION_FIELDS: AnnotationField[] = [
   { key: "pores", label: "Pores", options: SEVERITY_LEVELS },
   { key: "fine-lines", label: "Fine Lines", options: SEVERITY_LEVELS },
   { key: "wrinkles", label: "Wrinkles", options: SEVERITY_LEVELS },
+  // These three are in FACE_DIMENSIONS and shown to patients, but were not
+  // gradeable — so no ground truth could ever accumulate for them. Labels are
+  // phrased so "severe" is unambiguous: every dimension scores 0..1 as
+  // "more pronounced", i.e. more shadowing / more unevenness / more dryness.
+  { key: "dryness", label: "Dryness", options: SEVERITY_LEVELS },
+  { key: "under-eye", label: "Under-Eye Shadowing", options: SEVERITY_LEVELS },
+  { key: "tone-consistency", label: "Tone Unevenness", options: SEVERITY_LEVELS },
 ];
 
 /** Continuous 0..1 dimension score → the nearest severity level (AI suggestion). */

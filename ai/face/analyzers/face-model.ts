@@ -26,6 +26,15 @@ const STD = [0.229, 0.224, 0.225];
 // Unsure predictions keep the deterministic analyzer rather than assert a guess.
 const ACNE_MIN_CONF = Number(import.meta.env?.VITE_ACNE_MIN_CONF ?? "0.40");
 const SKINTYPE_MIN_CONF = Number(import.meta.env?.VITE_SKINTYPE_MIN_CONF ?? "0.45");
+const SEVERITY_MIN_CONF = Number(import.meta.env?.VITE_SEVERITY_MIN_CONF ?? "0.45");
+
+/** Must match SEVERITY_CLASSES in ai/training/dimension/labels.py, in order. */
+const SEVERITY_CLASSES = ["none", "mild", "moderate", "severe"] as const;
+/** Must match SEVERITY_DIMENSIONS in ai/training/dimension/ingest.py. */
+const SEVERITY_DIMENSIONS = [
+  "redness", "pigmentation", "oiliness", "texture", "pores",
+  "fine-lines", "wrinkles", "dryness", "under-eye", "tone-consistency",
+] as const;
 
 type OrtSession = import("onnxruntime-web").InferenceSession;
 
@@ -85,8 +94,9 @@ function softmax(logits: Float32Array | number[]): number[] {
   return exps.map((e) => e / sum);
 }
 
-function meanProbs(runs: number[][][], task: number): number[] | null {
-  const rows = runs.map((r) => r[task]).filter(Boolean);
+/** Averaged probabilities for one task, looked up by OUTPUT NAME. */
+function meanProbs(runs: Record<string, number[]>[], task: string): number[] | null {
+  const rows = runs.map((r) => r[`logits_${task}`]).filter(Boolean);
   if (rows.length === 0) return null;
   return rows[0].map((_, c) => rows.reduce((a, p) => a + p[c], 0) / rows.length);
 }
@@ -95,16 +105,21 @@ function meanProbs(runs: number[][][], task: number): number[] | null {
  * One pass per view over the shared model; returns per-task averaged probabilities.
  * Views are processed sequentially so a phone never holds several inferences at once.
  */
-async function runAllViews(views: Pixels[]): Promise<number[][][] | null> {
+async function runAllViews(views: Pixels[]): Promise<Record<string, number[]>[] | null> {
   const session = await ensureFaceModel();
   if (!session) return null;
   const ort = await import("onnxruntime-web");
-  const runs: number[][][] = [];
+  const runs: Record<string, number[]>[] = [];
   for (const px of views) {
     try {
       const tensor = new ort.Tensor("float32", preprocess(px), [1, 3, INPUT, INPUT]);
       const out = await session.run({ [session.inputNames[0]]: tensor });
-      runs.push(session.outputNames.map((n) => softmax(out[n].data as Float32Array)));
+      // Keyed by name, not position. Training adds a head per newly-trainable
+      // dimension, so output ORDER shifts between exports — reading by index
+      // would silently feed skintype logits into acne the day a head is added.
+      const byName: Record<string, number[]> = {};
+      for (const n of session.outputNames) byName[n] = softmax(out[n].data as Float32Array);
+      runs.push(byName);
     } catch {
       /* skip this view */
     }
@@ -126,7 +141,7 @@ export async function refineFaceWithModel(
 
   let next = report;
 
-  const acne = meanProbs(runs, 0);
+  const acne = meanProbs(runs, "acne");
   if (acne) {
     const confidence = Math.max(...acne);
     if (confidence >= ACNE_MIN_CONF) {
@@ -149,7 +164,7 @@ export async function refineFaceWithModel(
     }
   }
 
-  const skin = meanProbs(runs, 1);
+  const skin = meanProbs(runs, "skintype");
   if (skin) {
     const confidence = Math.max(...skin);
     if (confidence >= SKINTYPE_MIN_CONF) {
@@ -164,5 +179,34 @@ export async function refineFaceWithModel(
       };
     }
   }
+  // Any severity dimension whose head shipped in this export. Nothing to change
+  // here when a new one is trained — it appears as logits_<dimension> and is
+  // picked up automatically, tagged source:"model" so the UI shows a real
+  // confidence instead of the "estimate" chip.
+  for (const dim of SEVERITY_DIMENSIONS) {
+    const probs = meanProbs(runs, dim);
+    if (!probs) continue;
+    const confidence = Math.max(...probs);
+    if (confidence < SEVERITY_MIN_CONF) continue;
+    const idx = probs.indexOf(confidence);
+    // Ordinal expectation over none/mild/moderate/severe → the 0..1 score the
+    // report already uses, so downstream thresholds keep working.
+    const expected = probs.reduce((a, p, i) => a + p * i, 0) / (probs.length - 1);
+    next = {
+      ...next,
+      dimensions: {
+        ...next.dimensions,
+        [dim]: {
+          score: Math.max(0, Math.min(1, expected)),
+          confidence,
+          perZone: next.dimensions[dim]?.perZone ?? [],
+          source: "model",
+          evidence: `learned face model (${FACE_MODEL_VERSION}) — ${dim} "${SEVERITY_CLASSES[idx]}" across ${runs.length} view(s)`,
+        },
+      },
+      modelVersions: { ...next.modelVersions, [dim]: FACE_MODEL_VERSION },
+    };
+  }
+
   return next;
 }

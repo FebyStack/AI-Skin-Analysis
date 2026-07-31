@@ -1,4 +1,4 @@
-.PHONY: share up down lan build backup restore retrain retrain-acne retrain-skintype retrain-dim retrain-dims retrain-face
+.PHONY: share up down lan build dimension-readiness backup restore retrain retrain-acne retrain-skintype retrain-dim retrain-dims retrain-face
 
 # Compose lives in infrastructure/docker/; --env-file keeps root .env interpolation working.
 COMPOSE = docker compose -f infrastructure/docker/docker-compose.yml --env-file .env
@@ -62,6 +62,12 @@ backup:
 restore:
 	@test -n "$(FILE)" || (echo "usage: make restore FILE=database/backups/backup-....sql" && exit 1)
 	cat $(FILE) | $(COMPOSE) exec -T db psql -U skin skin
+
+# How close each skin dimension is to having a real trained model, and what is
+# still missing. Counts what is on disk, which is what the trainer reads — so
+# grade scans in the queue AND hit "Export graded scans" before expecting moves.
+dimension-readiness:
+	$(PY) -m ai.training.dimension.readiness
 
 # Expose the local dev server on a public HTTPS URL so remote patients can use a
 # private scan link. Cloudflare's quick tunnel needs no account. HTTPS matters:

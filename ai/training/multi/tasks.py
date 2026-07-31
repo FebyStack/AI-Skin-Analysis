@@ -16,23 +16,62 @@ from torch.utils.data import Dataset
 
 from ai.training.acne.ingest import collect_all as acne_rows
 from ai.training.acne.labels import ACNE_CLASSES
+from ai.training.dimension.ingest import SEVERITY_DIMENSIONS, collect_for
+from ai.training.dimension.labels import SEVERITY_CLASSES
 from ai.training.skintype.ingest import collect_all as skintype_rows
 from ai.training.skintype.labels import SKIN_TYPE_CLASSES
 from ai.training.transforms import serve_transforms, train_transforms
 
-# Ordered: the ONNX outputs are named logits_<task> in this order.
-TASKS: dict[str, list[str]] = {
-    "acne": ACNE_CLASSES,
-    "skintype": SKIN_TYPE_CLASSES,
-}
+# A severity dimension joins training only once every class has at least this
+# many examples. Below it the head cannot beat the pixel heuristic it would
+# replace, and shipping a worse model that LOOKS authoritative (a real model
+# confidence in the UI) is worse than shipping the honest estimate.
+MIN_PER_CLASS = 40
+
+
+def ready_dimensions() -> list[str]:
+    """Severity dimensions with enough clinician-graded data to train."""
+    ready = []
+    for dim in SEVERITY_DIMENSIONS:
+        counts = {}
+        for r in collect_for(dim):
+            counts[r["label"]] = counts.get(r["label"], 0) + 1
+        if counts and all(counts.get(c, 0) >= MIN_PER_CLASS for c in SEVERITY_CLASSES):
+            ready.append(dim)
+    return ready
+
+
+def build_tasks() -> dict[str, list[str]]:
+    """
+    Ordered task registry. acne and skintype stay FIRST and in this order:
+    older exported models are consumed by output index in some paths, so
+    prepending or reordering them would silently mis-map predictions.
+    """
+    tasks: dict[str, list[str]] = {
+        "acne": ACNE_CLASSES,
+        "skintype": SKIN_TYPE_CLASSES,
+    }
+    for dim in ready_dimensions():
+        tasks[dim] = SEVERITY_CLASSES
+    return tasks
+
+
+# Evaluated at import so the trainer, evaluator and exporter agree within a run.
+TASKS: dict[str, list[str]] = build_tasks()
 
 
 def collect_rows() -> list[dict]:
     """Every labeled image across all tasks, each row tagged with its task."""
     rows: list[dict] = []
-    for task, source in (("acne", acne_rows), ("skintype", skintype_rows)):
-        for r in source():
-            rows.append({**r, "task": task})
+    for r in acne_rows():
+        rows.append({**r, "task": "acne"})
+    for r in skintype_rows():
+        rows.append({**r, "task": "skintype"})
+    for dim in TASKS:
+        if dim in ("acne", "skintype"):
+            continue
+        for r in collect_for(dim):
+            rows.append({**r, "task": dim})
     return rows
 
 

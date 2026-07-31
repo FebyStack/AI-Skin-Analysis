@@ -1,52 +1,87 @@
-"""Build training rows for any face dimension from labeled images on disk.
+"""Training rows for any severity-graded dimension.
 
-Layout (same shape as acne/skintype, parameterized by dimension):
+Layout mirrors acne/skintype so the backend's existing export lands in the right
+place with no new plumbing:
 
-    $DATASETS_DIR/<dimension>/<source>/<class>/*.jpg
-    $DATASETS_DIR/<dimension>/scans/<class>/<scanId>.jpg   # clinician-labeled app scans
+    $DATASETS_DIR/<dimension>/<source>/<severity>/*.jpg
 
-Returns rows [{path, label, group}] for ai.training.train.train_one.
+The backend writes `<source>` = "scans" from POST /api/training/<dim>/export,
+so clinician-graded scans and any external corpus merge automatically.
+
+Deliberately NOT wired to any public dataset. Four dimension models were deleted
+on 2026-07-27 because positives and negatives came from different corpora and the
+model learned photographic style instead of skin. Anything dropped in here must
+share the clinic's camera and lighting distribution, or be held out for eval only.
 """
 from __future__ import annotations
 
+import os
+from pathlib import Path
+
+from ai.training.dimension.labels import normalize_severity
 from ai.training.paths import datasets_dir
-from ai.training.dimension.labels import classes_for, normalize_label
 
 IMG_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
 
+# Clinic-graded exports only, by default.
+#
+# This is not caution for its own sake. The other source folders on disk today
+# ("multi") hold 497 images reused as the "none" class for redness, pigmentation,
+# pores AND wrinkles at once — Roboflow acne photos that were never graded for
+# any of those dimensions. Training on them teaches the model which CORPUS a
+# photo came from, which is how four dimension models scored 0.96-1.00 and were
+# deleted as worthless on 2026-07-27.
+#
+# Set DIMENSION_EXTRA_SOURCES="multi,other" to opt in deliberately. Only do that
+# when positives and negatives share one camera/lighting distribution, and hold
+# out clinic scans for evaluation.
+CLINIC_SOURCE = "scans"
 
-def dimension_dir(dimension: str) -> Path:
-    return datasets_dir() / dimension
+
+def allowed_sources() -> set[str]:
+    extra = os.environ.get("DIMENSION_EXTRA_SOURCES", "")
+    return {CLINIC_SOURCE} | {s.strip() for s in extra.split(",") if s.strip()}
+
+# Dimensions graded on the 4-level severity scale (i.e. everything except acne,
+# which has its own 5 levels, and skintype, which is categorical).
+SEVERITY_DIMENSIONS: list[str] = [
+    "redness",
+    "pigmentation",
+    "oiliness",
+    "texture",
+    "pores",
+    "fine-lines",
+    "wrinkles",
+    "dryness",
+    "under-eye",
+    "tone-consistency",
+]
 
 
-def rows_from_folders(dimension: str, source: str) -> list[dict]:
-    base = dimension_dir(dimension) / source
+def collect_for(dimension: str) -> list[dict]:
+    """Every labelled image for one dimension, across all source folders."""
+    base = datasets_dir() / dimension
     rows: list[dict] = []
     if not base.exists():
         return rows
-    for label_dir in sorted(p for p in base.iterdir() if p.is_dir()):
-        label = normalize_label(dimension, label_dir.name)
-        if label is None:
+    permitted = allowed_sources()
+    for source_dir in sorted(p for p in base.iterdir() if p.is_dir()):
+        if source_dir.name not in permitted:
             continue
-        for img in label_dir.iterdir():
-            if img.suffix.lower() in IMG_EXTS:
-                rows.append({"path": str(img), "label": label, "group": img.stem})
+        for label_dir in sorted(p for p in source_dir.iterdir() if p.is_dir()):
+            label = normalize_severity(label_dir.name)
+            if label is None:
+                continue
+            for img in label_dir.iterdir():
+                if img.suffix.lower() in IMG_EXTS:
+                    # group = scan id, so augmented/multi-angle shots of one
+                    # patient never straddle the train/val split.
+                    rows.append({"path": str(img), "label": label, "group": img.stem})
     return rows
 
 
-def collect_all(dimension: str) -> list[dict]:
-    base = dimension_dir(dimension)
-    rows: list[dict] = []
-    if not base.exists():
-        return rows
-    for child in sorted(base.iterdir()):
-        if child.is_dir():
-            rows += rows_from_folders(dimension, child.name)
-    return rows
-
-
-def label_counts(dimension: str, rows: list[dict]) -> dict[str, int]:
-    counts = {c: 0 for c in classes_for(dimension)}
-    for r in rows:
-        counts[r["label"]] = counts.get(r["label"], 0) + 1
-    return counts
+def counts_for(dimension: str) -> dict[str, int]:
+    out: dict[str, int] = {}
+    for r in collect_for(dimension):
+        out[r["label"]] = out.get(r["label"], 0) + 1
+    return out
