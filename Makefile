@@ -1,4 +1,4 @@
-.PHONY: share up down lan build dimension-readiness backup restore retrain retrain-acne retrain-skintype retrain-dim retrain-dims retrain-face
+.PHONY: share up down lan build dimension-readiness fetch-dimension-datasets import-for-grading backup restore retrain retrain-acne retrain-skintype retrain-dim retrain-dims retrain-face
 
 # Compose lives in infrastructure/docker/; --env-file keeps root .env interpolation working.
 COMPOSE = docker compose -f infrastructure/docker/docker-compose.yml --env-file .env
@@ -62,6 +62,17 @@ backup:
 restore:
 	@test -n "$(FILE)" || (echo "usage: make restore FILE=database/backups/backup-....sql" && exit 1)
 	cat $(FILE) | $(COMPOSE) exec -T db psql -U skin skin
+
+# Download external face datasets for the severity dimensions. They land in
+# $DATASETS_DIR/_incoming/, which the trainer deliberately does NOT read — they
+# are presence/absence, not severity-graded, so they must be graded first.
+fetch-dimension-datasets:
+	$(PY) -m ai.training.dimension.fetch_datasets
+
+# Load those images into the Training Queue so a clinician can grade them.
+# Add --dry-run by hand to preview.
+import-for-grading:
+	npx tsx --env-file=.env backend/scripts/import-for-grading.ts
 
 # How close each skin dimension is to having a real trained model, and what is
 # still missing. Counts what is on disk, which is what the trainer reads — so
