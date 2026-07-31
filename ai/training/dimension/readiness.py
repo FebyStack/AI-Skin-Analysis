@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from ai.training.acne.ingest import collect_all as acne_rows
 from ai.training.dimension.ingest import SEVERITY_DIMENSIONS, collect_for
-from ai.training.dimension.labels import SEVERITY_CLASSES
+from ai.training.dimension.labels import PRESENCE_CLASSES
 from ai.training.multi.tasks import MIN_PER_CLASS
 from ai.training.skintype.ingest import collect_all as skintype_rows
 
@@ -38,14 +38,14 @@ def main() -> None:
         if total == 0:
             print(f"  {dim:17} no data   0 rows — grade scans, then export")
             continue
-        short = {k: MIN_PER_CLASS - c.get(k, 0) for k in SEVERITY_CLASSES if c.get(k, 0) < MIN_PER_CLASS}
+        short = {k: MIN_PER_CLASS - c.get(k, 0) for k in PRESENCE_CLASSES if c.get(k, 0) < MIN_PER_CLASS}
         state = "READY" if not short else "short"
         detail = "" if not short else f"  need {short}"
         print(f"  {dim:17} {state:9} {total:>6} rows  {c}{detail}")
 
     print(
         "\nA dimension with no trained model shows as an 'estimate' in the UI,"
-        "\nnot as a confidence percentage. See ai/datasets/DIMENSION-COVERAGE.md."
+        "\nnot as a confidence percentage. See docs/DIMENSION-COVERAGE.md."
     )
 
 

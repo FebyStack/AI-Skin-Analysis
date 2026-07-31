@@ -4,7 +4,7 @@
 //
 // It never blocks — a real flare can move two levels in a week. It surfaces the
 // pair and lets the reviewer decide, and every warning is logged for audit.
-import { ANNOTATION_FIELDS } from "./training-queue";
+import { ANNOTATION_FIELDS, normalizePresence } from "./training-queue";
 
 /** A jump of at least this many levels is worth questioning. */
 export const LEVEL_JUMP = 2;
@@ -25,7 +25,25 @@ export interface LabelInconsistency {
 
 function levelIndex(field: string, value: string): number {
   const spec = ANNOTATION_FIELDS.find((f) => f.key === field);
-  return spec ? spec.options.indexOf(value) : -1;
+  if (!spec) return -1;
+  const direct = spec.options.indexOf(value);
+  if (direct >= 0) return direct;
+  // Only reached for a value stored under the retired severity scale. Trying
+  // the direct match FIRST matters: acne still uses its own 5-level vocabulary,
+  // and normalising that would turn "moderate" into "present", which is not one
+  // of its options — silently switching the check off for acne.
+  return spec.options.indexOf(normalizePresence(value));
+}
+
+/**
+ * How far a label has to move before it is worth questioning.
+ *
+ * On the 5-level acne scale, one step is ordinary progression and two is not.
+ * On a 2-option presence scale the maximum possible jump IS one, so demanding
+ * two would silently switch the check off for the ten dimensions that use it.
+ */
+function jumpThreshold(optionCount: number): number {
+  return optionCount <= 2 ? 1 : LEVEL_JUMP;
 }
 
 /** Ordered scales only — skin type is categorical, so "oily → dry" isn't a jump. */
@@ -61,7 +79,7 @@ export function checkConsistency(i: ConsistencyInput): LabelInconsistency[] {
     if (a < 0 || b < 0) continue;
 
     const levelJump = Math.abs(b - a);
-    if (levelJump < LEVEL_JUMP) continue;
+    if (levelJump < jumpThreshold(spec.options.length)) continue;
 
     out.push({
       field: spec.key,

@@ -267,7 +267,38 @@ silently failed — they anchored on a `last Claude session:` timestamp that had
 already drifted, so the replace matched nothing and the sections were never
 written while being reported as done. Append, then VERIFY the section landed.
 
-last Claude session: 2026-07-31 18:30
+### Severity scale → presence (2026-07-31)
+
+The 9 non-acne dimensions now grade `absent` / `present`, not
+none/mild/moderate/severe. Reasons, in order of weight:
+
+1. **Untrainable as it stood.** Months of grading yielded 43 none / 23 mild /
+   4 moderate / **0 severe**. Four classes cannot be fitted from that; the same
+   labels are a usable 43/27 split as presence.
+2. **No dataset grades by degree.** Every public corpus is presence/absence, so
+   the scale could never be grounded externally either.
+3. **Not reproducible.** "Mild vs moderate" is a judgement two clinicians
+   disagree on; "is it visibly present?" is not.
+4. Degree is still communicated — by the model's probability.
+
+`PRESENCE_LEVELS` replaces `SEVERITY_LEVELS`; `scoreToPresence` replaces
+`scoreToSeverity`; Python gets `PRESENCE_CLASSES` / `normalize_presence`.
+acne keeps its 5 levels (it has real graded data) and skintype its 4 categories.
+`MIN_PER_CLASS = 40` now means 80 images per dimension, not 160.
+
+**Nothing stored was rewritten.** Old labels map forward on READ
+(`normalizePresence`, `normalize_presence`), so previously exported folders
+(`<dim>/scans/mild/`) still train and no clinician grade is lost.
+
+Two things this surfaced:
+- `LEVEL_JUMP = 2` in the consistency checker can never fire on a 2-option
+  scale — max jump is 1. `jumpThreshold()` now adapts, so a presence FLIP is
+  what gets questioned.
+- Normalising in `levelIndex` initially applied to every field, turning acne's
+  "moderate" into "present" — not one of acne's options, silently switching the
+  check off for acne. Direct match is tried first now.
+
+last Claude session: 2026-07-31 18:45
 
 ## Recent updates (2026-07-12)
 
@@ -511,7 +542,38 @@ silently failed — they anchored on a `last Claude session:` timestamp that had
 already drifted, so the replace matched nothing and the sections were never
 written while being reported as done. Append, then VERIFY the section landed.
 
-last Claude session: 2026-07-31 18:30
+### Severity scale → presence (2026-07-31)
+
+The 9 non-acne dimensions now grade `absent` / `present`, not
+none/mild/moderate/severe. Reasons, in order of weight:
+
+1. **Untrainable as it stood.** Months of grading yielded 43 none / 23 mild /
+   4 moderate / **0 severe**. Four classes cannot be fitted from that; the same
+   labels are a usable 43/27 split as presence.
+2. **No dataset grades by degree.** Every public corpus is presence/absence, so
+   the scale could never be grounded externally either.
+3. **Not reproducible.** "Mild vs moderate" is a judgement two clinicians
+   disagree on; "is it visibly present?" is not.
+4. Degree is still communicated — by the model's probability.
+
+`PRESENCE_LEVELS` replaces `SEVERITY_LEVELS`; `scoreToPresence` replaces
+`scoreToSeverity`; Python gets `PRESENCE_CLASSES` / `normalize_presence`.
+acne keeps its 5 levels (it has real graded data) and skintype its 4 categories.
+`MIN_PER_CLASS = 40` now means 80 images per dimension, not 160.
+
+**Nothing stored was rewritten.** Old labels map forward on READ
+(`normalizePresence`, `normalize_presence`), so previously exported folders
+(`<dim>/scans/mild/`) still train and no clinician grade is lost.
+
+Two things this surfaced:
+- `LEVEL_JUMP = 2` in the consistency checker can never fire on a 2-option
+  scale — max jump is 1. `jumpThreshold()` now adapts, so a presence FLIP is
+  what gets questioned.
+- Normalising in `levelIndex` initially applied to every field, turning acne's
+  "moderate" into "present" — not one of acne's options, silently switching the
+  check off for acne. Direct match is tried first now.
+
+last Claude session: 2026-07-31 18:45
 
 ## Progress 2026-07-21 (recommended-steps batch)
 
@@ -829,4 +891,35 @@ silently failed — they anchored on a `last Claude session:` timestamp that had
 already drifted, so the replace matched nothing and the sections were never
 written while being reported as done. Append, then VERIFY the section landed.
 
-last Claude session: 2026-07-31 18:30
+### Severity scale → presence (2026-07-31)
+
+The 9 non-acne dimensions now grade `absent` / `present`, not
+none/mild/moderate/severe. Reasons, in order of weight:
+
+1. **Untrainable as it stood.** Months of grading yielded 43 none / 23 mild /
+   4 moderate / **0 severe**. Four classes cannot be fitted from that; the same
+   labels are a usable 43/27 split as presence.
+2. **No dataset grades by degree.** Every public corpus is presence/absence, so
+   the scale could never be grounded externally either.
+3. **Not reproducible.** "Mild vs moderate" is a judgement two clinicians
+   disagree on; "is it visibly present?" is not.
+4. Degree is still communicated — by the model's probability.
+
+`PRESENCE_LEVELS` replaces `SEVERITY_LEVELS`; `scoreToPresence` replaces
+`scoreToSeverity`; Python gets `PRESENCE_CLASSES` / `normalize_presence`.
+acne keeps its 5 levels (it has real graded data) and skintype its 4 categories.
+`MIN_PER_CLASS = 40` now means 80 images per dimension, not 160.
+
+**Nothing stored was rewritten.** Old labels map forward on READ
+(`normalizePresence`, `normalize_presence`), so previously exported folders
+(`<dim>/scans/mild/`) still train and no clinician grade is lost.
+
+Two things this surfaced:
+- `LEVEL_JUMP = 2` in the consistency checker can never fire on a 2-option
+  scale — max jump is 1. `jumpThreshold()` now adapts, so a presence FLIP is
+  what gets questioned.
+- Normalising in `levelIndex` initially applied to every field, turning acne's
+  "moderate" into "present" — not one of acne's options, silently switching the
+  check off for acne. Direct match is tried first now.
+
+last Claude session: 2026-07-31 18:45

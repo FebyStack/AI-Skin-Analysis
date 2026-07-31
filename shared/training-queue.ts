@@ -14,7 +14,35 @@ export const QUEUE_STATUS_LABEL: Record<QueueStatus, string> = {
 };
 
 /** 4-level severity for the continuous dimensions (maps to 0 / .33 / .67 / 1). */
-export const SEVERITY_LEVELS = ["none", "mild", "moderate", "severe"] as const;
+/**
+ * Presence, not severity.
+ *
+ * The 4-level severity scale was never groundable: no public dataset grades
+ * these dimensions by degree, "mild vs moderate" is a judgement two clinicians
+ * disagree on, and after months of grading the clinic held 43 none / 23 mild /
+ * 4 moderate / 0 severe — untrainable. The same labels collapse to 43/27 here,
+ * which is a usable split, and "is it visibly present?" is a question a model
+ * and a clinician can both answer reproducibly.
+ *
+ * Degree is still communicated — by the model's probability, which is honest
+ * about its own uncertainty in a way a fabricated "moderate" is not.
+ */
+export const PRESENCE_LEVELS = ["absent", "present"] as const;
+
+/**
+ * The retired scale. Kept only to read labels stored before the change —
+ * `normalizePresence` maps them forward. Nothing writes these any more.
+ */
+export const LEGACY_SEVERITY_LEVELS = ["none", "mild", "moderate", "severe"] as const;
+
+/** Old label → new. Anything at all visible counts as present. */
+export function normalizePresence(label: string): string {
+  const k = label.trim().toLowerCase();
+  if (k === "absent" || k === "present") return k;
+  if (k === "none" || k === "clear") return "absent";
+  if (["mild", "moderate", "severe", "very-severe", "marked"].includes(k)) return "present";
+  return k;
+}
 export const ACNE_LEVELS = ["clear", "mild", "moderate", "severe", "very-severe"] as const;
 export const SKIN_TYPE_LEVELS = ["normal", "oily", "dry", "combination"] as const;
 
@@ -29,26 +57,25 @@ export interface AnnotationField {
 export const ANNOTATION_FIELDS: AnnotationField[] = [
   { key: "skintype", label: "Skin Type", options: SKIN_TYPE_LEVELS },
   { key: "acne", label: "Acne Severity", options: ACNE_LEVELS },
-  { key: "redness", label: "Redness", options: SEVERITY_LEVELS },
-  { key: "pigmentation", label: "Pigmentation", options: SEVERITY_LEVELS },
-  { key: "oiliness", label: "Oiliness", options: SEVERITY_LEVELS },
-  { key: "texture", label: "Texture", options: SEVERITY_LEVELS },
-  { key: "pores", label: "Pores", options: SEVERITY_LEVELS },
-  { key: "fine-lines", label: "Fine Lines", options: SEVERITY_LEVELS },
-  { key: "wrinkles", label: "Wrinkles", options: SEVERITY_LEVELS },
+  { key: "redness", label: "Redness", options: PRESENCE_LEVELS },
+  { key: "pigmentation", label: "Pigmentation", options: PRESENCE_LEVELS },
+  { key: "oiliness", label: "Oiliness", options: PRESENCE_LEVELS },
+  { key: "texture", label: "Texture", options: PRESENCE_LEVELS },
+  { key: "pores", label: "Pores", options: PRESENCE_LEVELS },
+  { key: "fine-lines", label: "Fine Lines", options: PRESENCE_LEVELS },
+  { key: "wrinkles", label: "Wrinkles", options: PRESENCE_LEVELS },
   // These three are in FACE_DIMENSIONS and shown to patients, but were not
   // gradeable — so no ground truth could ever accumulate for them. Labels are
   // phrased so "severe" is unambiguous: every dimension scores 0..1 as
   // "more pronounced", i.e. more shadowing / more unevenness / more dryness.
-  { key: "dryness", label: "Dryness", options: SEVERITY_LEVELS },
-  { key: "under-eye", label: "Under-Eye Shadowing", options: SEVERITY_LEVELS },
-  { key: "tone-consistency", label: "Tone Unevenness", options: SEVERITY_LEVELS },
+  { key: "dryness", label: "Dryness", options: PRESENCE_LEVELS },
+  { key: "under-eye", label: "Under-Eye Shadowing", options: PRESENCE_LEVELS },
+  { key: "tone-consistency", label: "Tone Unevenness", options: PRESENCE_LEVELS },
 ];
 
-/** Continuous 0..1 dimension score → the nearest severity level (AI suggestion). */
-export function scoreToSeverity(score: number): string {
-  const i = Math.min(SEVERITY_LEVELS.length - 1, Math.max(0, Math.round(score * 3)));
-  return SEVERITY_LEVELS[i];
+/** Continuous 0..1 dimension score → present/absent (the AI suggestion). */
+export function scoreToPresence(score: number): string {
+  return score >= 0.5 ? "present" : "absent";
 }
 
 /** Ordinal acne score (0..1 over 5 classes) → the nearest acne level. */

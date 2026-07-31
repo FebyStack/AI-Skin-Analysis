@@ -18,7 +18,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from ai.training.dimension.labels import normalize_severity
+from ai.training.dimension.labels import normalize_presence
 from ai.training.paths import datasets_dir
 
 IMG_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
@@ -69,7 +69,7 @@ def collect_for(dimension: str) -> list[dict]:
         if source_dir.name not in permitted:
             continue
         for label_dir in sorted(p for p in source_dir.iterdir() if p.is_dir()):
-            label = normalize_severity(label_dir.name)
+            label = normalize_presence(label_dir.name)
             if label is None:
                 continue
             for img in label_dir.iterdir():

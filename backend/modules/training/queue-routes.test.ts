@@ -73,14 +73,26 @@ describe("training queue", () => {
     expect(after.body.report.dimensions.acne).toEqual(aiAcne);
   });
 
-  it("accepts severity labels for the continuous dimensions", async () => {
-    for (const dim of ["redness", "oiliness", "fine-lines"]) {
-      const res = await request(app)
-        .post(`/api/scans/${scanId}/label`)
-        .set("Cookie", cookie)
-        .send({ dimension: dim, label: "moderate" });
-      expect(res.status).toBe(200);
+  it("accepts presence labels for the non-acne dimensions", async () => {
+    for (const dim of ["redness", "oiliness", "fine-lines", "dryness", "under-eye"]) {
+      for (const label of ["absent", "present"]) {
+        const res = await request(app)
+          .post(`/api/scans/${scanId}/label`)
+          .set("Cookie", cookie)
+          .send({ dimension: dim, label });
+        expect(res.status, `${dim}=${label}`).toBe(200);
+      }
     }
+  });
+
+  it("no longer accepts the retired severity vocabulary", async () => {
+    // The scale changed to absent/present; "moderate" must not silently land in
+    // the training data under a vocabulary the trainer no longer reads.
+    const res = await request(app)
+      .post(`/api/scans/${scanId}/label`)
+      .set("Cookie", cookie)
+      .send({ dimension: "redness", label: "moderate" });
+    expect(res.status).toBe(400);
   });
 
   it("rejects a label outside the field's vocabulary", async () => {

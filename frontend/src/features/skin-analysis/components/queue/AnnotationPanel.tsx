@@ -4,7 +4,8 @@ import {
   ANNOTATION_FIELDS,
   QUEUE_STATUS_LABEL,
   scoreToAcneLevel,
-  scoreToSeverity,
+  scoreToPresence,
+  normalizePresence,
   type QueueStatus,
 } from "@shared/training-queue";
 import { deleteScan, queueDetail, saveLabel, saveReview, type QueueDetail } from "../../api/queue-client";
@@ -17,6 +18,17 @@ import { ELIGIBILITY_LABEL, type Eligibility } from "@shared/training-governance
 import type { LabelInconsistency } from "@shared/label-consistency";
 import { ConsistencyBanner } from "./ConsistencyBanner";
 import { LifecycleTimeline } from "./LifecycleTimeline";
+
+/**
+ * A stored label may predate the presence switch ("mild"), so map it forward
+ * before it is used to preselect a dropdown — otherwise the option does not
+ * match and the panel silently falls back to the first choice, quietly
+ * rewriting a clinician's grade.
+ */
+function normalizeStored(key: string, value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  return key === "acne" || key === "skintype" ? value : normalizePresence(value);
+}
 
 /** The AI's suggested label + its confidence for one field. Never written to. */
 function aiPrediction(
@@ -35,7 +47,7 @@ function aiPrediction(
   const d = report.dimensions[key as FaceDimension];
   if (!d) return { value: null, confidence: null };
   return {
-    value: key === "acne" ? scoreToAcneLevel(d.score) : scoreToSeverity(d.score),
+    value: key === "acne" ? scoreToAcneLevel(d.score) : scoreToPresence(d.score),
     confidence: d.confidence,
     source: d.source ?? "heuristic",
   };
@@ -75,7 +87,7 @@ export function AnnotationPanel({ scanId, onClose }: { scanId: string; onClose: 
         Object.fromEntries(
           ANNOTATION_FIELDS.map((f) => [
             f.key,
-            saved[f.key] ?? aiPrediction(d.report, f.key).value ?? f.options[0],
+            normalizeStored(f.key, saved[f.key]) ?? aiPrediction(d.report, f.key).value ?? f.options[0],
           ]),
         ),
       );

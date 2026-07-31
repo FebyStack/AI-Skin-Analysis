@@ -37,12 +37,24 @@ describe("label consistency", () => {
     })).toHaveLength(0);
   });
 
-  it("flags the 4-level severity dimensions too", () => {
+  it("flags a presence flip on a 2-option dimension", () => {
+    // Max possible jump on absent/present is 1, so the threshold has to adapt —
+    // demanding 2 would switch the check off for every presence dimension.
     const w = checkConsistency({
-      previous: { redness: "severe" }, current: { redness: "none" },
+      previous: { redness: "present" }, current: { redness: "absent" },
       previousAt: at(1), currentAt: at(0),
     });
-    expect(w[0]).toMatchObject({ field: "redness", levelJump: 3 });
+    expect(w[0]).toMatchObject({ field: "redness", levelJump: 1 });
     expect(w[0].reason).toMatch(/same day|short period/i);
+  });
+
+  it("still reads labels stored under the retired severity scale", () => {
+    // Graded "severe" before the switch, "absent" after → still a flip.
+    const w = checkConsistency({
+      previous: { redness: "severe" }, current: { redness: "absent" },
+      previousAt: at(1), currentAt: at(0),
+    });
+    expect(w).toHaveLength(1);
+    expect(w[0].field).toBe("redness");
   });
 });

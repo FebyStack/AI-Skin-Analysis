@@ -1,5 +1,14 @@
 # Dimension coverage: what is measured vs. what is estimated
 
+> **2026-07-31: the 9 non-acne dimensions moved from a 4-level severity scale to
+> binary `absent` / `present`.** The severity scale was never groundable — no
+> public dataset grades by degree, "mild vs moderate" is a judgement two
+> clinicians disagree on, and the clinic's own grading produced 43 none / 23 mild
+> / 4 moderate / **0 severe**. Those same labels collapse to 43/27 as presence,
+> which is trainable. Degree is now carried by the model's probability, which is
+> honest about its own uncertainty in a way a fabricated "moderate" is not.
+> Old labels are mapped forward on read (`normalizePresence`), never rewritten.
+
 Status as of 2026-07-31, after `make retrain-face`.
 
 ## The honest table

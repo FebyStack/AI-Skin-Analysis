@@ -17,15 +17,17 @@ from torch.utils.data import Dataset
 from ai.training.acne.ingest import collect_all as acne_rows
 from ai.training.acne.labels import ACNE_CLASSES
 from ai.training.dimension.ingest import SEVERITY_DIMENSIONS, collect_for
-from ai.training.dimension.labels import SEVERITY_CLASSES
+from ai.training.dimension.labels import PRESENCE_CLASSES
 from ai.training.skintype.ingest import collect_all as skintype_rows
 from ai.training.skintype.labels import SKIN_TYPE_CLASSES
 from ai.training.transforms import serve_transforms, train_transforms
 
-# A severity dimension joins training only once every class has at least this
-# many examples. Below it the head cannot beat the pixel heuristic it would
-# replace, and shipping a worse model that LOOKS authoritative (a real model
-# confidence in the UI) is worse than shipping the honest estimate.
+# A dimension joins training only once BOTH classes have this many examples.
+# Below it the head cannot beat the pixel heuristic it would replace, and
+# shipping a worse model that LOOKS authoritative (a real model confidence in
+# the UI) is worse than shipping the honest estimate.
+#
+# Two classes rather than four means the bar is 80 images, not 160.
 MIN_PER_CLASS = 40
 
 
@@ -36,7 +38,7 @@ def ready_dimensions() -> list[str]:
         counts = {}
         for r in collect_for(dim):
             counts[r["label"]] = counts.get(r["label"], 0) + 1
-        if counts and all(counts.get(c, 0) >= MIN_PER_CLASS for c in SEVERITY_CLASSES):
+        if counts and all(counts.get(c, 0) >= MIN_PER_CLASS for c in PRESENCE_CLASSES):
             ready.append(dim)
     return ready
 
@@ -52,7 +54,7 @@ def build_tasks() -> dict[str, list[str]]:
         "skintype": SKIN_TYPE_CLASSES,
     }
     for dim in ready_dimensions():
-        tasks[dim] = SEVERITY_CLASSES
+        tasks[dim] = PRESENCE_CLASSES
     return tasks
 
 

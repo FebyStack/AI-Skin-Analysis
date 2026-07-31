@@ -26,10 +26,10 @@ const STD = [0.229, 0.224, 0.225];
 // Unsure predictions keep the deterministic analyzer rather than assert a guess.
 const ACNE_MIN_CONF = Number(import.meta.env?.VITE_ACNE_MIN_CONF ?? "0.40");
 const SKINTYPE_MIN_CONF = Number(import.meta.env?.VITE_SKINTYPE_MIN_CONF ?? "0.45");
-const SEVERITY_MIN_CONF = Number(import.meta.env?.VITE_SEVERITY_MIN_CONF ?? "0.45");
+const PRESENCE_MIN_CONF = Number(import.meta.env?.VITE_PRESENCE_MIN_CONF ?? "0.45");
 
-/** Must match SEVERITY_CLASSES in ai/training/dimension/labels.py, in order. */
-const SEVERITY_CLASSES = ["none", "mild", "moderate", "severe"] as const;
+/** Must match PRESENCE_CLASSES in ai/training/dimension/labels.py, in order. */
+const PRESENCE_CLASSES = ["absent", "present"] as const;
 /** Must match SEVERITY_DIMENSIONS in ai/training/dimension/ingest.py. */
 const SEVERITY_DIMENSIONS = [
   "redness", "pigmentation", "oiliness", "texture", "pores",
@@ -187,7 +187,7 @@ export async function refineFaceWithModel(
     const probs = meanProbs(runs, dim);
     if (!probs) continue;
     const confidence = Math.max(...probs);
-    if (confidence < SEVERITY_MIN_CONF) continue;
+    if (confidence < PRESENCE_MIN_CONF) continue;
     const idx = probs.indexOf(confidence);
     // Ordinal expectation over none/mild/moderate/severe → the 0..1 score the
     // report already uses, so downstream thresholds keep working.
@@ -201,7 +201,7 @@ export async function refineFaceWithModel(
           confidence,
           perZone: next.dimensions[dim]?.perZone ?? [],
           source: "model",
-          evidence: `learned face model (${FACE_MODEL_VERSION}) — ${dim} "${SEVERITY_CLASSES[idx]}" across ${runs.length} view(s)`,
+          evidence: `learned face model (${FACE_MODEL_VERSION}) — ${dim} "${PRESENCE_CLASSES[idx]}" across ${runs.length} view(s)`,
         },
       },
       modelVersions: { ...next.modelVersions, [dim]: FACE_MODEL_VERSION },
