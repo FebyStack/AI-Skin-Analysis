@@ -130,7 +130,144 @@ CSS `animate-rise`.
 Test-env note: jsdom implements no `matchMedia`, which GSAP needs, so
 `frontend/src/test/setup.ts` now polyfills it (reporting "no preference").
 
-last Claude session: 2026-07-31 13:40
+### Capture guide: golden-ratio phi mask (2026-07-30)
+
+The oval capture guide is now the Marquardt phi mask, enlarged to 78% of frame
+height. `capture/phi-mask.ts` is the single source: polylines in the reference
+drawing's pixel space, symmetric parts authored as a RIGHT half and mirrored.
+Feeds the SVG scrim/silhouette/progress AND (originally) a WebGL wireframe.
+
+Per-step poses come from the midpoint of `ANGLE_YAW_WINDOWS`, so the guide and
+the validator cannot disagree. Sign note: the window is measured on the RAW
+frame (patient's left = image-right, hence negative), the preview is CSS-mirrored,
+and a negative Y-rotation swings the nose screen-left — two flips that cancel.
+
+`SILHOUETTE_YAW_RATIO = 0.35`: at profile yaw the framing outline would
+foreshorten to a sliver, telling the patient to squeeze their head into a narrow
+band. A real head stays head-width at any yaw; only the FACE compresses.
+
+**Then: the WebGL layer was deleted.** It was gated behind `isMemoryConstrained()`,
+true for every iPhone — so the clinic's own phones saw a bare outline. SVG now
+draws the entire construction (`maskPaths()`) on every device. SVG was always
+right here: this sits over a live camera feed while MediaPipe runs.
+
+### Private scan links (2026-07-30)
+
+Remote patients get a link that runs the scan flow and nothing else.
+`make share` = Cloudflare quick tunnel, wrapped in `caffeinate -ism` because this
+Mac idles to sleep in ~1 minute. Vite 5.4+ rejects unknown Hosts, so tunnel
+hostnames are in `server.allowedHosts`. Closing the LID still kills it — not
+fixable in software on a laptop.
+
+Invites (`shared/invites.ts`, `backend/modules/invites/`):
+- Token = 32 random bytes, returned ONCE at creation.
+- Session tokens carry a role: `v2.<exp>.invite.<id>.<claimId>.<sig>`. Legacy
+  two-part clinic tokens still validate.
+- `requireClinician` gates patients/lesion/capture/training/queue/governance/
+  archive/analytics. Only face-scan routes accept an invite.
+- **Single-device binding**: first browser to open CLAIMS the link (atomic
+  `UPDATE ... WHERE claimed_at IS NULL`); the claim secret lives in that device's
+  session. A forwarded link gets 409. Stops forwarding, NOT handing over a phone.
+- Two clocks: 15 min to OPEN, then 60 min to finish. One clock would cut a scan
+  off mid-flow.
+- Quota spent in one atomic UPDATE before anything persists.
+- `scans.invite_id` scopes reads; mismatch is 404, not 403, so ids cannot be probed.
+
+Gap audit found five things, all fixed: a 403 was queued as if it were an outage
+(the patient was told "saved, will sync later" about a scan that could never
+sync); no rate limiting on `/api/auth/login` with the app on a public URL; the
+redemption promise cached globally rather than per token; refused patients landed
+on the CLINICIAN password prompt; and Revoke was hidden for unopened links.
+
+**Logout never logged anyone out** — it assigned to `document.cookie`, which
+cannot clear an HttpOnly cookie. Now `POST /api/auth/logout`. Pre-existing.
+
+### Obsidian orb + one loading treatment (2026-07-31)
+
+`ui/ObsidianOrb.tsx` — faceted icosahedron, flat-shaded, gold motes. No HDR env
+map: it mounts at the most memory-pressured moment in the app. Gloss comes from
+four moderate lights (one bright key blows out a single facet) plus a close
+PointLight for the travelling specular. Quality is TIERED, not gated.
+
+`ui/LoadingState.tsx` is the single waiting treatment: `page` = the orb, `inline`
+= a CSS ping. The split is forced — every orb is a live WebGL context, browsers
+cap them, and the Training tab mounts four loading sections at once. Queue and
+History keep skeletons, which preview real row layout.
+
+### THE black screen: hooks-order violation (2026-07-31)
+
+`GuidedFaceFlow` renders five views via early returns, and `useEasedYaw` + the
+mask `useMemo` sat BELOW them. They ran on the capture render and were skipped
+the instant `view` flipped → "Rendered fewer hooks than expected" → React
+unmounted the tree. Present since the phi-mask commit.
+
+Fixed by moving the whole per-step block above every early return.
+`capture/hooks-order.test.tsx` parses the file and fails if any `use*(` appears
+after the first early return — verified it fails when a hook is moved back down.
+
+**Correction:** I earlier blamed this on `localReport` being read from the server
+echo, and on a failed lazy chunk. Both were real latent bugs and those fixes
+stand, but neither was the cause. `Boundary` + a visible error message is what
+found it — `components/ui/Boundary.tsx` catches render AND chunk failures, and
+its fallback can be a function receiving `{ message, where }`.
+
+### Dimension provenance: the "100%" was zone coverage (2026-07-31)
+
+The panel showed **Wrinkles: None · 100%** on a visibly wrinkled face. In
+`analyzers/types.ts`, `confidence = collected.size / zones.length` — how much of
+the face was VISIBLE, not certainty. With 5 angles it is always 1.0, rendered in
+the same green badge as real model probabilities.
+
+The report advertises 11 dimensions; the model trains 2. The other 9 are pixel
+heuristics with hand-picked constants (`HF_BASE = 0.008`, `HF_SPAN = 0.05`).
+
+`DimensionScore.source: "model" | "heuristic"` (optional → old reports are
+heuristic). `MODELLED_DIMENSIONS` / `isModelled()` are the single source of
+truth. The badge shows a neutral **"estimate"**; the patient report says "Visual
+estimate — not a trained measurement".
+
+### All 11 dimensions gradeable + trainable (2026-07-31)
+
+`dryness`, `under-eye`, `tone-consistency` added to `ANNOTATION_FIELDS` (labelled
+"Under-Eye Shadowing" / "Tone Unevenness" — every score runs 0..1 as MORE
+pronounced). `ai/training/dimension/` gives a generic severity ingest; TASKS is
+data-driven via `build_tasks()`, a dimension joining once every class has
+`MIN_PER_CLASS = 40`. `make dimension-readiness` shows the gap.
+
+**Landmine defused:** the first generic ingest read every source folder and
+reported redness/pigmentation/pores/wrinkles at 600-1200 rows. Those were
+leftover `<dim>/multi/absent/` folders holding Roboflow ACNE photos — 497
+identical images reused as the "none" class for four dimensions at once. That is
+the 2026-07-27 leakage, resurrected. Severity dimensions now read ONLY
+clinic-graded `scans/`; opt in with `DIMENSION_EXTRA_SOURCES`.
+
+Browser now reads model outputs by NAME (`logits_<task>`), not index — adding a
+head shifted positions and would have fed skintype logits into acne.
+
+### External datasets (2026-07-31)
+
+`make fetch-dimension-datasets` → 133 images / 293 MB in `$DATASETS_DIR/_incoming`
+(gitignored, and the trainer does not read it). Two TrainingDataPro sets: 10
+subjects x 3 angles for acne/redness/under-eye bags, plus 23 botox before/after
+pairs. One publisher, one rig, angles matching the app.
+
+**No public dataset grades these on a severity scale** — all presence/absence.
+Rejected: `rishantrokaha/skin-wrinkles-vs-nonwrinkles` (9-23 KB, wrinkled=press
+photos of older people vs smooth=young selfies → learns style/age); three
+Roboflow re-exports of the leaking corpus; `glowmix` (4 GB, "merged").
+
+`make import-for-grading` loads them into the queue as an "Imported dataset"
+patient with `report: null` — inventing predictions to "verify" would bias the
+labels. NOT run automatically: it writes 75 scans to the live DB.
+
+Full write-up: `docs/DIMENSION-COVERAGE.md`.
+
+**PROCESS NOTE:** several PROJECT.md updates between 2026-07-28 and 2026-07-31
+silently failed — they anchored on a `last Claude session:` timestamp that had
+already drifted, so the replace matched nothing and the sections were never
+written while being reported as done. Append, then VERIFY the section landed.
+
+last Claude session: 2026-07-31 18:30
 
 ## Recent updates (2026-07-12)
 
@@ -237,7 +374,144 @@ CSS `animate-rise`.
 Test-env note: jsdom implements no `matchMedia`, which GSAP needs, so
 `frontend/src/test/setup.ts` now polyfills it (reporting "no preference").
 
-last Claude session: 2026-07-31 13:40
+### Capture guide: golden-ratio phi mask (2026-07-30)
+
+The oval capture guide is now the Marquardt phi mask, enlarged to 78% of frame
+height. `capture/phi-mask.ts` is the single source: polylines in the reference
+drawing's pixel space, symmetric parts authored as a RIGHT half and mirrored.
+Feeds the SVG scrim/silhouette/progress AND (originally) a WebGL wireframe.
+
+Per-step poses come from the midpoint of `ANGLE_YAW_WINDOWS`, so the guide and
+the validator cannot disagree. Sign note: the window is measured on the RAW
+frame (patient's left = image-right, hence negative), the preview is CSS-mirrored,
+and a negative Y-rotation swings the nose screen-left — two flips that cancel.
+
+`SILHOUETTE_YAW_RATIO = 0.35`: at profile yaw the framing outline would
+foreshorten to a sliver, telling the patient to squeeze their head into a narrow
+band. A real head stays head-width at any yaw; only the FACE compresses.
+
+**Then: the WebGL layer was deleted.** It was gated behind `isMemoryConstrained()`,
+true for every iPhone — so the clinic's own phones saw a bare outline. SVG now
+draws the entire construction (`maskPaths()`) on every device. SVG was always
+right here: this sits over a live camera feed while MediaPipe runs.
+
+### Private scan links (2026-07-30)
+
+Remote patients get a link that runs the scan flow and nothing else.
+`make share` = Cloudflare quick tunnel, wrapped in `caffeinate -ism` because this
+Mac idles to sleep in ~1 minute. Vite 5.4+ rejects unknown Hosts, so tunnel
+hostnames are in `server.allowedHosts`. Closing the LID still kills it — not
+fixable in software on a laptop.
+
+Invites (`shared/invites.ts`, `backend/modules/invites/`):
+- Token = 32 random bytes, returned ONCE at creation.
+- Session tokens carry a role: `v2.<exp>.invite.<id>.<claimId>.<sig>`. Legacy
+  two-part clinic tokens still validate.
+- `requireClinician` gates patients/lesion/capture/training/queue/governance/
+  archive/analytics. Only face-scan routes accept an invite.
+- **Single-device binding**: first browser to open CLAIMS the link (atomic
+  `UPDATE ... WHERE claimed_at IS NULL`); the claim secret lives in that device's
+  session. A forwarded link gets 409. Stops forwarding, NOT handing over a phone.
+- Two clocks: 15 min to OPEN, then 60 min to finish. One clock would cut a scan
+  off mid-flow.
+- Quota spent in one atomic UPDATE before anything persists.
+- `scans.invite_id` scopes reads; mismatch is 404, not 403, so ids cannot be probed.
+
+Gap audit found five things, all fixed: a 403 was queued as if it were an outage
+(the patient was told "saved, will sync later" about a scan that could never
+sync); no rate limiting on `/api/auth/login` with the app on a public URL; the
+redemption promise cached globally rather than per token; refused patients landed
+on the CLINICIAN password prompt; and Revoke was hidden for unopened links.
+
+**Logout never logged anyone out** — it assigned to `document.cookie`, which
+cannot clear an HttpOnly cookie. Now `POST /api/auth/logout`. Pre-existing.
+
+### Obsidian orb + one loading treatment (2026-07-31)
+
+`ui/ObsidianOrb.tsx` — faceted icosahedron, flat-shaded, gold motes. No HDR env
+map: it mounts at the most memory-pressured moment in the app. Gloss comes from
+four moderate lights (one bright key blows out a single facet) plus a close
+PointLight for the travelling specular. Quality is TIERED, not gated.
+
+`ui/LoadingState.tsx` is the single waiting treatment: `page` = the orb, `inline`
+= a CSS ping. The split is forced — every orb is a live WebGL context, browsers
+cap them, and the Training tab mounts four loading sections at once. Queue and
+History keep skeletons, which preview real row layout.
+
+### THE black screen: hooks-order violation (2026-07-31)
+
+`GuidedFaceFlow` renders five views via early returns, and `useEasedYaw` + the
+mask `useMemo` sat BELOW them. They ran on the capture render and were skipped
+the instant `view` flipped → "Rendered fewer hooks than expected" → React
+unmounted the tree. Present since the phi-mask commit.
+
+Fixed by moving the whole per-step block above every early return.
+`capture/hooks-order.test.tsx` parses the file and fails if any `use*(` appears
+after the first early return — verified it fails when a hook is moved back down.
+
+**Correction:** I earlier blamed this on `localReport` being read from the server
+echo, and on a failed lazy chunk. Both were real latent bugs and those fixes
+stand, but neither was the cause. `Boundary` + a visible error message is what
+found it — `components/ui/Boundary.tsx` catches render AND chunk failures, and
+its fallback can be a function receiving `{ message, where }`.
+
+### Dimension provenance: the "100%" was zone coverage (2026-07-31)
+
+The panel showed **Wrinkles: None · 100%** on a visibly wrinkled face. In
+`analyzers/types.ts`, `confidence = collected.size / zones.length` — how much of
+the face was VISIBLE, not certainty. With 5 angles it is always 1.0, rendered in
+the same green badge as real model probabilities.
+
+The report advertises 11 dimensions; the model trains 2. The other 9 are pixel
+heuristics with hand-picked constants (`HF_BASE = 0.008`, `HF_SPAN = 0.05`).
+
+`DimensionScore.source: "model" | "heuristic"` (optional → old reports are
+heuristic). `MODELLED_DIMENSIONS` / `isModelled()` are the single source of
+truth. The badge shows a neutral **"estimate"**; the patient report says "Visual
+estimate — not a trained measurement".
+
+### All 11 dimensions gradeable + trainable (2026-07-31)
+
+`dryness`, `under-eye`, `tone-consistency` added to `ANNOTATION_FIELDS` (labelled
+"Under-Eye Shadowing" / "Tone Unevenness" — every score runs 0..1 as MORE
+pronounced). `ai/training/dimension/` gives a generic severity ingest; TASKS is
+data-driven via `build_tasks()`, a dimension joining once every class has
+`MIN_PER_CLASS = 40`. `make dimension-readiness` shows the gap.
+
+**Landmine defused:** the first generic ingest read every source folder and
+reported redness/pigmentation/pores/wrinkles at 600-1200 rows. Those were
+leftover `<dim>/multi/absent/` folders holding Roboflow ACNE photos — 497
+identical images reused as the "none" class for four dimensions at once. That is
+the 2026-07-27 leakage, resurrected. Severity dimensions now read ONLY
+clinic-graded `scans/`; opt in with `DIMENSION_EXTRA_SOURCES`.
+
+Browser now reads model outputs by NAME (`logits_<task>`), not index — adding a
+head shifted positions and would have fed skintype logits into acne.
+
+### External datasets (2026-07-31)
+
+`make fetch-dimension-datasets` → 133 images / 293 MB in `$DATASETS_DIR/_incoming`
+(gitignored, and the trainer does not read it). Two TrainingDataPro sets: 10
+subjects x 3 angles for acne/redness/under-eye bags, plus 23 botox before/after
+pairs. One publisher, one rig, angles matching the app.
+
+**No public dataset grades these on a severity scale** — all presence/absence.
+Rejected: `rishantrokaha/skin-wrinkles-vs-nonwrinkles` (9-23 KB, wrinkled=press
+photos of older people vs smooth=young selfies → learns style/age); three
+Roboflow re-exports of the leaking corpus; `glowmix` (4 GB, "merged").
+
+`make import-for-grading` loads them into the queue as an "Imported dataset"
+patient with `report: null` — inventing predictions to "verify" would bias the
+labels. NOT run automatically: it writes 75 scans to the live DB.
+
+Full write-up: `docs/DIMENSION-COVERAGE.md`.
+
+**PROCESS NOTE:** several PROJECT.md updates between 2026-07-28 and 2026-07-31
+silently failed — they anchored on a `last Claude session:` timestamp that had
+already drifted, so the replace matched nothing and the sections were never
+written while being reported as done. Append, then VERIFY the section landed.
+
+last Claude session: 2026-07-31 18:30
 
 ## Progress 2026-07-21 (recommended-steps batch)
 
@@ -418,4 +692,141 @@ CSS `animate-rise`.
 Test-env note: jsdom implements no `matchMedia`, which GSAP needs, so
 `frontend/src/test/setup.ts` now polyfills it (reporting "no preference").
 
-last Claude session: 2026-07-31 13:40
+### Capture guide: golden-ratio phi mask (2026-07-30)
+
+The oval capture guide is now the Marquardt phi mask, enlarged to 78% of frame
+height. `capture/phi-mask.ts` is the single source: polylines in the reference
+drawing's pixel space, symmetric parts authored as a RIGHT half and mirrored.
+Feeds the SVG scrim/silhouette/progress AND (originally) a WebGL wireframe.
+
+Per-step poses come from the midpoint of `ANGLE_YAW_WINDOWS`, so the guide and
+the validator cannot disagree. Sign note: the window is measured on the RAW
+frame (patient's left = image-right, hence negative), the preview is CSS-mirrored,
+and a negative Y-rotation swings the nose screen-left — two flips that cancel.
+
+`SILHOUETTE_YAW_RATIO = 0.35`: at profile yaw the framing outline would
+foreshorten to a sliver, telling the patient to squeeze their head into a narrow
+band. A real head stays head-width at any yaw; only the FACE compresses.
+
+**Then: the WebGL layer was deleted.** It was gated behind `isMemoryConstrained()`,
+true for every iPhone — so the clinic's own phones saw a bare outline. SVG now
+draws the entire construction (`maskPaths()`) on every device. SVG was always
+right here: this sits over a live camera feed while MediaPipe runs.
+
+### Private scan links (2026-07-30)
+
+Remote patients get a link that runs the scan flow and nothing else.
+`make share` = Cloudflare quick tunnel, wrapped in `caffeinate -ism` because this
+Mac idles to sleep in ~1 minute. Vite 5.4+ rejects unknown Hosts, so tunnel
+hostnames are in `server.allowedHosts`. Closing the LID still kills it — not
+fixable in software on a laptop.
+
+Invites (`shared/invites.ts`, `backend/modules/invites/`):
+- Token = 32 random bytes, returned ONCE at creation.
+- Session tokens carry a role: `v2.<exp>.invite.<id>.<claimId>.<sig>`. Legacy
+  two-part clinic tokens still validate.
+- `requireClinician` gates patients/lesion/capture/training/queue/governance/
+  archive/analytics. Only face-scan routes accept an invite.
+- **Single-device binding**: first browser to open CLAIMS the link (atomic
+  `UPDATE ... WHERE claimed_at IS NULL`); the claim secret lives in that device's
+  session. A forwarded link gets 409. Stops forwarding, NOT handing over a phone.
+- Two clocks: 15 min to OPEN, then 60 min to finish. One clock would cut a scan
+  off mid-flow.
+- Quota spent in one atomic UPDATE before anything persists.
+- `scans.invite_id` scopes reads; mismatch is 404, not 403, so ids cannot be probed.
+
+Gap audit found five things, all fixed: a 403 was queued as if it were an outage
+(the patient was told "saved, will sync later" about a scan that could never
+sync); no rate limiting on `/api/auth/login` with the app on a public URL; the
+redemption promise cached globally rather than per token; refused patients landed
+on the CLINICIAN password prompt; and Revoke was hidden for unopened links.
+
+**Logout never logged anyone out** — it assigned to `document.cookie`, which
+cannot clear an HttpOnly cookie. Now `POST /api/auth/logout`. Pre-existing.
+
+### Obsidian orb + one loading treatment (2026-07-31)
+
+`ui/ObsidianOrb.tsx` — faceted icosahedron, flat-shaded, gold motes. No HDR env
+map: it mounts at the most memory-pressured moment in the app. Gloss comes from
+four moderate lights (one bright key blows out a single facet) plus a close
+PointLight for the travelling specular. Quality is TIERED, not gated.
+
+`ui/LoadingState.tsx` is the single waiting treatment: `page` = the orb, `inline`
+= a CSS ping. The split is forced — every orb is a live WebGL context, browsers
+cap them, and the Training tab mounts four loading sections at once. Queue and
+History keep skeletons, which preview real row layout.
+
+### THE black screen: hooks-order violation (2026-07-31)
+
+`GuidedFaceFlow` renders five views via early returns, and `useEasedYaw` + the
+mask `useMemo` sat BELOW them. They ran on the capture render and were skipped
+the instant `view` flipped → "Rendered fewer hooks than expected" → React
+unmounted the tree. Present since the phi-mask commit.
+
+Fixed by moving the whole per-step block above every early return.
+`capture/hooks-order.test.tsx` parses the file and fails if any `use*(` appears
+after the first early return — verified it fails when a hook is moved back down.
+
+**Correction:** I earlier blamed this on `localReport` being read from the server
+echo, and on a failed lazy chunk. Both were real latent bugs and those fixes
+stand, but neither was the cause. `Boundary` + a visible error message is what
+found it — `components/ui/Boundary.tsx` catches render AND chunk failures, and
+its fallback can be a function receiving `{ message, where }`.
+
+### Dimension provenance: the "100%" was zone coverage (2026-07-31)
+
+The panel showed **Wrinkles: None · 100%** on a visibly wrinkled face. In
+`analyzers/types.ts`, `confidence = collected.size / zones.length` — how much of
+the face was VISIBLE, not certainty. With 5 angles it is always 1.0, rendered in
+the same green badge as real model probabilities.
+
+The report advertises 11 dimensions; the model trains 2. The other 9 are pixel
+heuristics with hand-picked constants (`HF_BASE = 0.008`, `HF_SPAN = 0.05`).
+
+`DimensionScore.source: "model" | "heuristic"` (optional → old reports are
+heuristic). `MODELLED_DIMENSIONS` / `isModelled()` are the single source of
+truth. The badge shows a neutral **"estimate"**; the patient report says "Visual
+estimate — not a trained measurement".
+
+### All 11 dimensions gradeable + trainable (2026-07-31)
+
+`dryness`, `under-eye`, `tone-consistency` added to `ANNOTATION_FIELDS` (labelled
+"Under-Eye Shadowing" / "Tone Unevenness" — every score runs 0..1 as MORE
+pronounced). `ai/training/dimension/` gives a generic severity ingest; TASKS is
+data-driven via `build_tasks()`, a dimension joining once every class has
+`MIN_PER_CLASS = 40`. `make dimension-readiness` shows the gap.
+
+**Landmine defused:** the first generic ingest read every source folder and
+reported redness/pigmentation/pores/wrinkles at 600-1200 rows. Those were
+leftover `<dim>/multi/absent/` folders holding Roboflow ACNE photos — 497
+identical images reused as the "none" class for four dimensions at once. That is
+the 2026-07-27 leakage, resurrected. Severity dimensions now read ONLY
+clinic-graded `scans/`; opt in with `DIMENSION_EXTRA_SOURCES`.
+
+Browser now reads model outputs by NAME (`logits_<task>`), not index — adding a
+head shifted positions and would have fed skintype logits into acne.
+
+### External datasets (2026-07-31)
+
+`make fetch-dimension-datasets` → 133 images / 293 MB in `$DATASETS_DIR/_incoming`
+(gitignored, and the trainer does not read it). Two TrainingDataPro sets: 10
+subjects x 3 angles for acne/redness/under-eye bags, plus 23 botox before/after
+pairs. One publisher, one rig, angles matching the app.
+
+**No public dataset grades these on a severity scale** — all presence/absence.
+Rejected: `rishantrokaha/skin-wrinkles-vs-nonwrinkles` (9-23 KB, wrinkled=press
+photos of older people vs smooth=young selfies → learns style/age); three
+Roboflow re-exports of the leaking corpus; `glowmix` (4 GB, "merged").
+
+`make import-for-grading` loads them into the queue as an "Imported dataset"
+patient with `report: null` — inventing predictions to "verify" would bias the
+labels. NOT run automatically: it writes 75 scans to the live DB.
+
+Full write-up: `docs/DIMENSION-COVERAGE.md`.
+
+**PROCESS NOTE:** several PROJECT.md updates between 2026-07-28 and 2026-07-31
+silently failed — they anchored on a `last Claude session:` timestamp that had
+already drifted, so the replace matched nothing and the sections were never
+written while being reported as done. Append, then VERIFY the section landed.
+
+last Claude session: 2026-07-31 18:30
