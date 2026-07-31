@@ -140,6 +140,7 @@ export async function refineFaceWithModel(
             score: Math.max(0, Math.min(1, expected)),
             confidence,
             perZone: [],
+            source: "model",
             evidence: `learned face model (${FACE_MODEL_VERSION}) — acne "${predicted}" across ${runs.length} view(s)`,
           },
         },

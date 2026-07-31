@@ -24,7 +24,7 @@ export const pigmentationAnalyzer: Analyzer = (views) =>
 const TONE_SPAN = 0.25;
 export const toneConsistencyAnalyzer: Analyzer = (views) => {
   const collected = collectZones(views, ["forehead", "nose", "left-cheek", "right-cheek", "chin"]);
-  if (collected.size < 2) return { score: 0, confidence: 0, perZone: [], evidence: "cross-zone luma spread (insufficient zones)" };
+  if (collected.size < 2) return { score: 0, confidence: 0, perZone: [], source: "heuristic" as const, evidence: "cross-zone luma spread (insufficient zones)" };
   const zoneLumas = [...collected.entries()].map(([zone, list]) => ({
     zone, luma: list.reduce((a, s) => a + s.meanLuma, 0) / list.length,
   }));
@@ -34,6 +34,7 @@ export const toneConsistencyAnalyzer: Analyzer = (views) => {
   return {
     score,
     confidence: clamp01(collected.size / 5),
+    source: "heuristic" as const,
     perZone: zoneLumas.map((z) => ({ zone: z.zone, score: clamp01(Math.abs(z.luma - mean) / TONE_SPAN) })),
     evidence: "cross-zone luma spread (uneven tone)",
   };

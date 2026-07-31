@@ -18,9 +18,28 @@ export type FaceAnalysisZone = (typeof FACE_ANALYSIS_ZONES)[number];
 
 export interface DimensionScore {
   score: number;        // 0..1, higher = more pronounced
+  /**
+   * Meaning depends on `source`, which is exactly why `source` exists:
+   *  - "model": the trained head's class probability. A real certainty.
+   *  - "heuristic": ZONE COVERAGE — the fraction of zones that were visible.
+   *    It says nothing about whether the value is right, so it must never be
+   *    shown to a clinician as a confidence percentage.
+   */
   confidence: number;   // 0..1
   perZone: { zone: FaceAnalysisZone; score: number }[];
   evidence: string;     // camera-honest: names the pixel metric used
+  /** Absent on reports saved before this field existed → treat as heuristic. */
+  source?: "model" | "heuristic";
+}
+
+/**
+ * Dimensions a trained model actually covers. Everything else in
+ * FACE_DIMENSIONS is an uncalibrated pixel heuristic, and the UI has to say so.
+ */
+export const MODELLED_DIMENSIONS = ["acne"] as const;
+
+export function isModelled(d: FaceDimension, score?: DimensionScore): boolean {
+  return score?.source === "model" || (MODELLED_DIMENSIONS as readonly string[]).includes(d);
 }
 
 // Skin type is categorical (no severity order) → a separate report field, not a

@@ -64,6 +64,7 @@ export function FaceReportView({ report }: Props) {
               name={dimension}
               score={report.dimensions[dimension].score}
               confidence={report.dimensions[dimension].confidence}
+              source={report.dimensions[dimension].source}
             />
           ))}
         </ul>
@@ -107,22 +108,37 @@ function DimensionCard({
   name,
   score,
   confidence,
+  source,
 }: {
   name: FaceDimension;
   score: number;
   confidence: number;
+  source?: "model" | "heuristic";
 }) {
+  // Only a trained head produces a real confidence. For the rest `confidence`
+  // is zone coverage, and printing it as "Confidence: 100%" overstated a pixel
+  // estimate as a certainty.
+  const modelled = source === "model";
   return (
     <li className="card p-4">
       <h3 className="font-medium capitalize text-ink">{name}</h3>
       <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/[0.08]">
-        <div className="h-full rounded-full bg-gold" style={{ width: `${score * 100}%` }} />
+        <div
+          className={`h-full rounded-full ${modelled ? "bg-gold" : "bg-gold/40"}`}
+          style={{ width: `${score * 100}%` }}
+        />
       </div>
       <p className="mt-2 text-sm text-ink">
         Score: <span className="font-mono tabular-nums">{Math.round(score * 100)}%</span>
       </p>
       <p className="text-xs text-ink-tertiary">
-        Confidence: <span className="font-mono tabular-nums">{Math.round(confidence * 100)}%</span>
+        {modelled ? (
+          <>
+            Confidence: <span className="font-mono tabular-nums">{Math.round(confidence * 100)}%</span>
+          </>
+        ) : (
+          "Visual estimate — not a trained measurement"
+        )}
       </p>
     </li>
   );

@@ -27,11 +27,14 @@ export function zoneMeanDimension(
   evidence: string,
 ): DimensionScore {
   const collected = collectZones(views, zones);
-  if (collected.size === 0) return { score: 0, confidence: 0, perZone: [], evidence: `${evidence} (no zones visible)` };
+  if (collected.size === 0)
+    return { score: 0, confidence: 0, perZone: [], evidence: `${evidence} (no zones visible)`, source: "heuristic" };
   const perZone = [...collected.entries()].map(([zone, list]) => ({
     zone, score: clamp01(list.reduce((a, s) => a + zoneScore(s), 0) / list.length),
   }));
   const score = clamp01(perZone.reduce((a, z) => a + z.score, 0) / perZone.length);
-  const confidence = clamp01(collected.size / zones.length);   // zone coverage; merge refines further
-  return { score, confidence, perZone, evidence };
+  // NOT a certainty — just how much of the face we could see. Tagged as
+  // heuristic so the UI never renders it as a model confidence.
+  const confidence = clamp01(collected.size / zones.length);
+  return { score, confidence, perZone, evidence, source: "heuristic" };
 }

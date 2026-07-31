@@ -12,13 +12,32 @@ const STYLES: Record<string, string> = {
 export function ConfidenceBadge({
   confidence,
   label,
+  source,
 }: {
   confidence: number | null | undefined;
   label?: string;
+  /** Omitted or "heuristic" → no trained model stands behind this number. */
+  source?: "model" | "heuristic";
 }) {
   if (typeof confidence !== "number") {
     return <span className="text-xs text-ink-tertiary">—</span>;
   }
+
+  // For a heuristic, `confidence` is ZONE COVERAGE, not certainty. Rendering it
+  // as a green "100%" told the clinician the model was sure of a value no model
+  // ever produced — it read "Wrinkles: None · 100%" on a face with obvious
+  // wrinkles. Show it for what it is.
+  if (source !== "model") {
+    return (
+      <span
+        className="inline-flex items-center gap-1 rounded-full border border-hairline bg-surface px-2 py-0.5 text-[11px] font-medium text-ink-tertiary"
+        title="No trained model for this dimension yet — a pixel-based estimate, not a prediction. Grade it yourself."
+      >
+        estimate
+      </span>
+    );
+  }
+
   const band = confidenceBand(confidence);
   return (
     <span

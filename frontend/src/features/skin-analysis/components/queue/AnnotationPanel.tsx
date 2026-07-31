@@ -19,16 +19,25 @@ import { ConsistencyBanner } from "./ConsistencyBanner";
 import { LifecycleTimeline } from "./LifecycleTimeline";
 
 /** The AI's suggested label + its confidence for one field. Never written to. */
-function aiPrediction(report: FaceReport | null, key: string): { value: string | null; confidence: number | null } {
+function aiPrediction(
+  report: FaceReport | null,
+  key: string,
+): { value: string | null; confidence: number | null; source?: "model" | "heuristic" } {
   if (!report) return { value: null, confidence: null };
   if (key === "skintype") {
-    return { value: report.skinType?.type ?? null, confidence: report.skinType?.confidence ?? null };
+    // Skin type comes from the trained multi-head model.
+    return {
+      value: report.skinType?.type ?? null,
+      confidence: report.skinType?.confidence ?? null,
+      source: "model",
+    };
   }
   const d = report.dimensions[key as FaceDimension];
   if (!d) return { value: null, confidence: null };
   return {
     value: key === "acne" ? scoreToAcneLevel(d.score) : scoreToSeverity(d.score),
     confidence: d.confidence,
+    source: d.source ?? "heuristic",
   };
 }
 
@@ -221,7 +230,7 @@ export function AnnotationPanel({ scanId, onClose }: { scanId: string; onClose: 
                     <span className="min-w-0 flex-1 truncate rounded-lg border border-hairline bg-surface px-2 py-1 text-xs capitalize text-ink-tertiary">
                       {ai.value ?? "—"}
                     </span>
-                    <ConfidenceBadge confidence={ai.confidence} label={f.label} />
+                    <ConfidenceBadge confidence={ai.confidence} label={f.label} source={ai.source} />
                   </div>
                   <select
                     ref={(el) => {
