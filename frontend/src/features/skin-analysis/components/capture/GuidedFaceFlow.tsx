@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useCamera } from "../../hooks/use-camera";
 import { useFaceScan } from "../../hooks/use-face-scan";
 import { makeAnalyzeFrame, FACE_MODEL_VERSIONS } from "./frame-adapter";
@@ -27,6 +27,11 @@ import { FaceRejectedError, type CapturedAngle } from "../../api/face-client";
 import { SILHOUETTE_YAW_RATIO, maskPaths, outerPathD, svgGuide } from "./phi-mask";
 import { useEasedYaw } from "./use-eased-yaw";
 import { useInviteAllowance } from "../../hooks/use-invite-allowance";
+
+// three.js lives in a lazy chunk; importing this directly would pull the whole
+// library into the eager bundle. Fetching it here is well timed — the report
+// screen that follows needs the same chunk for its zone map.
+const ObsidianOrb = lazy(() => import("../ui/ObsidianOrb"));
 
 type View = "capture" | "saving" | "result" | "history";
 
@@ -368,7 +373,14 @@ export function GuidedFaceFlow({ isInvite = false }: { isInvite?: boolean }) {
   }
 
   if (view === "saving") {
-    return <p className="py-8 text-center text-sm text-ink-secondary">Saving your scan…</p>;
+    const waiting = "Reading your scan…";
+    return (
+      <Suspense
+        fallback={<p className="py-8 text-center text-sm text-ink-secondary">{waiting}</p>}
+      >
+        <ObsidianOrb label={waiting} />
+      </Suspense>
+    );
   }
 
   // Capture state — per-step guidance derived from the angle being captured.
