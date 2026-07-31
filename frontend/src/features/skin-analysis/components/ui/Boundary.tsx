@@ -12,23 +12,51 @@ import React, { Component, lazy, type ReactNode } from "react";
  *
  * Anything decorative that is code-split MUST sit under one of these.
  */
-export class Boundary extends Component<
-  { children: ReactNode; fallback: ReactNode; onError?: (err: unknown) => void },
-  { failed: boolean }
-> {
-  state = { failed: false };
+export interface BoundaryFailure {
+  message: string;
+  /** First frames of the component stack — enough to name the culprit. */
+  where: string;
+}
 
-  static getDerivedStateFromError() {
-    return { failed: true };
+export class Boundary extends Component<
+  {
+    children: ReactNode;
+    /** A node, or a function that receives the failure so it can be displayed. */
+    fallback: ReactNode | ((failure: BoundaryFailure) => ReactNode);
+    onError?: (err: unknown) => void;
+  },
+  { failure: BoundaryFailure | null }
+> {
+  state: { failure: BoundaryFailure | null } = { failure: null };
+
+  static getDerivedStateFromError(err: unknown) {
+    return {
+      failure: {
+        message: err instanceof Error ? err.message : String(err),
+        where: "",
+      },
+    };
   }
 
-  componentDidCatch(err: unknown) {
-    console.error("Boundary caught:", err);
+  componentDidCatch(err: unknown, info: { componentStack?: string | null }) {
+    console.error("Boundary caught:", err, info.componentStack);
+    // A phone has no console. Carrying the top of the component stack into the
+    // UI is the difference between "something went wrong" and a diagnosis.
+    const where = (info.componentStack ?? "")
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .slice(0, 4)
+      .join(" ← ");
+    this.setState((s) => ({ failure: s.failure ? { ...s.failure, where } : s.failure }));
     this.props.onError?.(err);
   }
 
   render() {
-    return this.state.failed ? this.props.fallback : this.props.children;
+    const { failure } = this.state;
+    if (!failure) return this.props.children;
+    const { fallback } = this.props;
+    return typeof fallback === "function" ? fallback(failure) : fallback;
   }
 }
 

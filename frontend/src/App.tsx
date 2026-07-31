@@ -34,7 +34,7 @@ export default function App() {
   // screen with a way out — never a black one.
   return (
     <Boundary
-      fallback={
+      fallback={(failure) => (
         <main className="flex min-h-[100dvh] flex-col items-center justify-center gap-4 bg-canvas px-6 text-center">
           <h1 className="font-serif text-xl font-semibold text-ink">Something went wrong</h1>
           <p className="max-w-sm text-sm leading-relaxed text-ink-secondary">
@@ -43,8 +43,17 @@ export default function App() {
           <button onClick={() => window.location.reload()} className="btn-primary px-6">
             Reload
           </button>
+          {/* Shown so a fault on someone's phone can be reported without a
+              console. Selectable — the point is that it can be sent on. */}
+          <details className="mt-2 w-full max-w-sm text-left">
+            <summary className="cursor-pointer text-xs text-ink-tertiary">Technical details</summary>
+            <p className="mt-2 select-all break-words rounded-xl border border-hairline bg-surface p-3 font-mono text-[11px] leading-relaxed text-ink-tertiary">
+              {failure.message}
+              {failure.where && <><br /><br />{failure.where}</>}
+            </p>
+          </details>
         </main>
-      }
+      )}
     >
       <SkinAnalysisPage role={role ?? "clinic"} />
     </Boundary>

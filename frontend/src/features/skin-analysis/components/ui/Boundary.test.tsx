@@ -36,6 +36,34 @@ describe("Boundary", () => {
     expect(screen.queryByText("loading…")).not.toBeInTheDocument();
   });
 
+  it("hands the failure to a function fallback so it can be shown", async () => {
+    function Explodes(): never {
+      throw new Error("kaboom: the actual reason");
+    }
+    render(
+      <Boundary fallback={(f) => <span>reason: {f.message}</span>}>
+        <Explodes />
+      </Boundary>,
+    );
+    // Without this a phone user can only report "something went wrong", which is
+    // not enough to diagnose anything.
+    await waitFor(() =>
+      expect(screen.getByText(/kaboom: the actual reason/)).toBeInTheDocument(),
+    );
+  });
+
+  it("names where it failed, from the component stack", async () => {
+    function Explodes(): never {
+      throw new Error("boom");
+    }
+    render(
+      <Boundary fallback={(f) => <span data-testid="where">{f.where}</span>}>
+        <Explodes />
+      </Boundary>,
+    );
+    await waitFor(() => expect(screen.getByTestId("where").textContent).toMatch(/Explodes/));
+  });
+
   it("renders children untouched when nothing throws", () => {
     render(
       <Boundary fallback={<span>fallback</span>}>
