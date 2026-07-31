@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { clinicAnalytics, type ClinicAnalytics } from "../../api/queue-client";
 import { useReveal } from "@/motion/useReveal";
+import { LoadingState } from "../ui/LoadingState";
 
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
@@ -50,7 +51,7 @@ export function AnalyticsDashboard() {
     };
   }, []);
 
-  if (!a) return <p className="text-sm text-ink-tertiary">Loading analytics…</p>;
+  if (!a) return <LoadingState label="Loading analytics…" variant="inline" />;
 
   const reviewHours = a.avgReviewMs == null ? null : a.avgReviewMs / 3_600_000;
 

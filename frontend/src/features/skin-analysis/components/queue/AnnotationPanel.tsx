@@ -9,6 +9,7 @@ import {
 } from "@shared/training-queue";
 import { deleteScan, queueDetail, saveLabel, saveReview, type QueueDetail } from "../../api/queue-client";
 import { ConfidenceBadge } from "./ConfidenceBadge";
+import { LoadingState } from "../ui/LoadingState";
 import { ImageManager } from "./ImageManager";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { DUPLICATE_THRESHOLD } from "@shared/training-queue";
@@ -119,7 +120,7 @@ export function AnnotationPanel({ scanId, onClose }: { scanId: string; onClose: 
     if (fresh) setDetail(fresh);
   };
 
-  if (loading) return <div className="skeleton mt-4 h-64" />;
+  if (loading) return <LoadingState label="Opening this scan…" />;
   if (!detail) return <p className="mt-4 text-sm text-ink-secondary">Sample not found in the queue.</p>;
 
   return (

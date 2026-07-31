@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { EVENT_LABEL, describeEvent, type ScanEvent } from "@shared/lifecycle";
 import { scanEvents } from "../../api/queue-client";
+import { LoadingState } from "../ui/LoadingState";
 
 const fmt = (ms: number) =>
   new Date(ms).toLocaleString(undefined, {
@@ -28,7 +29,7 @@ export function LifecycleTimeline({ scanId }: { scanId: string }) {
     };
   }, [scanId]);
 
-  if (!events) return <p className="text-xs text-ink-tertiary">Loading history…</p>;
+  if (!events) return <LoadingState label="Loading history…" variant="inline" />;
   if (events.length === 0) return <p className="text-xs text-ink-tertiary">No history recorded yet.</p>;
 
   return (

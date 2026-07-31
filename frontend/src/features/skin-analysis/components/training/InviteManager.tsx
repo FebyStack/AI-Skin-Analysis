@@ -9,6 +9,7 @@ import {
   type Invite,
   type InviteState,
 } from "@shared/invites";
+import { LoadingState } from "../ui/LoadingState";
 
 type Row = Omit<Invite, "token" | "claimId"> & { state: InviteState; scansLeft: number };
 
@@ -194,7 +195,11 @@ export function InviteManager() {
       {msg && <p className="mt-3 text-xs text-urgent">{msg}</p>}
 
       <ul className="mt-4 space-y-2">
-        {rows === null && <li className="text-xs text-ink-tertiary">Loading…</li>}
+        {rows === null && (
+          <li>
+            <LoadingState label="Loading links…" variant="inline" />
+          </li>
+        )}
         {rows?.length === 0 && <li className="text-xs text-ink-tertiary">No links yet.</li>}
         {rows?.map((r) => (
           <li key={r.id} className="flex flex-wrap items-center gap-2 border-t border-hairline pt-2">

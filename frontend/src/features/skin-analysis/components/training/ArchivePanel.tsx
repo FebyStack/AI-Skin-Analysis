@@ -7,6 +7,7 @@ import {
   type ArchiveEntry,
 } from "../../api/queue-client";
 import { ConfirmDialog } from "../queue/ConfirmDialog";
+import { LoadingState } from "../ui/LoadingState";
 
 /** Archived images: recoverable until their retention window runs out. */
 export function ArchivePanel() {
@@ -41,7 +42,7 @@ export function ArchivePanel() {
     setBusy(false);
   };
 
-  if (!rows) return <p className="text-sm text-ink-tertiary">Loading archive…</p>;
+  if (!rows) return <LoadingState label="Loading archive…" variant="inline" />;
 
   return (
     <section className="space-y-4">
