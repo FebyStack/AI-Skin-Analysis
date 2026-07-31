@@ -287,6 +287,47 @@ export function GuidedFaceFlow({ isInvite = false }: { isInvite?: boolean }) {
     void camera.start();
   }, [scan, camera]);
 
+  // NOTE: this block sits ABOVE every early return because it contains hooks
+  // (useEasedYaw, useMemo). It used to live down with the capture markup, so a
+  // render that returned early for another view skipped two hooks and React
+  // threw "Rendered fewer hooks than expected" — which unmounted the app the
+  // moment a scan finished. Hooks must run on every render, unconditionally.
+  // Capture state — per-step guidance derived from the angle being captured.
+  const currentAngle = scan.currentAngle as FaceAngle;
+  const turnDir: "left" | "right" | "none" = currentAngle?.startsWith("left")
+    ? "left"
+    : currentAngle?.startsWith("right")
+      ? "right"
+      : "none";
+  // Turn the guide to the middle of the window this step actually accepts, so
+  // the mask and the validator can never disagree about the target pose.
+  //
+  // The signs work out to the same number, via two flips that cancel:
+  // the window is measured on the RAW camera frame, where the patient's left is
+  // image-right, so "left-45" is negative. The preview is CSS-mirrored, which
+  // puts the patient's left back on screen-left. And a negative Y-rotation of
+  // the mask swings its nose to screen-left. So the midpoint is used as-is.
+  const [yawLo, yawHi] = ANGLE_YAW_WINDOWS[currentAngle] ?? [0, 0];
+  const guideYaw = (yawLo + yawHi) / 2;
+  const holding = holdStreak > 0;
+  // One eased angle drives the scrim, the outline and the wireframe together.
+  const easedYaw = useEasedYaw(guideYaw);
+  const { maskPath, innerPaths } = useMemo(() => {
+    const { cx, cy, scale } = svgGuide(100, 133);
+    return {
+      // The framing silhouette only leans; the face inside turns the whole way.
+      maskPath: outerPathD(cx, cy, scale, easedYaw * SILHOUETTE_YAW_RATIO),
+      innerPaths: maskPaths(cx, cy, scale, easedYaw),
+    };
+  }, [easedYaw]);
+  const countdown = Math.max(0, HOLD_CHECKS - holdStreak);
+  const positionCue = holding
+    ? `Hold still — capturing in ${countdown}…`
+    : turnDir === "none"
+      ? "Center your face in the guide"
+      : `Turn ${turnDir} — keep your face in the guide`;
+  const stepLabel = `Step ${scan.stepIndex + 1} of ${scan.totalSteps}`;
+
   if (view === "history") {
     return <HistoryView onBack={() => setView(saved ? "result" : "capture")} />;
   }
@@ -372,41 +413,6 @@ export function GuidedFaceFlow({ isInvite = false }: { isInvite?: boolean }) {
     return <LoadingState label="Reading your scan…" />;
   }
 
-  // Capture state — per-step guidance derived from the angle being captured.
-  const currentAngle = scan.currentAngle as FaceAngle;
-  const turnDir: "left" | "right" | "none" = currentAngle?.startsWith("left")
-    ? "left"
-    : currentAngle?.startsWith("right")
-      ? "right"
-      : "none";
-  // Turn the guide to the middle of the window this step actually accepts, so
-  // the mask and the validator can never disagree about the target pose.
-  //
-  // The signs work out to the same number, via two flips that cancel:
-  // the window is measured on the RAW camera frame, where the patient's left is
-  // image-right, so "left-45" is negative. The preview is CSS-mirrored, which
-  // puts the patient's left back on screen-left. And a negative Y-rotation of
-  // the mask swings its nose to screen-left. So the midpoint is used as-is.
-  const [yawLo, yawHi] = ANGLE_YAW_WINDOWS[currentAngle] ?? [0, 0];
-  const guideYaw = (yawLo + yawHi) / 2;
-  const holding = holdStreak > 0;
-  // One eased angle drives the scrim, the outline and the wireframe together.
-  const easedYaw = useEasedYaw(guideYaw);
-  const { maskPath, innerPaths } = useMemo(() => {
-    const { cx, cy, scale } = svgGuide(100, 133);
-    return {
-      // The framing silhouette only leans; the face inside turns the whole way.
-      maskPath: outerPathD(cx, cy, scale, easedYaw * SILHOUETTE_YAW_RATIO),
-      innerPaths: maskPaths(cx, cy, scale, easedYaw),
-    };
-  }, [easedYaw]);
-  const countdown = Math.max(0, HOLD_CHECKS - holdStreak);
-  const positionCue = holding
-    ? `Hold still — capturing in ${countdown}…`
-    : turnDir === "none"
-      ? "Center your face in the guide"
-      : `Turn ${turnDir} — keep your face in the guide`;
-  const stepLabel = `Step ${scan.stepIndex + 1} of ${scan.totalSteps}`;
 
   return (
     <div className="relative flex w-full animate-reveal flex-col items-center">
