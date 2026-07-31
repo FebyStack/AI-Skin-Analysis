@@ -1,13 +1,14 @@
-import { Suspense, lazy, useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import type { FaceDimension, FaceReport } from "@shared/face";
 import { FACE_DIMENSIONS } from "@shared/face";
 import { isMemoryConstrained } from "@ai/face/segmentation/parser";
 import { SEVERITY_COLOR, severityOf } from "@/motion/tokens";
 import type { ZoneScore } from "./FaceZoneMap3D";
+import { Boundary, lazyRetry } from "../ui/Boundary";
 
 // three.js is ~150KB gzipped — it must never sit in the main bundle, and it is
 // only ever fetched on a device that will actually render it.
-const FaceZoneMap3D = lazy(() => import("./FaceZoneMap3D"));
+const FaceZoneMap3D = lazyRetry(() => import("./FaceZoneMap3D"));
 
 /** WebGL on a machine with headroom. Low-memory phones keep the 2D bars. */
 function can3D(): boolean {
@@ -84,11 +85,16 @@ export function ZoneMap({ report }: { report: FaceReport }) {
       <div className="mt-4 grid gap-5 md:grid-cols-2 md:items-center">
         <ZoneBars zones={zones} label={dimension} />
         {enabled3D && (
-          <Suspense
-            fallback={<div className="h-40 animate-pulse rounded-2xl border border-hairline bg-surface/40" />}
-          >
-            <FaceZoneMap3D zones={zones} label={dimension} />
-          </Suspense>
+          // The bars above already carry the data, so losing the 3D map costs
+          // nothing — but letting it take the report down with it costs the
+          // whole result.
+          <Boundary fallback={null}>
+            <Suspense
+              fallback={<div className="h-40 animate-pulse rounded-2xl border border-hairline bg-surface/40" />}
+            >
+              <FaceZoneMap3D zones={zones} label={dimension} />
+            </Suspense>
+          </Boundary>
         )}
       </div>
     </section>

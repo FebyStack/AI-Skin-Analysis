@@ -6,7 +6,7 @@
 //   navigations   → network-first, falling back to cached shell.
 // Bump CACHE_V whenever the shell/assets change → old caches purged on activate.
 
-const CACHE_V = "skin-v1";
+const CACHE_V = "skin-v2";
 const SHELL_CACHE = `${CACHE_V}-shell`;
 const MODEL_CACHE = `${CACHE_V}-models`;
 const ASSET_CACHE = `${CACHE_V}-assets`;

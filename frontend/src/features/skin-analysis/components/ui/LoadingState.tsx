@@ -1,6 +1,7 @@
-import { Suspense, lazy } from "react";
+import { Suspense } from "react";
+import { Boundary, lazyRetry } from "./Boundary";
 
-const ObsidianOrb = lazy(() => import("./ObsidianOrb"));
+const ObsidianOrb = lazyRetry(() => import("./ObsidianOrb"));
 
 /**
  * The app's single waiting treatment.
@@ -34,10 +35,17 @@ export function LoadingState({
     );
   }
 
+  const plain = <p className="py-10 text-center text-sm text-ink-secondary">{label}</p>;
+
   return (
-    // The orb pulls three.js, so the text shows first and it fades in behind.
-    <Suspense fallback={<p className="py-10 text-center text-sm text-ink-secondary">{label}</p>}>
-      <ObsidianOrb label={label} />
-    </Suspense>
+    // Boundary OUTSIDE Suspense on purpose. Suspense covers the wait; only the
+    // boundary covers the chunk failing to arrive. Without it a dropped fetch
+    // unmounts the app and the user is left staring at black — with no route
+    // forward, because this sits on the path to their results.
+    <Boundary fallback={plain}>
+      <Suspense fallback={plain}>
+        <ObsidianOrb label={label} />
+      </Suspense>
+    </Boundary>
   );
 }
