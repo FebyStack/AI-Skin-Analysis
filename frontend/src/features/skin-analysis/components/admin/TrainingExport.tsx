@@ -19,9 +19,15 @@ export function TrainingExport() {
         });
         const j = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(j.error ?? `${dim} export failed (${res.status})`);
-        parts.push(`${dim}: ${j.exported}/${j.labeled}`);
+        // The export is a REBUILD, so orphans and re-files are the interesting
+        // numbers — they say how far the folder had drifted from the database.
+        const drift = [
+          j.removed ? `${j.removed} orphaned` : "",
+          j.relabelled ? `${j.relabelled} refiled` : "",
+        ].filter(Boolean).join(", ");
+        parts.push(`${dim}: ${j.exported}/${j.labeled}${drift ? ` (${drift})` : ""}`);
       }
-      setStatus(`Exported — ${parts.join(" · ")}. Next: make retrain`);
+      setStatus(`Rebuilt — ${parts.join(" · ")}. Orphans moved to _orphaned/, not deleted. Next: make retrain`);
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Export failed.");
     } finally {

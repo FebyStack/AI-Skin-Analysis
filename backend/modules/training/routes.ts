@@ -1,8 +1,9 @@
 import { Router, type RequestHandler } from "express";
-import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import type { AppDeps } from "../../shared/deps";
 import { ANNOTATION_FIELDS } from "../../../shared/training-queue";
+import { rebuildExport } from "./rebuild-export";
 import { checkConsistency } from "../../../shared/label-consistency";
 
 // Every field of the Training Queue annotation panel. Vocabularies come from the
@@ -114,35 +115,37 @@ export function createTrainingRoutes(deps: AppDeps, auth: RequestHandler): Route
     res.json({ labels: await deps.scans.getLabels(req.params.id) });
   });
 
-  // Export every labeled scan's image into the training folder layout
-  // ($DATASETS_DIR/<dimension>/scans/<label>/<scanId>.jpg) that the trainer reads.
-  // Session auth (any clinician): writes to LOCAL disk only, same machine that
-  // already stores + displays the scans, so it's no new exposure.
+  /**
+   * Rebuild $DATASETS_DIR/<dimension>/scans/ from the current database labels.
+   *
+   * This used to append, so the folder only ever grew: a scan deleted from the
+   * database left its exported JPEG behind forever, and a re-graded scan gained
+   * a second copy under the new label while the old one stayed. On this install
+   * that produced 29 orphans out of 36 files for one dimension, alongside
+   * retired-vocabulary folders — so what trained the model was not what the
+   * clinicians currently believed.
+   *
+   * Logic lives in ./rebuild-export so the CLI runs exactly the same routine.
+   * `?dryRun=1` reports the plan without touching the disk.
+   */
   router.post("/api/training/:dimension/export", auth, async (req, res) => {
     const dimension = req.params.dimension;
-    if (!LABELS_BY_DIMENSION[dimension]) {
+    const vocabulary = LABELS_BY_DIMENSION[dimension];
+    if (!vocabulary) {
       res.status(400).json({ error: `unknown dimension: ${dimension}` });
       return;
     }
-    const labeled = await deps.scans.listTrainable(dimension);
-    const outBase = path.join(datasetsDir(), dimension, "scans");
-    let written = 0;
-    const missing: string[] = [];
-    for (const { scanId, label } of labeled) {
-      // Prefer the front angle image; fall back to the scan's headline image.
-      const img =
-        (await deps.scans.getScanImage(scanId, "front")) ?? (await deps.scans.getImage(scanId));
-      if (!img) {
-        missing.push(scanId);
-        continue;
-      }
-      const dir = path.join(outBase, label);
-      mkdirSync(dir, { recursive: true });
-      writeFileSync(path.join(dir, `${scanId}.jpg`), Buffer.from(img.jpeg));
-      written++;
-    }
-    await deps.scans.markExported(labeled.map((l) => l.scanId));
-    res.json({ ok: true, exported: written, labeled: labeled.length, missing, dir: outBase });
+    const result = await rebuildExport(
+      deps.scans,
+      dimension,
+      vocabulary,
+      path.join(datasetsDir(), dimension, "scans"),
+      { dryRun: req.query.dryRun === "1" || req.query.dryRun === "true" },
+    );
+    // `exported` and `labeled` are the names this endpoint has always returned
+    // and the admin UI still reads. Renaming them silently broke that.
+    const { labelled, written, ...rest } = result;
+    res.json({ ok: true, ...rest, labeled: labelled, exported: written, labelled, written });
   });
 
   return router;

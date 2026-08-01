@@ -63,6 +63,14 @@ restore:
 	@test -n "$(FILE)" || (echo "usage: make restore FILE=database/backups/backup-....sql" && exit 1)
 	cat $(FILE) | $(COMPOSE) exec -T db psql -U skin skin
 
+# Rebuild every <dim>/scans/ folder from the CURRENT database labels. The export
+# used to append, so deleted scans left their JPEGs behind and re-graded scans
+# ended up filed under both labels. Safe to re-run; images come from the DB.
+rebuild-export:
+	npx tsx --env-file=.env backend/scripts/rebuild-training-export.ts --dry-run
+	@echo "\nAbove is the PLAN. To apply:"
+	@echo "  npx tsx --env-file=.env backend/scripts/rebuild-training-export.ts"
+
 # Download external face datasets for the severity dimensions. They land in
 # $DATASETS_DIR/_incoming/, which the trainer deliberately does NOT read — they
 # are presence/absence, not severity-graded, so they must be graded first.

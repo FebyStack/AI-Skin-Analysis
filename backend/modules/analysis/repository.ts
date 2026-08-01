@@ -222,8 +222,25 @@ export class MemoryScanRepo implements ScanRepo {
     row.promptVersion = promptVersion;
     return true;
   }
+  /**
+   * Mirror ON DELETE CASCADE across EVERY table that references scans(id).
+   *
+   * This previously cleared images only, so a deleted scan kept its labels,
+   * queue entry, events and archived rows in memory while Postgres dropped
+   * them. That divergence hid a real bug: the training export could not be
+   * tested against orphaned labels, because in the test double the labels never
+   * became orphans.
+   */
   async remove(id: string) {
-    this.imagesByScan.delete(id); // mirror ON DELETE CASCADE
+    this.imagesByScan.delete(id);
+    this.labels.delete(id);
+    this.queue.delete(id);
+    this.hashes.delete(id);
+    this.consents.delete(id);
+    this.events = this.events.filter((e) => e.scanId !== id);
+    for (const k of [...this.archived.keys()]) {
+      if (this.archived.get(k)?.scanId === id) this.archived.delete(k);
+    }
     return this.rows.delete(id);
   }
 
