@@ -3,12 +3,17 @@
  *
  *   npx tsx --env-file=.env backend/scripts/apply-annotations.ts [--dry-run]
  *
- * Reads ai/datasets/_annotate/labels.jsonl and applies every record, so the
+ * Reads every ai/datasets/_annotate/labels*.jsonl and applies each record, so the
  * annotations join the SAME pipeline clinician grades use: scan_labels →
  * rebuild-export → <dim>/scans/<label>/ → trainer.
  *
  * What it refuses to write, and why each refusal exists:
  *
+ * - **A scan without training consent.** `consent_training` defaults to false
+ *   and gates entry to the training queue; building a dataset from a scan that
+ *   lacks it is precisely the use the flag withholds. The manifest filters these
+ *   out too, but a JSONL written before that filter existed would not have, and
+ *   this is the step that writes.
  * - **A value outside the attribute's vocabulary.** The backend would reject it
  *   and the row would vanish silently; better to fail loudly here.
  * - **An attribute the annotator marked `uncertain`.** Those are excluded from
@@ -57,6 +62,14 @@ async function main(): Promise<void> {
   if (!url) throw new Error("DATABASE_URL is not set");
   const pool = new Pool({ connectionString: url });
 
+  // Defence in depth: the manifest already filters on consent, but a JSONL from
+  // an older run predates that filter, and this is the step that writes.
+  const consented = new Set(
+    (await pool.query<{ id: string }>(`SELECT id FROM scans WHERE consent_training = true`)).rows.map(
+      (r) => r.id,
+    ),
+  );
+
   const existing = new Map<string, Set<string>>();
   for (const r of (await pool.query<{ scan_id: string; dimension: string }>(
     `SELECT scan_id, dimension FROM scan_labels`,
@@ -66,6 +79,7 @@ async function main(): Promise<void> {
 
   let applied = 0;
   let skippedQuality = 0;
+  let skippedNoConsent = 0;
   let skippedUncertain = 0;
   let skippedExisting = 0;
   let malformed = 0;
@@ -88,6 +102,10 @@ async function main(): Promise<void> {
     }
     if (rec.quality && rec.quality !== "ok") {
       skippedQuality++;
+      continue;
+    }
+    if (!consented.has(scanId)) {
+      skippedNoConsent++;
       continue;
     }
     const uncertain = new Set(rec.uncertain ?? []);
@@ -131,6 +149,7 @@ async function main(): Promise<void> {
       `  skipped uncertain ${skippedUncertain}\n` +
       `  skipped existing  ${skippedExisting}${OVERWRITE ? " (overwrite on)" : " (human grades win)"}\n` +
       `  skipped bad image ${skippedQuality}\n` +
+      `  skipped no consent ${skippedNoConsent} (consent_training = false)\n` +
       `  malformed lines   ${malformed}`,
   );
   if (invalid.length) {

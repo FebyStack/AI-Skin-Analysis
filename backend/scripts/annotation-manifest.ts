@@ -77,10 +77,16 @@ async function main(): Promise<void> {
   // make the "redo" silently partial.
   if (REDO) for (const f of labelFiles(outDir)) rmSync(f, { force: true });
 
-  // Every face scan that has an image, newest first.
+  // Every face scan that has an image AND carries training consent, newest first.
+  //
+  // The consent filter is not optional. `consent_training` defaults to false and
+  // is what gates entry to the training queue; a scan without it must never be
+  // used to build a dataset, and labelling it is exactly that use. Without this
+  // clause the manifest staged 23 non-consented scans and they were labelled.
   const { rows: candidates } = await pool.query<{ id: string }>(
     `SELECT s.id FROM scans s
       WHERE s.mode = 'face'
+        AND s.consent_training = true
         AND EXISTS (SELECT 1 FROM scan_images i WHERE i.scan_id = s.id)
       ORDER BY s.created_at DESC`,
   );
