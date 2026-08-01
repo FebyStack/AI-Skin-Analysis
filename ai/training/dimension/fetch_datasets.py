@@ -37,8 +37,65 @@ Rejected, with reasons:
   drishyatomar/glowmix-merged-facial-skincare-dataset
       4 GB and "merged" from multiple sources — merging is the leak.
 
+Second sweep (2026-08-01), aimed at the `present`-class gaps in the 10 binary
+dimensions. Nine permissively-licensed Kaggle sets were downloaded and checked;
+all nine failed, each for a reason worth writing down so nobody re-fetches them:
+
+  indahlestari23/skin-problems-multi-label-dataset            MIT, 178 MB
+      The one with the right SHAPE: 4,547 images, one pool, per-image binary
+      labels for Acne/Blackheads/Dark Spots/Dry Skin/Eye bags/Normal/Oily/
+      Pores/Redness/Wrinkles — positives and negatives from the same images by
+      construction. It still fails: it is a MERGE, and the filename family
+      predicts the label almost perfectly. Pores 232/267 and Wrinkles 371/403
+      are the numeric-named family; Acne 1171 is the "acne-N-" family and 890
+      the "levleN_N" family; Dry Skin 381/430 and Oily 216/247 are Indonesian
+      "kering-"/"oily-" scrapes; all 249 Normal and all 37 Redness sit in yet
+      another family. The corpus cue survives the multi-label format.
+
+  shakyadissanayake/oily-dry-and-normal-skin-types-dataset    "apache-2.0", 136 MB
+  manithj/oily-and-dry-skin-dataset                           "apache-2.0", 121 MB
+      Byte-identical class counts (652 dry / 1104 normal / 1000 oily) — one
+      dataset uploaded twice. A contact sheet shows what it actually is: a web
+      image scrape. Visible Shutterstock watermarks, Danish skincare marketing
+      copy burnt into frames, product shots, magnifying-glass stock photos,
+      rotation augmentation, and faces that do not show the labelled condition.
+      The Apache-2.0 tag was not the uploader's to give.
+
+  rajeshpandhare/skin-classification-normal-acne-oily-dry-wrinkle   "MIT", 61 MB
+      The negative class is literally istockphoto-*.jpg and gettyimages-*.jpg
+      while every positive class is a 640x640 Roboflow export. Textbook leak,
+      and again a licence the uploader could not grant.
+
+  muttaqin1113/faceskintype                                   "apache-2.0", 339 MB
+      Four classes, each scraped separately — filenames are "berjerawat (1)",
+      "berminyak (1)", "kering (1)", "normal (1)", the browser duplicate-download
+      pattern. Per-class scrape means per-class photographic style.
+
+  bishalsharma000/facial-skin-datasets                        "apache-2.0", 13 MB
+      Ships a subfolder named "02_01+shutterphoto". 429 images total.
+
+  hafsamahbub17/acne-and-wrinkles-dataset                     CC0-1.0, 205 MB
+      Two folders from two corpora: "acne-cystic-N.jpg" (DermNet clinical
+      naming) versus "images (N).jpg" (Google scrape). No shared negative.
+
+  abhayyadav1074/skin-disease-classification-for-skin-analysis-tool  "MIT", 648 MB
+      DermNet disease folders re-merged with the Oily-Dry scrape above (its
+      dry count is the same 652). Its own `bags` and `redness` folders hold
+      27 images each — too few, and from a different origin than the rest.
+
+  osmankagankurnaz/facial-skin-diseases-dataset               "apache-2.0", 8 MB
+      TFRecords, acne only.
+
+LICENCE WARNING on the two accepted sets below: both are CC BY-NC-ND 4.0.
+NonCommercial rules out a paid clinic product, and NoDerivatives is at best
+untested for model weights. Fine for research; get written permission from the
+publisher (roman@kucev.com) before anything trained on them ships.
+
 Accepted: both TrainingDataPro sets. One publisher, one rig, high resolution,
-and front/left/right angles that match what the app captures.
+and front/left/right angles that match what the app captures. Between them they
+can only serve redness, under-eye, wrinkles and fine-lines. For pigmentation,
+texture, pores, dryness, oiliness and tone-consistency no public corpus was
+found that carries both classes — the clinician grading loop is the only source.
 """
 from __future__ import annotations
 
