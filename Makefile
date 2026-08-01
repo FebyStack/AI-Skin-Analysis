@@ -63,6 +63,19 @@ restore:
 	@test -n "$(FILE)" || (echo "usage: make restore FILE=database/backups/backup-....sql" && exit 1)
 	cat $(FILE) | $(COMPOSE) exec -T db psql -U skin skin
 
+# Stage the scans that still need annotating. Anything already carrying a label
+# for every attribute is skipped, so re-running after new data only offers the
+# new work. Partially-labelled scans come back with just their missing fields.
+annotate-manifest:
+	npx tsx --env-file=.env backend/scripts/annotation-manifest.ts
+
+# Write a labelling run's JSONL into scan_labels. Uncertain fields and
+# non-ok-quality images are dropped; existing human grades are never overwritten.
+apply-annotations:
+	npx tsx --env-file=.env backend/scripts/apply-annotations.ts --dry-run
+	@echo "\nAbove is the PLAN. To apply:"
+	@echo "  npx tsx --env-file=.env backend/scripts/apply-annotations.ts"
+
 # Rebuild every <dim>/scans/ folder from the CURRENT database labels. The export
 # used to append, so deleted scans left their JPEGs behind and re-graded scans
 # ended up filed under both labels. Safe to re-run; images come from the DB.
