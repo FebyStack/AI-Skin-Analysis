@@ -18,6 +18,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from ai.training.dedup import subject_group
 from ai.training.dimension.labels import normalize_presence
 from ai.training.paths import datasets_dir
 
@@ -76,8 +77,13 @@ def collect_for(dimension: str) -> list[dict]:
                 if img.suffix.lower() in IMG_EXTS:
                     # group = scan id, so augmented/multi-angle shots of one
                     # patient never straddle the train/val split.
-                    rows.append({"path": str(img), "label": label, "group": img.stem})
+                    rows.append({"path": str(img), "label": label, "group": group_key(img.stem)})
     return rows
+
+
+# Subject key for the train/val split — shared with acne and skintype ingest so
+# all three group one photograph's copies and one person's angles identically.
+group_key = subject_group
 
 
 def counts_for(dimension: str) -> dict[str, int]:

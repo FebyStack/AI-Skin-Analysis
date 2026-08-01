@@ -1,4 +1,4 @@
-.PHONY: share up down lan build dimension-readiness fetch-dimension-datasets import-for-grading backup restore retrain retrain-acne retrain-skintype retrain-dim retrain-dims retrain-face
+.PHONY: share up down lan build dimension-readiness label-build label-status label-materialize fetch-dimension-datasets import-for-grading backup restore retrain retrain-acne retrain-skintype retrain-dim retrain-dims retrain-face
 
 # Compose lives in infrastructure/docker/; --env-file keeps root .env interpolation working.
 COMPOSE = docker compose -f infrastructure/docker/docker-compose.yml --env-file .env
@@ -79,6 +79,22 @@ import-for-grading:
 # grade scans in the queue AND hit "Export graded scans" before expecting moves.
 dimension-readiness:
 	$(PY) -m ai.training.dimension.readiness
+
+# --- AI annotation of the unlabelled corpus ------------------------------
+# Build the work queue once (dedupes, interleaves sources so any prefix stays
+# source-balanced), then check progress between labelling sessions.
+label-build:
+	$(PY) -m ai.training.dimension.labelqueue build
+label-status:
+	$(PY) -m ai.training.dimension.labelqueue status
+
+# Fold every completed batch into $(DATASETS_DIR)/<attr>/auto/<label>/.
+# Idempotent — re-run it after each labelling session. Invalid rows are printed
+# and skipped, never silently normalised.
+label-materialize:
+	@for f in ai/datasets/_labels/batch-*.jsonl; do \
+		$(PY) -m ai.training.dimension.materialize "$$f" || true; \
+	done
 
 # Expose the local dev server on a public HTTPS URL so remote patients can use a
 # private scan link. Cloudflare's quick tunnel needs no account. HTTPS matters:

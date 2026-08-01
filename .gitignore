@@ -40,7 +40,12 @@ MobileSAM/
 .DS_Store
 __pycache__/
 *.task
-ai/datasets/
+ai/datasets/*
+# Annotation labels are the one thing here that is NOT regenerable from source —
+# images re-download, months of grading do not. Small JSONL, so version them.
+!ai/datasets/_labels/
+ai/datasets/_labels/*
+!ai/datasets/_labels/*.jsonl
 ai/models/**/*.pt
 
 # Kept off iCloud via .nosync suffix; `node_modules`/`.venv` are symlinks into these.

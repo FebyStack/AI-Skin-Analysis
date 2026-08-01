@@ -1,6 +1,6 @@
 {
   "name": "efficientnet-b0-multihead",
-  "version": "face-20260731-032659",
+  "version": "face-20260731-205700",
   "tasks": {
     "acne": [
       "clear",
@@ -18,8 +18,8 @@
   },
   "img_size": 224,
   "metrics": {
-    "val_macro_f1": 0.7160389781960496,
-    "val_macro_f1_acne": 0.7410750360750361,
-    "val_macro_f1_skintype": 0.691002920317063
+    "val_macro_f1": 0.5567187531595166,
+    "val_macro_f1_acne": 0.7856475700093133,
+    "val_macro_f1_skintype": 0.32778993630971986
   }
 }

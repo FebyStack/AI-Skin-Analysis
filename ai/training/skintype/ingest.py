@@ -16,6 +16,7 @@ from pathlib import Path
 
 from ai.training.paths import datasets_dir
 from ai.training.skintype.labels import SKIN_TYPE_CLASSES, normalize_skin_type
+from ai.training.dedup import subject_group
 
 IMG_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
 
@@ -35,7 +36,7 @@ def rows_from_folders(source: str) -> list[dict]:
             continue
         for img in label_dir.iterdir():
             if img.suffix.lower() in IMG_EXTS:
-                rows.append({"path": str(img), "label": label, "group": img.stem})
+                rows.append({"path": str(img), "label": label, "group": subject_group(img.stem)})
     return rows
 
 

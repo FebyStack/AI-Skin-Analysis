@@ -16,6 +16,7 @@ from pathlib import Path
 
 from ai.training.paths import datasets_dir
 from ai.training.acne.labels import ACNE_CLASSES, normalize_acne_label
+from ai.training.dedup import subject_group
 
 IMG_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
 
@@ -36,7 +37,7 @@ def rows_from_folders(source: str) -> list[dict]:
             continue
         for img in label_dir.iterdir():
             if img.suffix.lower() in IMG_EXTS:
-                rows.append({"path": str(img), "label": label, "group": img.stem})
+                rows.append({"path": str(img), "label": label, "group": subject_group(img.stem)})
     return rows
 
 

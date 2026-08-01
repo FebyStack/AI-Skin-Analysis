@@ -110,21 +110,247 @@ model's output probability instead.
 **Do not invent a severity.** If you find yourself wanting to say "mildly
 present", the answer is `present`.
 
-| Attribute | `present` when… | Look at |
-|---|---|---|
-| `redness` | Visible erythema/flushing distinctly redder than the person's baseline tone | cheeks, nose |
-| `pigmentation` | Discrete darker patches — sun spots, melasma, post-inflammatory marks | cheeks, forehead |
-| `oiliness` | Specular highlights (shine) on the skin surface | forehead, nose |
-| `texture` | Surface roughness or bumpiness breaking up reflected light | cheeks, chin |
-| `pores` | Individually visible pore openings at normal viewing distance | nose, cheeks |
-| `fine-lines` | Fine surface lines, visible without expression | periorbital, under-eye |
-| `wrinkles` | Deeper folds that persist at rest | forehead, periorbital, nasolabial |
-| `dryness` | Flaking, scaling, or a dull/tight matte appearance | cheeks, chin |
-| `under-eye` | Darkening or shadowing under the eye, distinctly darker than the cheek | under-eye |
-| `tone-consistency` | Tone varies noticeably **between zones** (this is *unevenness* — `present` means uneven) | all zones |
+#### 4.3.1 The governing principle
 
-> `tone-consistency` is the one attribute whose name reads backwards. Every
-> attribute scores as **more pronounced**, so here `present` = more uneven tone.
+**Every one of these findings exists on every face at sufficient magnification.**
+Everyone has pores. Everyone has microtexture. Everyone has an infraorbital
+hollow. Everyone's cheeks differ slightly in tone from their forehead.
+
+So the rubric does not ask *"is it there?"* — the answer is always yes. It asks:
+
+> **Is this a conspicuous feature of this face, at conversational distance?**
+
+An attribute that comes back `present` on every face carries zero information,
+can never reach its `absent` quota, and can never train. Grading normal anatomy
+as a finding is the single most damaging error available to you.
+
+#### 4.3.2 Gates — apply these BEFORE any attribute
+
+These exist because they are the actual cause of over-firing.
+
+**Viewing gate — fit-to-screen, never zoomed.**
+Assess the image at a size where the whole head is visible. Do not enlarge to
+inspect skin. This is what makes the criteria independent of camera resolution:
+a 48 MP phone resolves pores that a 5 MP phone does not, and the label must not
+depend on which phone was used.
+
+**Expression gate.**
+If the subject is smiling, squinting, or raising their brows, periorbital and
+forehead skin is mechanically deformed. **Omit `fine-lines` and `wrinkles`** —
+do not record `absent` either, because you did not assess them at rest.
+
+**Makeup gate.**
+Visible foundation, concealer, powder or heavy blusher makes four attributes
+unassessable — it conceals pigment and evens tone, or adds both.
+**Omit `pigmentation`, `tone-consistency`, `redness` and `oiliness`** when
+face makeup is present. Note it in `notes`.
+
+**Multi-angle persistence test — the shadow/pigment discriminator.**
+This dataset gives up to 5 angles per subject. Contour shadow moves when the
+head and light move; pigment does not.
+
+> If a darkened area appears in the same place with the same colour across
+> front, left-45 and right-45, it is **pigment**. If it deepens on one side and
+> vanishes on another, it is **shadow** → `absent`.
+
+Use this for `under-eye`, `tone-consistency` and `pigmentation`. Where only one
+angle is available and the call is genuinely ambiguous, omit the attribute.
+
+**Same-face baseline — never a reference face.**
+Every threshold below compares a region against *another region of the same
+face under the same light*. Never against a mental image of "normal skin".
+This is what keeps the criteria independent of constitutional skin tone. Judging
+"looks older" or "looks darker" trains a model that discriminates instead of one
+that measures.
+
+#### 4.3.3 The attributes
+
+---
+
+**`redness`** · look at: cheeks, nose, perinasal
+
+- **`present`** — erythema in a **vascular distribution** (malar, nasal,
+  perinasal, or over inflammatory lesions): a bounded red area measurably
+  redder than that same face's forehead or chin under the same light.
+- **`absent`** — tone is uniformly warm across all zones. A warm complexion is
+  a skin tone, not erythema.
+- **Decision Rule** — would you say this person has *red areas on their face*,
+  as opposed to a warm complexion? Only the former is `present`.
+- **Do NOT count** — overall warm skin tone; warm camera white balance; blusher;
+  transient flush from exertion or heat when it is uniform; sunburn is genuine
+  erythema and does count.
+
+> On deeply pigmented skin, erythema is frequently not assessable in an ordinary
+> photograph. **Omit it.** `absent` asserts you looked and saw none.
+
+---
+
+**`pigmentation`** · look at: cheeks, forehead, upper lip
+
+- **`present`** — at least one **discrete, circumscribed** darker macule or
+  patch whose border you could trace: lentigines (sun spots), melasma patches,
+  post-inflammatory brown marks.
+- **`absent`** — no bounded lesions. The complexion may still be uneven overall;
+  that is `tone-consistency`, not this.
+- **Decision Rule** — can you point at a specific mark and trace its edge? If the
+  darkness has no border, it is not pigmentation.
+- **Do NOT count** — diffuse unevenness (→ `tone-consistency`); active red or
+  inflamed acne (not pigment until it settles brown); shadows; moles or naevi
+  (raised/congenital lesions, out of scope); ephelides (freckles) as a
+  symmetrical constitutional pattern rather than acquired dyschromia.
+
+---
+
+**`oiliness`** · look at: forehead, nose, medial cheeks
+
+- **`present`** — a **broad, confluent specular sheen** across a zone, giving the
+  skin a wet or glossy appearance over an *area*.
+- **`absent`** — matte; or only pinpoint catchlights on the nose tip, brow ridge
+  or lower lip, which are the light source reflecting off curved skin.
+- **Decision Rule** — is there continuous shine covering an area, or only points
+  where the light happens to strike? Points are `absent`.
+- **Do NOT count** — single specular highlights; direct flash; visible sweat;
+  the `skintype` label (an independent judgement — see hard rule 4).
+
+---
+
+**`texture`** · look at: cheeks, chin, temples
+
+- **`present`** — surface irregularity that **visibly breaks the light
+  reflection into an uneven pattern** at conversational distance: papular
+  roughness, acne scarring, orange-peel surface, persistent rough patches.
+- **`absent`** — smooth continuous reflection with only normal skin grain.
+- **Decision Rule** — without zooming, does the skin *surface* look rough or
+  uneven, as distinct from being differently coloured?
+- **Do NOT count** — normal pores (→ `pores`); microtexture visible only when
+  enlarged; active inflammatory acne lesions (→ `acne`; post-acne **scarring**
+  does count here); makeup cakeyness; JPEG compression artefacts.
+
+---
+
+**`pores`** · look at: nose, alar creases, medial cheeks
+
+- **`present`** — pore openings **conspicuously enlarged**, reading as an
+  obvious feature of the face — a stippled or orange-peel field of distinct
+  openings over an area, not isolated points.
+- **`absent`** — pores resolvable on close inspection or when enlarged, but not
+  something you would remark on at conversational distance. **This is the normal
+  finding and should be the common label.**
+- **Decision Rule** — at arm's length, would you describe this person as having
+  *large pores*? If you had to enlarge the image to see them, the answer is
+  `absent`.
+- **Do NOT count** — pores visible only on zoom; a high-resolution sensor
+  rendering ordinary pores crisply; open comedones/blackheads (→ `acne`); a
+  macro or tightly cropped nose shot, where the viewing gate cannot be applied
+  — omit instead.
+
+---
+
+**`fine-lines`** · look at: lateral periorbital, infraorbital
+
+- **`present`** — fine, **superficial** lines etched into the skin **at rest**,
+  visible with a neutral expression. No depth of their own.
+- **`absent`** — skin smooth at rest; lines appear only on smiling or squinting.
+- **Decision Rule** — with a neutral expression, are the lines still there?
+  Dynamic-only lines are `absent`.
+- **Do NOT count** — expression lines in a smiling photo (→ apply the expression
+  gate and omit); the natural upper-eyelid crease; tear-trough shadow; deep
+  furrows (→ `wrinkles`).
+
+---
+
+**`wrinkles`** · look at: forehead, glabella, lateral periorbital, nasolabial
+
+- **`present`** — **deep, persistent folds** present at rest, with enough depth
+  to cast their own shadow: horizontal forehead lines, glabellar furrows,
+  established periorbital folds.
+- **`absent`** — no fold at rest, however pronounced it becomes on expression.
+- **Decision Rule** — is there a furrow with *depth* — one that shadows itself —
+  while the face is at rest?
+- **Do NOT count** — dynamic folds in an expressive photo (apply the expression
+  gate); **the normal nasolabial fold**, which every adult face has — count it
+  only when deeply established beyond ordinary contour; superficial lines
+  (→ `fine-lines`).
+
+> `fine-lines` and `wrinkles` are separated by **depth, not location**. One line
+> is one or the other. A face may legitimately have both at different sites.
+
+---
+
+**`dryness`** · look at: cheeks, chin, perioral
+
+- **`present`** — **visible scaling, flaking or desquamation** — actual loose
+  or roughened stratum corneum you can see.
+- **`absent`** — a smooth supple surface, **including matte skin**.
+- **Decision Rule** — can you see actual scale or flake? Absence of shine is not
+  evidence of dryness.
+- **Do NOT count** — matte or non-shiny skin; a powder or matte-foundation
+  finish; the `skintype: dry` label; "tightness", which is a sensation and not
+  visible.
+
+---
+
+**`under-eye`** · look at: infraorbital
+
+- **`present`** — infraorbital **colour change**: a defined darker crescent
+  differing in *hue* from the mid-cheek — brown, violet or slate — that persists
+  across viewing angles.
+- **`absent`** — the normal tear-trough hollow casting a shadow that follows the
+  orbital contour and shifts with the light. **Every face has this.**
+- **Decision Rule** — apply the multi-angle persistence test. Same place, same
+  colour across angles → pigment → `present`. Deepens on one side, disappears on
+  another → shadow → `absent`. Single ambiguous angle → omit.
+- **Do NOT count** — tear-trough anatomy; shadow from overhead or raking light;
+  lower-lid lash shadow; concealer; infraorbital puffiness, which is oedema and
+  casts a shadow rather than being pigmented.
+
+---
+
+**`tone-consistency`** · look at: all zones compared against one another
+> Reads backwards by design: **`present` means the tone is UNEVEN.**
+
+- **`present`** — **frank dyschromia**: a blotchy or patchy complexion, or a zone
+  reading as a distinctly different colour from its neighbours, obvious at
+  conversational distance. Diffuse and unbounded — not spots.
+- **`absent`** — gradual gradation from facial contour and lighting falloff.
+  **All faces vary somewhat in tone; that variation is `absent`.**
+- **Decision Rule** — would you describe this complexion as *blotchy* or
+  *uneven* to someone across a desk? Minor natural variation is `absent`.
+- **Do NOT count** — discrete bounded spots (→ `pigmentation`); side-lighting
+  or a lighting gradient across the face; normal contour shading at the nose,
+  jaw and temples; beard shadow; a makeup demarcation line at the jaw.
+
+#### 4.3.4 Overlap map — one finding, one attribute
+
+| Finding | Belongs to | NOT |
+|---|---|---|
+| Bounded dark spot with a traceable edge | `pigmentation` | `tone-consistency` |
+| Diffuse blotchy complexion, no borders | `tone-consistency` | `pigmentation` |
+| Superficial line at rest | `fine-lines` | `wrinkles` |
+| Self-shadowing furrow at rest | `wrinkles` | `fine-lines` |
+| Visible flake or scale | `dryness` | `texture` |
+| Rough/bumpy surface, no flaking | `texture` | `dryness` |
+| Broad glossy sheen | `oiliness` | `skintype` |
+| Enlarged pore openings | `pores` | `texture` |
+| Active inflammatory lesion | `acne` | `texture`, `redness` |
+| Post-acne scar | `texture` | `acne` |
+| Post-acne brown mark | `pigmentation` | `acne` |
+
+#### 4.3.5 Expected balance — a drift signal, never a target
+
+Applied to ordinary adult smartphone selfies, a healthy rubric produces a mix.
+Rough expectations:
+
+| Attribute | Typical `present` share |
+|---|---|
+| `pores`, `pigmentation`, `dryness`, `tone-consistency` | ~10–30% |
+| `texture`, `oiliness`, `redness`, `under-eye` | ~20–40% |
+| `fine-lines`, `wrinkles` | ~20–40%, strongly cohort-dependent |
+
+**This is not a quota. Never flip a label to hit it.** It is a smoke alarm: if an
+attribute is coming back `present` on nearly every face, your threshold has
+drifted downward and you are scoring normal anatomy. Stop and re-read that
+attribute's Decision Rule before labelling the next image.
 
 ---
 

@@ -298,7 +298,7 @@ Two things this surfaced:
   "moderate" into "present" — not one of acne's options, silently switching the
   check off for acne. Direct match is tried first now.
 
-last Claude session: 2026-07-31 18:45
+
 
 ## Recent updates (2026-07-12)
 
@@ -573,7 +573,7 @@ Two things this surfaced:
   "moderate" into "present" — not one of acne's options, silently switching the
   check off for acne. Direct match is tried first now.
 
-last Claude session: 2026-07-31 18:45
+
 
 ## Progress 2026-07-21 (recommended-steps batch)
 
@@ -922,4 +922,102 @@ Two things this surfaced:
   "moderate" into "present" — not one of acne's options, silently switching the
   check off for acne. Direct match is tried first now.
 
-last Claude session: 2026-07-31 18:45
+
+
+## 2026-07-31 — AI-annotator labelling pipeline (skill + agent + materializer)
+
+Labelling the 11.3k unlabelled corpus is now agent-driven:
+
+- `.claude/skills/face-labelling/SKILL.md` — operational rubric (exact vocab,
+  quality gate, omit-don't-guess, no cross-attribute inference, no folder-name
+  labels). Written TDD-style: baseline agent without it used invalid vocab
+  (`mild` on binary dims), defaulted unassessable attrs to "none", skipped the
+  quality gate; the skill counters each observed failure.
+- `.claude/agents/face-labeller.md` — batch annotator subagent (manifest of
+  image paths + output JSONL). Loads next session.
+- `ai/training/dimension/materialize.py` — validates JSONL (loud per-line
+  rejects, no alias forgiveness) and hardlinks confident quality-ok labels into
+  `$DATASETS_DIR/<attr>/auto/<label>/`. `uncertain` attrs skipped; `auto`
+  source inert until `DIMENSION_EXTRA_SOURCES=auto`, so clinic `scans/` remain
+  the held-out truth. Tests: `ai/training/tests/test_materialize.py` (6).
+- Known-broken pre-existing: `ai/training/dimension/tests/test_ingest.py`
+  imports the deleted severity API — spawned as a follow-up chip.
+
+Run a batch: dispatch `face-labeller` with paths + JSONL out, then
+`.venv/bin/python -m ai.training.dimension.materialize <batch>.jsonl`.
+last Claude session: 2026-08-01 05:35
+
+### 2026-08-01 — two bugs found before the first materialize
+
+Both would have corrupted training silently, and both are now covered by tests:
+
+1. **Basename collisions.** 1136 basenames repeat across the corpus (`front.jpg`
+   28 times). Linking by basename made 2592 images collide, and since an existing
+   destination reads as already-done they were dropped without a word. Links are
+   now `<source>__<subject>[__<stem>]<ext>`.
+2. **acne/skintype had no opt-in gate.** Their `ingest.collect_all()` reads every
+   source folder unconditionally — unlike dimensions, which honour
+   `DIMENSION_EXTRA_SOURCES` — so `acne/auto/` would have injected AI labels into
+   the two heads that actually work (F1 0.741 / 0.691) with nobody opting in.
+   `materialize()` now skips them unless `include_trained=True`. Labels are still
+   recorded in the JSONL, just not used.
+
+Also: `dimension/ingest.group_key()` folds `<source>__<subject>__<angle>` to the
+subject, so one face's three frames can't straddle the train/val split.
+
+**Annotator presence-bias, unresolved.** First 181 images: tone-consistency
+118 present / 1 absent, redness 124/4, but dryness 100 absent / 6 present. Some
+of that is real (these are condition datasets), some is likely the annotator's
+threshold. §7.2's clinician spot-check (~20 per attribute) has NOT been done and
+should gate any export to the PWA.
+
+### 2026-08-01 — skintype's F1 0.691 was measured with train/val leakage
+
+Found while wiring auto-labels into training. `build_master.split_rows` uses
+`StratifiedGroupKFold` on `row["group"]`, and every ingest set `group = img.stem`.
+killa92 ships each source photo across `train/`, `valid/` AND `test/` under
+different Roboflow re-encode hashes, so **4145 skintype rows come from only 1672
+distinct photographs — 2473 copies (60%) could sit on both sides of the split.**
+Validation was scoring itself on images it had trained on. acne is barely
+affected (22 copies).
+
+`dedup.subject_group()` now extracts Roboflow's 20-hex source id (lookarounds
+stop it matching inside their 32-hex re-encode hash) and is shared by the acne,
+skintype and dimension ingests. **Expect the next skintype number to be LOWER
+than 0.691 and to be the first honest one.** The old figure should not be quoted.
+
+Also: phash near-duplicate detection is unreliable on this corpus. At Hamming
+<=4 it merged 196 *different people* from `acnegrading/Level_0` — identical
+black-background framing dominates an 8x8 DCT hash. Exact-phash dedup at manifest
+build is fine (its 637 drops were verified genuine re-encodes by filename id);
+do not lower the threshold to catch "near" duplicates.
+
+### 2026-08-01 — skintype's real macro F1 is near chance, and the rubric was broken
+
+**Two findings, both from wiring AI labels into training.**
+
+**1. skintype was memorising duplicates.** With `subject_group` holding a photo's
+Roboflow copies together (see above), a 12-epoch multi run gave
+`skintype=0.259-0.318` across epochs 1-5 — against 4 classes, i.e. chance is
+0.25. The shipped 0.691 came from validating on photos the model had trained on.
+`acne` held at 0.60-0.70 (its reported 0.741 is roughly honest; only 22 of its
+1695 rows were duplicated). **Do not quote skintype 0.691 anywhere.**
+
+**2. Seven of ten presence criteria had no threshold.** After 425 records the
+distribution was: pores 100% present, under-eye 100%, tone-consistency 100%,
+texture 97%, oiliness 96%, pigmentation 95%, redness 94% — and, inverted,
+dryness 2%. Splitting by source proved it was the rubric, not the corpus:
+`pores`/`under-eye`/`tone-consistency`/`texture` came back 100% present even in
+killa92, a skin-TYPE corpus full of normal skin. The criteria described anatomy
+("individually visible pore openings", "darker than the cheek", "tone varies
+between zones") which is true of every face at any resolution.
+
+Rewritten with clinical thresholds + a **conversational-distance test** (is it a
+feature of the face at ~1 m, or only when you zoom?), plus shadow-vs-pigment and
+skin-tone guidance. v1 labels archived to `_labels/v1-pre-rubric-fix/` (not
+deleted — they are the before-set if the thresholds ever need re-litigating) and
+all 17 batches are being re-labelled.
+
+Lesson for the next dimension added: check the present-rate BY SOURCE after ~200
+records. A column that is 100% one class in a corpus known to contain both is a
+rubric bug, and it is cheap to catch at 200 records and ruinous at 10,000.
