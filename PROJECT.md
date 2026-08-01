@@ -1021,3 +1021,49 @@ all 17 batches are being re-labelled.
 Lesson for the next dimension added: check the present-rate BY SOURCE after ~200
 records. A column that is 100% one class in a corpus known to contain both is a
 rubric bug, and it is cheap to catch at 200 records and ruinous at 10,000.
+
+### 2026-08-01 (later) — 109 scans annotated; the clinic corpus alone cannot train these
+
+**All 109 staged scans are labelled** (4 batches, 766 labels applied, 7
+quality-rejected, 260 uncertain excluded). The rewritten rubric holds: presence
+rates are now spread (redness 41%, oiliness 49%, fine-lines 27%, wrinkles 20%)
+instead of the 94-100% that made v1 untrainable. Nothing was flipped to balance
+a column.
+
+**The blocking finding.** Even if every consented pending scan were approved, no
+dimension reaches the 40-per-class floor:
+
+    redness  15/23    oiliness 19/19   fine-lines 30/20   wrinkles 38/10
+    texture  44/4     pigmentation 30/6   pores 71/1   dryness 82/0
+    under-eye 35/2    tone-consistency 62/3
+
+Three of these are *structurally* starved, not just small: `dryness` (0 present
+in 109 faces), `pores` (1), `under-eye` (2), `tone-consistency` (3). Clinic
+patients photographed in good light largely do not exhibit them. **More clinic
+scans will not fix these columns** — they need external corpora
+(`make fetch-dimension-datasets`). Annotating more of the same is the expensive
+way to learn this twice.
+
+**Two safety fixes came out of the run.**
+
+1. *Consent.* `annotation-manifest` did not filter on `consent_training`, so it
+   staged 23 non-consented scans and they were labelled. Both the manifest and
+   the applier now refuse them (109 candidates -> 85). Those scans never reached
+   the trainer — `listTrainable` joins `training_queue` and a non-consented scan
+   has no queue row, which is why the export kept reporting 8 labelled per
+   dimension while `scan_labels` held 766 new rows. 174 inert labels remain on
+   them; 34 older labels on the same scans are clinician work, so nothing was
+   deleted.
+2. *Split leakage, second route.* `subject_group` reads the subject from the
+   FILENAME, but clinic scans are named with a bare UUID — so every scan was its
+   own group and near-duplicate frames straddled the train/val split. 15 of 85
+   queued scans fall into 6 near-duplicate clusters by perceptual hash. Scans are
+   now grouped by image content (`phash_group_map`), which groups rather than
+   drops.
+
+**Next session:** approve the 77 pending consented scans (clinician decision —
+the annotation labels are not clinician grades), then fetch external corpora for
+the starved dimensions. Do NOT annotate more clinic scans expecting the columns
+to fill.
+
+**Process note (still true):** append to this file, then verify the write landed.
