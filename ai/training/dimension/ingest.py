@@ -18,7 +18,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from ai.training.dedup import subject_group
+from ai.training.dedup import phash_group_map, subject_group
 from ai.training.dimension.labels import normalize_presence
 from ai.training.paths import datasets_dir
 
@@ -69,15 +69,26 @@ def collect_for(dimension: str) -> list[dict]:
     for source_dir in sorted(p for p in base.iterdir() if p.is_dir()):
         if source_dir.name not in permitted:
             continue
+        source_rows: list[dict] = []
         for label_dir in sorted(p for p in source_dir.iterdir() if p.is_dir()):
             label = normalize_presence(label_dir.name)
             if label is None:
                 continue
             for img in label_dir.iterdir():
                 if img.suffix.lower() in IMG_EXTS:
-                    # group = scan id, so augmented/multi-angle shots of one
-                    # patient never straddle the train/val split.
-                    rows.append({"path": str(img), "label": label, "group": group_key(img.stem)})
+                    # The external corpora encode the subject in the filename,
+                    # so the stem is enough to keep one person's angles together.
+                    source_rows.append(
+                        {"path": str(img), "label": label, "group": group_key(img.stem)}
+                    )
+        # Clinic scans are named with a bare UUID, so the line above gives every
+        # capture its own group and two frames of one person taken seconds apart
+        # end up on opposite sides of the split. Regroup those by image content.
+        if source_dir.name == "scans" and source_rows:
+            clusters = phash_group_map(r["path"] for r in source_rows)
+            for r in source_rows:
+                r["group"] = clusters[r["path"]]
+        rows.extend(source_rows)
     return rows
 
 
