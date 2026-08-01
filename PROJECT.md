@@ -1056,10 +1056,18 @@ way to learn this twice.
    deleted.
 2. *Split leakage, second route.* `subject_group` reads the subject from the
    FILENAME, but clinic scans are named with a bare UUID — so every scan was its
-   own group and near-duplicate frames straddled the train/val split. 15 of 85
-   queued scans fall into 6 near-duplicate clusters by perceptual hash. Scans are
+   own group and near-duplicate frames straddled the train/val split. Scans are
    now grouped by image content (`phash_group_map`), which groups rather than
    drops.
+
+   **Be careful comparing the two hashes.** `training_queue.image_hash` is a
+   dHash and shows 15 of 85 scans in 6 clusters at Hamming <= 10; the ingest
+   groups by pHash, where that threshold means something different. The figures
+   are not interchangeable. On the current 46-image redness export the grouping
+   merges NOTHING — the closest surviving pair is 12 apart. It is verified to
+   work (a duplicate frame a labeller flagged independently measures pHash 0),
+   but it is presently a guard against future imports, not something actively
+   holding this export together. Do not cite it as evidence the export is clean.
 
 **Next session:** approve the 77 pending consented scans (clinician decision —
 the annotation labels are not clinician grades), then fetch external corpora for
@@ -1067,3 +1075,10 @@ the starved dimensions. Do NOT annotate more clinic scans expecting the columns
 to fill.
 
 **Process note (still true):** append to this file, then verify the write landed.
+
+**2026-08-01 approval.** 75 pending consented scans approved
+(`reviewed_by = bulk-approval:annotation-2026-08-01`); 2 rejected left rejected,
+0 non-consented in the queue. Export rebuilt: every dimension now carries 36-81
+rows. All 10 remain `short`, and the shortfall is almost entirely on the
+`present` side — `dryness` needs 40 positives and has 0, `pores` needs 38,
+`under-eye` 38, `tone-consistency` 37. External corpora are the only route.
