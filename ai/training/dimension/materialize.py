@@ -19,6 +19,7 @@ import sys
 from pathlib import Path
 
 from ai.training.acne.labels import ACNE_CLASSES
+from ai.training.dimension.balance import source_skew
 from ai.training.dimension.ingest import SEVERITY_DIMENSIONS
 from ai.training.dimension.labels import PRESENCE_CLASSES
 from ai.training.paths import datasets_dir
@@ -85,7 +86,23 @@ def link_name(rec_image: str, meta: dict | None) -> str:
     return f"{meta['source']}__{subject}{tail}{p.suffix}"
 
 
-def materialize(jsonl_path: str | Path, source: str = "auto", include_trained: bool = False) -> dict:
+def _all_labels(jsonl_path: str | Path, fallback: list[dict]) -> list[dict]:
+    """Every label record written so far, for accumulated-state checks."""
+    d = datasets_dir() / "_labels"
+    if not d.exists():
+        return fallback
+    out: list[dict] = []
+    for f in sorted(d.glob("batch-*.jsonl")):
+        out += [json.loads(l) for l in f.read_text().splitlines() if l.strip()]
+    return out or fallback
+
+
+def materialize(
+    jsonl_path: str | Path,
+    source: str = "auto",
+    include_trained: bool = False,
+    allow_skew: bool = False,
+) -> dict:
     """Link every confident, quality-ok label into <attr>/<source>/<label>/."""
     base = datasets_dir()
     index = _manifest_index()
@@ -94,8 +111,27 @@ def materialize(jsonl_path: str | Path, source: str = "auto", include_trained: b
         "skipped_uncertain": 0,
         "skipped_gated": 0,
         "dropped_quality": 0,
+        "skewed": {},
         "invalid": [],
     }
+    records = [
+        json.loads(l) for l in Path(jsonl_path).read_text().splitlines() if l.strip()
+    ]
+
+    # Refuse a dimension whose two classes are drawn from different corpora. The
+    # labels can be individually correct and the folder still teach the model
+    # which dataset a photo came from — see ai/training/dimension/balance.py.
+    #
+    # Judged over EVERY label written so far, not just this file: the folder this
+    # protects accumulates across batches, so one 25-image batch is far too small
+    # a sample to say anything about the mix that will actually train.
+    if not allow_skew:
+        source_of = {img: m["source"] for img, m in index.items()}
+        for dim in SEVERITY_DIMENSIONS:
+            skew = source_skew(dim, _all_labels(jsonl_path, records), source_of)
+            if not skew["ok"]:
+                report["skewed"][dim] = skew
+
     for n, line in enumerate(Path(jsonl_path).read_text().splitlines(), 1):
         if not line.strip():
             continue
@@ -116,6 +152,8 @@ def materialize(jsonl_path: str | Path, source: str = "auto", include_trained: b
                 continue
             if attr in GATED and not include_trained:
                 report["skipped_gated"] += 1
+                continue
+            if attr in report["skewed"]:
                 continue
             dest = base / attr / source / value / name
             if dest.exists():

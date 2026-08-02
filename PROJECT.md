@@ -1157,3 +1157,36 @@ Re-cutting it blind would be thrashing. Left for the spot-check.
 Effective yield is roughly HALF the earlier projection: uncertainty runs 45-73%
 across most columns and uncertain labels are excluded from training. Re-do the
 40/class projections against *confident* counts, not raw records.
+
+### 2026-08-01 — source-balance guard (§7.1 finally in code, not just prose)
+
+`redness` present-rate by source at 220 records: multi 92%, acne04 63%,
+acne04full 58%, botox 55%, skindefects 41%, acnegrading 15%. A 6x spread.
+`_multi` ships a curated Redness folder, so the enrichment is REAL — which is
+why this needs a guard rather than a rubric fix. Left alone,
+`redness/auto/present/` fills from one corpus and `absent/` from another: the
+exact confound that scored four models 0.96-1.00 before they were deleted.
+
+`ai/training/dimension/balance.py` scores total-variation distance between a
+dimension's two source mixes; `materialize()` refuses to stage anything above
+`MAX_TV_DISTANCE = 0.35` (`allow_skew=True` overrides). Counts only what would
+actually train — quality-ok, minus `uncertain`.
+
+Two things learned building it:
+
+1. **A thin class makes TVD meaningless.** With 3 positives the mix is whichever
+   corpus supplied them, and the first version blocked 9 of 10 dimensions on
+   noise. A guard that always fires trains people to pass the override
+   reflexively, which is how a guard stops working. `MIN_FOR_JUDGEMENT = 10`
+   yields "no verdict yet" instead — explicitly NOT a pass.
+2. **The check must read accumulated labels, not the batch being staged.** The
+   folder it protects accumulates across batches; one 25-image file says nothing
+   about the mix that will train.
+
+Standing at 346 records: redness (69/53, TVD 0.38), pigmentation (26/22, 0.50),
+oiliness (71/59, 0.53) and fine-lines (15/79, 0.67) are BLOCKED with enough data
+to mean it. texture passes at 0.32. The rest have no verdict yet.
+
+Open question this raises: `_multi`'s redness enrichment is structural, so that
+column may never balance on its own. The fix is either capping positives per
+source or holding clinic scans out for eval — decide when the counts are real.

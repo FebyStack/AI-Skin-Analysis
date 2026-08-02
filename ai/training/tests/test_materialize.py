@@ -77,7 +77,9 @@ def test_link_names_cannot_collide_across_subjects(tmp_path, monkeypatch):
     jsonl = tmp_path / "b.jsonl"
     jsonl.write_text("\n".join(json.dumps(r) for r in recs))
 
-    report = materialize(jsonl, source="auto")
+    # allow_skew: this fixture is all-`present` by design, which the balance
+    # guard rightly rejects. The behaviour under test here is link naming.
+    report = materialize(jsonl, source="auto", allow_skew=True)
 
     linked = sorted(p.name for p in (tmp_path / "redness" / "auto" / "present").iterdir())
     assert report["linked"] == 2
@@ -103,6 +105,36 @@ def test_acne_and_skintype_need_explicit_opt_in(tmp_path, monkeypatch):
 
     materialize(jsonl, source="auto", include_trained=True)
     assert (tmp_path / "acne" / "auto" / "mild").exists()
+
+
+def test_source_skewed_dimension_is_refused(tmp_path, monkeypatch):
+    """Positives from one corpus and negatives from another is the confound that
+    deleted four models. It must not reach <dim>/auto/ just because the labels
+    themselves are well-formed."""
+    monkeypatch.setenv("DATASETS_DIR", str(tmp_path))
+    manifest = tmp_path / "_labels" / "manifest.jsonl"
+    manifest.parent.mkdir(parents=True)
+    man, recs = [], []
+    for i in range(10):
+        for label, src in (("present", "multi"), ("absent", "acnegrading")):
+            rel = f"{src}/{label}{i}.jpg"
+            p = tmp_path / rel
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_bytes(b"x")
+            man.append({"image": rel, "source": src, "subject": f"{label}{i}"})
+            recs.append({"image": rel, "labels": {"redness": label}, "quality": "ok"})
+    manifest.write_text("\n".join(json.dumps(r) for r in man))
+    jsonl = tmp_path / "b.jsonl"
+    jsonl.write_text("\n".join(json.dumps(r) for r in recs))
+
+    report = materialize(jsonl, source="auto")
+
+    assert report["linked"] == 0
+    assert "redness" in report["skewed"]
+    assert not (tmp_path / "redness" / "auto").exists()
+
+    forced = materialize(jsonl, source="auto", allow_skew=True)
+    assert forced["linked"] == 20
 
 
 def test_materialize_is_idempotent(tmp_path, monkeypatch):
