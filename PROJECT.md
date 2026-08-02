@@ -1123,3 +1123,37 @@ Small fixes from labeller reports: queue files now end with a newline (one
 labeller's line-reader dropped image 25), and the skill no longer points at
 `docs/LABELLING-CONTEXT.md` as its source of truth — three annotators looked for
 it beside the skill, did not find it, and correctly carried on.
+
+### 2026-08-01 (later still) — one gate was suppressing three dimensions
+
+At 220 records the omission/uncertainty profile showed the problem was no longer
+thresholds but a **gate**: "Multi-angle — ambiguous on a single angle → omit",
+applied to `under-eye`, `tone-consistency` and `pigmentation`. This corpus is
+overwhelmingly single-angle, so the gate fired constantly:
+
+    under-eye        79% omitted, 55% of the rest uncertain -> 21 usable of 220
+    pigmentation     32% omitted, 73% uncertain             -> 40 usable
+    tone-consistency 30% omitted, 0 positives
+
+Clinically the gate was over-strict: periorbital hyperpigmentation is routinely
+graded from single clinical photographs. The working discriminator is anatomical
+extent, not light direction — **contour shadow is confined to a concavity and
+fades where the surface turns convex; pigment crosses that boundary** onto the
+lid or orbital rim and holds one hue. Multi-angle is now a bonus, not a
+precondition.
+
+**This loosening is monotone, so no re-labelling is needed.** A darkening
+confined to the hollow was `absent` before and still is; what changes is that
+previously-omitted images become assessable. Existing calls stay valid — which
+is the only reason a third rubric revision was affordable.
+
+**`oiliness` deliberately NOT changed.** Three labellers flagged it as running
+hot and two tightened mid-batch (which is its own inconsistency — the rubric
+should decide, not the annotator). But the numbers say 49% present / 45%
+uncertain: a usable split, not a degenerate column. Their concern is validity
+(clinical flash sheen vs sebum), which only the clinician spot-check can settle.
+Re-cutting it blind would be thrashing. Left for the spot-check.
+
+Effective yield is roughly HALF the earlier projection: uncertainty runs 45-73%
+across most columns and uncertain labels are excluded from training. Re-do the
+40/class projections against *confident* counts, not raw records.

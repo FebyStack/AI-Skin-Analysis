@@ -62,7 +62,8 @@ that is `present` on every face carries zero information and can never train.
 | **Viewing** | Assess fit-to-screen, whole head visible. **Never zoom.** A 48 MP phone resolves pores a 5 MP phone does not; the label must not depend on the camera. |
 | **Expression** | Smiling / squinting / raised brows → **omit `fine-lines` and `wrinkles`**. Not `absent` — you did not assess them at rest. |
 | **Makeup** | Visible foundation, concealer, powder → **omit `pigmentation`, `tone-consistency`, `redness`, `oiliness`**. Note it. |
-| **Multi-angle** | Pigment holds its place and colour across front/left-45/right-45. Shadow moves with the light. Use for `under-eye`, `tone-consistency`, `pigmentation`. Ambiguous on a single angle → omit. |
+| **Multi-angle** | *When several angles exist*, use them: pigment holds its place and colour across front/left-45/right-45, shadow moves with the light. This is the cleanest test — but most of this corpus is single-angle, so it is a bonus, **not a precondition**. On one angle, use the anatomical-boundary test below. |
+| **Anatomical boundary** (single angle) | Contour shadow is **confined to a concavity** and fades where the surface turns convex; it is grey and gradient-edged. Pigment **crosses that boundary** onto convex surface, holds one hue (brown, or blue-violet if vascular), and keeps its edge. If a darkening stops exactly at the hollow, it is shadow → `absent`. If it extends past the rim onto the lid or cheek, it is pigment → `present`. |
 | **Same-face baseline** | Compare a region to *another region of the same face under the same light*, never to a remembered "normal". This is what keeps the criteria independent of constitutional skin tone and age. |
 
 | Attribute | `present` — the threshold | `absent` — the normal finding |
@@ -75,7 +76,7 @@ that is `present` on every face carries zero information and can never train.
 | `fine-lines` | **Superficial** lines etched **at rest**, no depth of their own | Smooth at rest; lines only on expression |
 | `wrinkles` | **Self-shadowing furrows** persisting at rest | No fold at rest, however deep on expression |
 | `dryness` | **Visible scale or flake** — actual desquamation | Smooth supple surface, **including matte skin** |
-| `under-eye` | Infraorbital **colour change** — brown/violet/slate crescent differing in *hue* from mid-cheek, persisting across angles | The tear-trough hollow casting contour shadow. **Every face has this** |
+| `under-eye` | Infraorbital **colour change** differing in *hue* from mid-cheek — brown (pigmentary) or blue-violet (vascular) — **extending past the tear-trough hollow** onto the lid or orbital rim | Grey contour shadow confined to the hollow, fading where the cheek turns convex. **Every face has this** |
 | `tone-consistency` | **Frank dyschromia** — blotchy/patchy, a zone a distinctly different colour from neighbours, unbounded | Gradual gradation from contour and lighting falloff. **All faces vary somewhat; that is `absent`** |
 
 **Do NOT count** (the recurring false positives):
