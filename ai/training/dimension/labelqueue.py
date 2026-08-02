@@ -14,6 +14,7 @@ corpus and its `absent` from another — the exact failure that scored four mode
 from __future__ import annotations
 
 import json
+import random
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -45,6 +46,27 @@ def subject_of(source: str, rel: Path) -> str:
     if source in MULTI_ANGLE:
         return f"{rel.parent.parent.name}-{rel.parent.name}"
     return rel.stem
+
+
+def shuffle_within_source(by_source: dict[str, list[dict]], seed: int = 0) -> dict[str, list[dict]]:
+    """Break up each source's per-class directory blocks.
+
+    Sources store one class per directory and `scan()` walks them in path order,
+    so a source emits all of one class before any of the next. killa92's `oily`
+    faces sat past batch 62 and `dry` past batch 8 — but the 40/class bar is
+    reached long before that, so the model would have hit "ready" having never
+    seen an oily face. Interleaving sources is not enough; the classes inside a
+    source have to be mixed too.
+
+    Seeded so the manifest is reproducible: rebuilding it must not renumber work
+    that is already done.
+    """
+    out = {}
+    for source, rows in by_source.items():
+        shuffled = list(rows)
+        random.Random(f"{seed}:{source}").shuffle(shuffled)
+        out[source] = shuffled
+    return out
 
 
 def interleave(by_source: dict[str, list[dict]]) -> list[dict]:
@@ -148,7 +170,7 @@ def next_batch() -> tuple[int | None, list[dict]]:
 
 
 def build() -> list[dict]:
-    rows = assign_batches(drop_duplicates(interleave(scan())))
+    rows = assign_batches(drop_duplicates(interleave(shuffle_within_source(scan()))))
     labels_dir().mkdir(parents=True, exist_ok=True)
     manifest_path().write_text("".join(json.dumps(r) + "\n" for r in rows))
     return rows

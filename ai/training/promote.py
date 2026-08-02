@@ -8,6 +8,29 @@ from pathlib import Path
 
 _REQUIRED = ("melanoma_sensitivity", "val_macro_f1")
 
+# How far above its own chance floor a per-task head must score to be worth
+# shipping. A multi-head model reports ONE mean macro-F1, and a mean hides a dead
+# head: the 2026-07-31 face candidate averaged 0.557 while its skintype head sat
+# at 0.328 against a 0.25 floor — a coin flip the PWA would have rendered as a
+# real confidence percentage. Chance depends on the task's class count, so the
+# floor is computed per task rather than set as one absolute number.
+CHANCE_MARGIN = 0.10
+
+
+def near_chance_tasks(meta: dict) -> list[str]:
+    """Tasks whose head is at or near chance — the ones that must not ship.
+
+    A missing metric counts as failing: an unmeasured head is not a passing one.
+    """
+    metrics = meta.get("metrics") or {}
+    bad = []
+    for task, classes in (meta.get("tasks") or {}).items():
+        f1 = metrics.get(f"val_macro_f1_{task}")
+        chance = 1.0 / len(classes) if classes else 1.0
+        if f1 is None or f1 < chance + CHANCE_MARGIN:
+            bad.append(task)
+    return bad
+
 def decide_promotion(candidate_meta: dict, production_meta: dict | None) -> tuple[bool, str]:
     blocked = (False, "Blocked: candidate/production metrics incomplete — run evaluate first.")
     c = candidate_meta.get("metrics") or {}

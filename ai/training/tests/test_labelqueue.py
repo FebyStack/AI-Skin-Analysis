@@ -56,3 +56,19 @@ def test_group_key_spans_a_subjects_angles():
     assert group_key("skindefects__acne-1__left_side") == "skindefects__acne-1"
     assert group_key("killa92__x9") == "killa92__x9"
     assert group_key("0bfc17ea-0b16-41ea-8bbd-2dc09dde8ae8") == "0bfc17ea-0b16-41ea-8bbd-2dc09dde8ae8"
+
+
+def test_within_source_order_is_shuffled_not_path_sorted():
+    """Sources store one class per directory, so path order emits them in
+    blocks: every killa92 'oily' face sat past batch 62, beyond where the
+    40/class bar is reached. Any prefix must see every class of every source."""
+    rows = [{"image": f"killa92/{c}/{i}.jpg"}
+            for c in ("combination", "dry", "normal", "oily") for i in range(25)]
+    out = q.shuffle_within_source({"killa92": list(rows)})["killa92"]
+    assert {r["image"].split("/")[1] for r in out[:25]} == {"combination", "dry", "normal", "oily"}
+
+
+def test_shuffle_is_deterministic_so_the_manifest_is_reproducible():
+    rows = [{"image": f"s/{i}.jpg"} for i in range(50)]
+    assert (q.shuffle_within_source({"s": list(rows)})["s"]
+            == q.shuffle_within_source({"s": list(rows)})["s"])

@@ -10,7 +10,11 @@ consistency engine, not a dermatologist. One wrong label teaches the model
 something false permanently; one omitted label costs a single row. **Omission
 is always cheaper than a guess.**
 
-Full brief: `docs/LABELLING-CONTEXT.md`. This skill is the operational core.
+This skill is the complete and authoritative rubric — grade against it alone.
+(Background on why the project works this way lives in `docs/LABELLING-CONTEXT.md`
+at the **repository root**, not beside this file. It is context, not criteria;
+three annotators looked for it relative to this skill, found nothing, and rightly
+carried on with the tables below.)
 
 ## Vocabularies — exact strings, nothing else
 
