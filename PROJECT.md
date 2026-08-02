@@ -945,7 +945,7 @@ Labelling the 11.3k unlabelled corpus is now agent-driven:
 
 Run a batch: dispatch `face-labeller` with paths + JSONL out, then
 `.venv/bin/python -m ai.training.dimension.materialize <batch>.jsonl`.
-last Claude session: 2026-08-01 05:35
+last Claude session: 2026-08-02 01:26
 
 ### 2026-08-01 — two bugs found before the first materialize
 
@@ -1082,3 +1082,44 @@ to fill.
 rows. All 10 remain `short`, and the shortfall is almost entirely on the
 `present` side — `dryness` needs 40 positives and has 0, `pores` needs 38,
 `under-eye` 38, `tone-consistency` 37. External corpora are the only route.
+
+### 2026-08-01 (later) — rubric fix verified, and a manifest ordering bug
+
+**The threshold rewrite worked.** 156 quality-ok records under the corrected
+criteria, versus the degenerate columns it replaced:
+
+    redness 52% present · pigmentation 43% · oiliness 47% · under-eye 20%
+    texture 17% · fine-lines 11%        (all previously 94-100% present)
+
+Six dimensions moved from unusable to trainable ranges. Three are skewed but not
+blocked (pores 2%, wrinkles 2%, dryness 1%). One is still blocked:
+**tone-consistency, 0 positives in 156** — either genuinely rare under the new
+"frank dyschromia" wording or still too strict. Decide it on evidence at ~500
+records, not before.
+
+Projected images needed to reach 40/class: redness/oiliness ~207, pigmentation
+~469, texture ~640, fine-lines ~1408, under-eye ~1760, wrinkles ~3520,
+pores/dryness ~7040. **Finishing the corpus gets 9 of 10 over the bar** — the
+run is worth completing, and the first four land inside ~26 batches.
+
+**Manifest ordering bug (fixed).** `scan()` walks each source in path order and
+sources keep one class per directory, so a source emitted its classes in blocks:
+killa92's `oily` faces all sat past batch 62, `dry` past batch 8. Interleaving
+SOURCES was not enough — a run could hit the 40/class bar having never shown the
+model an oily face. `shuffle_within_source()` (seeded, so the manifest stays
+reproducible) now mixes within each source before the round-robin. All four
+killa92 classes now appear by batch 1, and batch 000 draws 4/4/4/4/3/3/3.
+
+Rebuilding the manifest is SAFE for work already done: resume keys off the image
+path, not the batch number — 176 records survived the rebuild untouched.
+
+**Three rubric generations got mixed.** 24 records were graded against an
+intermediate wording; two labellers independently flagged them rather than
+silently rewriting. Archived to `_labels/v1-pre-rubric-fix/intermediate-rubric.jsonl`
+and re-queued. Current-rubric records consolidated to `_labels/batch-pass1.jsonl`
+so batch numbering could be reused after the rebuild.
+
+Small fixes from labeller reports: queue files now end with a newline (one
+labeller's line-reader dropped image 25), and the skill no longer points at
+`docs/LABELLING-CONTEXT.md` as its source of truth — three annotators looked for
+it beside the skill, did not find it, and correctly carried on.
