@@ -210,8 +210,12 @@ that measures.
   skin a wet or glossy appearance over an *area*.
 - **`absent`** — matte; or only pinpoint catchlights on the nose tip, brow ridge
   or lower lip, which are the light source reflecting off curved skin.
-- **Decision Rule** — is there continuous shine covering an area, or only points
-  where the light happens to strike? Points are `absent`.
+- **Decision Rule** — light geometry. A hard flash lights the **convexities**
+  (brow ridge, nose bridge, cheekbone, lip, chin point) and skips the flats
+  between them. Sebum ignores the light: it covers the T-zone as a *region*,
+  mid-forehead and alar creases included, and leaves a visible glossy/matte
+  boundary at the cheeks. Shine mapping onto the raised parts of the face is the
+  lamp → `absent`.
 - **Do NOT count** — single specular highlights; direct flash; visible sweat;
   the `skintype` label (an independent judgement — see hard rule 4).
 
@@ -296,13 +300,18 @@ that measures.
 **`under-eye`** · look at: infraorbital
 
 - **`present`** — infraorbital **colour change**: a defined darker crescent
-  differing in *hue* from the mid-cheek — brown, violet or slate — that persists
-  across viewing angles.
-- **`absent`** — the normal tear-trough hollow casting a shadow that follows the
-  orbital contour and shifts with the light. **Every face has this.**
-- **Decision Rule** — apply the multi-angle persistence test. Same place, same
-  colour across angles → pigment → `present`. Deepens on one side, disappears on
-  another → shadow → `absent`. Single ambiguous angle → omit.
+  differing in *hue* from the mid-cheek — brown, violet or slate — **extending
+  past the tear-trough hollow** onto the lid or orbital rim.
+- **`absent`** — the normal tear-trough hollow casting a grey shadow that follows
+  the orbital contour and fades where the cheek turns convex. **Every face has
+  this.**
+- **Decision Rule** — anatomical extent, on a single angle. Darkening confined to
+  the hollow and fading at the convexity → shadow → `absent`. Darkening that
+  crosses that boundary and holds one hue → pigment → `present`.
+- **Multi-angle, where sibling angles exist** — the cleanest confirmation: same
+  place and colour across angles → pigment; deepens one side, gone the other →
+  shadow. A **bonus, not a precondition** — this corpus is overwhelmingly
+  single-angle, and requiring it omitted 79% of all under-eye assessments.
 - **Do NOT count** — tear-trough anatomy; shadow from overhead or raking light;
   lower-lid lash shadow; concealer; infraorbital puffiness, which is oedema and
   casts a shadow rather than being pigmented.

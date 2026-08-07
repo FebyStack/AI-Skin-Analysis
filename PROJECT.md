@@ -1254,3 +1254,25 @@ error, so existing labels stand.
 **Lesson: two sources of truth for one criterion will diverge.** The skill and
 the brief now both state this rule; when either changes, change both, or delete
 one of them.
+
+### 2026-08-01 — I created the divergence I had just warned about
+
+Having written "two sources of truth for one criterion will diverge", I then
+fixed `under-eye` in the SKILL only and left `docs/LABELLING-CONTEXT.md` §4.3.3
+saying `present` requires persistence "across viewing angles" with "single
+ambiguous angle -> omit". A labeller caught it within one unit.
+
+Both documents now carry the same three sharpened rules — anatomical extent for
+`under-eye`, light geometry for `oiliness`, acne-independence for `redness`. The
+skill also now instructs annotators to STOP and report a disagreement rather than
+pick a side, which is how both contradictions surfaced.
+
+**Standing rule: the skill and the brief are one rubric in two files. Change
+both in the same commit, or the annotators will find out for you.**
+
+The self-check is working as intended. Unit 005 hit the 20-in-a-row trigger on
+`oiliness`, stopped, re-read two already-graded images against the sharpened
+criterion, found the threshold had HELD (sheen covering mid-forehead and alar
+creases as a region, not convexities), and correctly did not re-grade. That is
+the behaviour the rule was written for — verify, then act on the finding, rather
+than flip labels to hit a band.
