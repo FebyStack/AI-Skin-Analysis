@@ -72,3 +72,46 @@ def test_shuffle_is_deterministic_so_the_manifest_is_reproducible():
     rows = [{"image": f"s/{i}.jpg"} for i in range(50)]
     assert (q.shuffle_within_source({"s": list(rows)})["s"]
             == q.shuffle_within_source({"s": list(rows)})["s"])
+
+
+def test_a_subjects_angles_stay_in_one_batch():
+    """skin-defects ships front/left_side/right_side per subject, and the
+    shadow-vs-pigment test needs to compare them. Shuffling by IMAGE scattered
+    53 of 54 multi-image subjects across different batches, so no annotator ever
+    saw two angles of the same face."""
+    rows = [{"image": f"s/{s}/{a}.jpg", "source": "skindefects", "subject": s}
+            for s in ("a", "b", "c") for a in ("front", "left", "right")]
+    out = q.assign_batches(q.keep_subjects_together(list(reversed(rows))))
+    for s in ("a", "b", "c"):
+        assert len({r["batch"] for r in out if r["subject"] == s}) == 1
+
+
+def test_a_batch_boundary_never_splits_a_subject(monkeypatch):
+    monkeypatch.setattr(q, "BATCH_SIZE", 4)
+    rows = [{"image": f"s/{s}/{a}.jpg", "source": "sd", "subject": s}
+            for s in ("a", "b", "c") for a in ("1", "2", "3")]
+    out = q.assign_batches(q.keep_subjects_together(rows))
+    for s in ("a", "b", "c"):
+        assert len({r["batch"] for r in out if r["subject"] == s}) == 1
+
+
+def test_work_units_pack_the_remainder_into_full_batches(monkeypatch):
+    """After a manifest rebuild the done images scatter, leaving batches holding
+    2-6 unlabelled each. Dispatching an annotator for 2 images wastes its whole
+    startup, so the remainder is repacked into full units."""
+    monkeypatch.setattr(q, "BATCH_SIZE", 5)
+    rows = [{"image": f"{i}.jpg", "source": "s", "subject": str(i), "batch": i // 2}
+            for i in range(20)]
+    units = q.work_units(rows, done={f"{i}.jpg" for i in range(0, 20, 2)})  # half labelled
+    assert [len(u) for u in units] == [5, 5]
+    assert [r["image"] for r in units[0]] == ["1.jpg", "3.jpg", "5.jpg", "7.jpg", "9.jpg"]
+
+
+def test_work_units_never_split_a_subject(monkeypatch):
+    monkeypatch.setattr(q, "BATCH_SIZE", 4)
+    rows = [{"image": f"{s}-{a}.jpg", "source": "sd", "subject": s, "batch": 0}
+            for s in ("a", "b", "c") for a in ("1", "2", "3")]
+    units = q.work_units(rows, done=set())
+    for s in ("a", "b", "c"):
+        holding = [i for i, u in enumerate(units) if any(r["subject"] == s for r in u)]
+        assert len(holding) == 1

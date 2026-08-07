@@ -78,9 +78,41 @@ def interleave(by_source: dict[str, list[dict]]) -> list[dict]:
     return out
 
 
+def keep_subjects_together(rows: list[dict]) -> list[dict]:
+    """Pull a subject's other angles up next to its first.
+
+    skin-defects and botox ship several angles per subject, and the
+    shadow-vs-pigment discriminator wants to compare them. Shuffling by IMAGE
+    scattered 53 of 54 multi-image subjects across different batches, so no
+    annotator ever saw two angles of one face — the multi-angle test could never
+    fire on the only corpus that supports it.
+
+    Order is by each subject's FIRST appearance, so the source interleave and the
+    within-source shuffle both survive; only the 54 subjects with extra angles
+    move at all.
+    """
+    groups: dict[tuple, list[dict]] = {}
+    for r in rows:
+        groups.setdefault((r.get("source"), r.get("subject", r["image"])), []).append(r)
+    return [r for g in groups.values() for r in g]  # dict preserves first-seen order
+
+
 def assign_batches(rows: list[dict]) -> list[dict]:
-    for i, r in enumerate(rows):
-        r["batch"] = i // BATCH_SIZE
+    """Pack into batches, rolling over only at a subject boundary.
+
+    A batch may run a couple over BATCH_SIZE rather than cut a subject in half —
+    splitting one is the bug this exists to prevent.
+    """
+    batch = filled = 0
+    prev = None
+    for r in rows:
+        key = (r.get("source"), r.get("subject", r["image"]))
+        if filled >= BATCH_SIZE and key != prev:
+            batch += 1
+            filled = 0
+        r["batch"] = batch
+        filled += 1
+        prev = key
     return rows
 
 
@@ -160,6 +192,34 @@ def labelled() -> set[str]:
     return done
 
 
+def work_units(rows: list[dict], done: set[str]) -> list[list[dict]]:
+    """Repack the unlabelled remainder into full annotator-sized units.
+
+    Batch numbers order the corpus; they are not work assignments. After a
+    manifest rebuild the already-done images scatter, leaving batches holding a
+    handful of unlabelled each — and an annotator dispatched for 2 images pays
+    its whole startup for 2 images.
+
+    Manifest order is preserved (so the source interleave still holds for any
+    prefix) and subjects are never cut across units.
+    """
+    units: list[list[dict]] = []
+    unit: list[dict] = []
+    prev = None
+    for r in rows:
+        if r["image"] in done:
+            continue
+        key = (r.get("source"), r.get("subject", r["image"]))
+        if len(unit) >= BATCH_SIZE and key != prev:
+            units.append(unit)
+            unit = []
+        unit.append(r)
+        prev = key
+    if unit:
+        units.append(unit)
+    return units
+
+
 def next_batch() -> tuple[int | None, list[dict]]:
     """Lowest-numbered batch with unlabelled images, and those images."""
     pending = [r for r in read_manifest() if r["image"] not in labelled()]
@@ -170,7 +230,7 @@ def next_batch() -> tuple[int | None, list[dict]]:
 
 
 def build() -> list[dict]:
-    rows = assign_batches(drop_duplicates(interleave(shuffle_within_source(scan()))))
+    rows = assign_batches(keep_subjects_together(drop_duplicates(interleave(shuffle_within_source(scan())))))
     labels_dir().mkdir(parents=True, exist_ok=True)
     manifest_path().write_text("".join(json.dumps(r) + "\n" for r in rows))
     return rows
