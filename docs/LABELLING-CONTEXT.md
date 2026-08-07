@@ -170,15 +170,18 @@ that measures.
 **`redness`** · look at: cheeks, nose, perinasal
 
 - **`present`** — erythema in a **vascular distribution** (malar, nasal,
-  perinasal, or over inflammatory lesions): a bounded red area measurably
-  redder than that same face's forehead or chin under the same light.
+  perinasal): a bounded red area measurably redder than that same face's
+  forehead or chin under the same light, **independent of any acne lesions**.
 - **`absent`** — tone is uniformly warm across all zones. A warm complexion is
   a skin tone, not erythema.
 - **Decision Rule** — would you say this person has *red areas on their face*,
   as opposed to a warm complexion? Only the former is `present`.
 - **Do NOT count** — overall warm skin tone; warm camera white balance; blusher;
   transient flush from exertion or heat when it is uniform; sunburn is genuine
-  erythema and does count.
+  erythema and does count. **Perilesional erythema — the redness of and around
+  active acne lesions — belongs to `acne`, per the table in §4.3.4.** Counting it
+  here makes `redness` a proxy for acne rather than a measurement of vascular
+  erythema, and a face whose only red areas are its spots is `redness: absent`.
 
 > On deeply pigmented skin, erythema is frequently not assessable in an ordinary
 > photograph. **Omit it.** `absent` asserts you looked and saw none.

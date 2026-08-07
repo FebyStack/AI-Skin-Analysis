@@ -1227,3 +1227,30 @@ Corpus composition is the persistent confound and ordering cannot fix it: three
 of the seven corpora are acne datasets, so any balanced sample is acne-heavy, and
 `pigmentation` runs high because post-inflammatory macules are a genuine acne
 sequela. The source-balance guard is what catches the downstream damage.
+
+### 2026-08-01 — the brief contradicted itself on acne vs redness
+
+A labeller found it, and it was real:
+
+    §4.3   redness `present` = erythema in a vascular distribution
+           "(malar, nasal, perinasal, OR OVER INFLAMMATORY LESIONS)"
+    §4.3.4 disambiguation table: "Active inflammatory lesion -> `acne`,
+           NOT `texture`, `redness`"
+
+Two annotators reading different sections graded the same acne face oppositely,
+which is most of why `redness` swung 46-83% between units. The table is the
+clinically correct side: perilesional erythema is part of the lesion, and
+counting it as `redness` turns that column into an acne proxy — the model would
+learn to fire `redness` on every spotty face.
+
+Fixed in BOTH the brief and the skill: `redness` is now explicitly independent of
+acne lesions, and a face whose only red areas are its spots is `redness: absent`.
+
+Reassuringly the labellers had mostly resolved it correctly on instinct — redness
+was 52% present on acne-bearing faces vs 46% on clear ones, i.e. nearly
+independent already. The contradiction was producing variance, not a systematic
+error, so existing labels stand.
+
+**Lesson: two sources of truth for one criterion will diverge.** The skill and
+the brief now both state this rule; when either changes, change both, or delete
+one of them.

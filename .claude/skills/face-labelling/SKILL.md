@@ -69,7 +69,7 @@ that is `present` on every face carries zero information and can never train.
 
 | Attribute | `present` — the threshold | `absent` — the normal finding |
 |---|---|---|
-| `redness` | Erythema in a **vascular distribution** (malar/nasal/perinasal); a bounded red area redder than that face's own forehead/chin | Uniformly warm tone across all zones — a complexion, not erythema |
+| `redness` | Erythema in a **vascular distribution** (malar/nasal/perinasal); a bounded red area redder than that face's own forehead/chin, **independent of acne lesions** | Uniformly warm tone across all zones — a complexion, not erythema. A face whose only red areas are its spots is `absent`: perilesional erythema belongs to `acne` |
 | `pigmentation` | ≥1 **discrete, circumscribed** darker macule whose border you could trace | No bounded lesion. Diffuse unevenness is `tone-consistency` |
 | `oiliness` | **Broad confluent sheen** over a zone — wet/glossy across an *area*, covering flat parts of the T-zone (mid-forehead, alar crease) and not only the raised parts | Matte, or highlights sitting **only on convexities** — brow ridge, nose bridge, cheekbone, lip, chin point. That pattern is the lamp, not sebum |
 | `texture` | Surface irregularity **breaking the light reflection** into an uneven pattern — papular roughness, scarring, orange-peel | Smooth continuous reflection with normal skin grain |
