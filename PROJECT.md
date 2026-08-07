@@ -1276,3 +1276,27 @@ criterion, found the threshold had HELD (sheen covering mid-forehead and alar
 creases as a region, not convexities), and correctly did not re-grade. That is
 the behaviour the rule was written for — verify, then act on the finding, rather
 than flip labels to hit a band.
+
+### 2026-08-01 — clinician spot-check priorities, in order
+
+Not yet done, and it gates any PWA export. Ranked by where the annotator's own
+threshold is most likely wrong, which is a better ordering than by column size:
+
+1. **`pores` — the viewing gate.** Standing at ~1-2% present. The gate says
+   "assess fit-to-screen, never zoom", written so a 48MP phone and a 5MP phone
+   produce the same label. But fit-to-screen on a 3000px whole-head portrait
+   shows the face far larger than it appears at 1 m, so the two halves of the
+   rule disagree, and annotators have been resolving it conservatively — calling
+   `absent` and flagging uncertain. One labeller volunteered this as the column
+   where its threshold is most likely wrong. If the clinician calls those faces
+   `present`, `pores` is being systematically under-called and the gate needs a
+   stated viewing size, not a stated distance.
+2. **`oiliness`** — flash-lit clinical captures. The light-geometry rule holds up
+   on inspection (sheen crossing mid-forehead and alar creases, not just
+   convexities) but five annotators flagged it and the residual rate stays high.
+3. **`pigmentation`** — brown-macule-vs-red-lesion separation on acne corpora.
+   One labeller caught its own drift here and re-graded a whole unit; the rule
+   works but is the hardest to apply.
+
+Method per §7.2: clinician grades ~20 per attribute WITHOUT seeing the AI labels,
+then compare. Poor agreement means fix the rubric, never raise the threshold.
