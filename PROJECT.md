@@ -945,7 +945,7 @@ Labelling the 11.3k unlabelled corpus is now agent-driven:
 
 Run a batch: dispatch `face-labeller` with paths + JSONL out, then
 `.venv/bin/python -m ai.training.dimension.materialize <batch>.jsonl`.
-last Claude session: 2026-08-02 01:26
+last Claude session: 2026-08-07 16:48
 
 ### 2026-08-01 — two bugs found before the first materialize
 
@@ -1190,3 +1190,40 @@ to mean it. texture passes at 0.32. The rest have no verdict yet.
 Open question this raises: `_multi`'s redness enrichment is structural, so that
 column may never balance on its own. The fix is either capping positives per
 source or holding clinic scans out for eval — decide when the counts are real.
+
+### 2026-08-01 — oiliness: five labellers, one mechanism, one clarification
+
+`oiliness` was flagged by five independent annotators. I left it alone twice on
+the grounds that 49-55% present is a usable split — trainability was never the
+problem. What finally forced the change was a different number: **138 of 303
+assessments flagged `uncertain`** (46%), and two reports of annotators drifting
+and self-correcting WITHIN a single unit ("records 1-13 have a looser oiliness
+threshold than 14-25"). A rule that ambiguous costs half its data and produces
+files holding two thresholds.
+
+The annotators supplied the discriminator themselves: *"highlights sit only on
+brow ridge, nose and lip convexities under one hard source; cheeks matte."*
+So — the same anatomy-vs-light test that fixed `under-eye`, inverted:
+
+    hard flash lights CONVEXITIES and skips the flats between them
+    sebum covers the T-zone as a REGION, flats included, with a glossy/matte
+    boundary at the cheeks
+
+This **sharpens the existing rule rather than moving it** — "broad confluent
+sheen over a zone" already excluded brow-ridge-only highlights; annotators were
+applying it inconsistently. Existing `present` calls made on genuine T-zone sheen
+stay valid, so no re-label. Misapplied ones are mostly already `uncertain` and
+excluded from training anyway.
+
+Also added: when the 20-in-a-row self-check fires, **re-grade the images already
+done in that batch**. Tightening from image 14 leaves one file holding two
+thresholds, which is worse than either applied consistently.
+
+Standing at 378 quality-ok records: oiliness 55% present, redness 58%,
+pigmentation 63%. **88 confidently acne-clear faces (23%)** — the §6 clear-skin
+shortfall is being filled, slowly.
+
+Corpus composition is the persistent confound and ordering cannot fix it: three
+of the seven corpora are acne datasets, so any balanced sample is acne-heavy, and
+`pigmentation` runs high because post-inflammatory macules are a genuine acne
+sequela. The source-balance guard is what catches the downstream damage.
