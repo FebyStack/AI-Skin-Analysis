@@ -116,6 +116,12 @@ scoring normal anatomy — re-read its Decision Rule before the next image.
 | `severe` | Widespread inflammatory lesions, some nodules |
 | `very-severe` | Extensive nodulocystic involvement, visible scarring |
 
+**A partial crop can support a positive acne grade but never `clear`.** Lesions
+you can see are evidence; `clear` asserts their absence across zones the frame
+does not show. Same asymmetry for the binary dimensions — `present` needs one
+qualifying finding, `absent` needs to have looked everywhere it could hide. When
+the frame is partial, grade what is visible and omit the rest.
+
 | `skintype` | criterion |
 |---|---|
 | `normal` | Even surface, no marked shine, no flaking |

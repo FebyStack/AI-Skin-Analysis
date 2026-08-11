@@ -86,6 +86,12 @@ backend and the row is silently lost.
 | `severe` | Widespread inflammatory lesions, some nodules. |
 | `very-severe` | Extensive nodulocystic involvement, visible scarring. |
 
+**A partial crop can support a positive acne grade but never `clear`.** Lesions
+you can see are evidence; `clear` asserts their absence across zones the frame
+does not show. The same asymmetry governs the binary dimensions — `present`
+needs one qualifying finding, `absent` needs to have looked everywhere it could
+hide. On a partial frame, grade what is visible and omit the rest.
+
 ### 4.2 `skintype` — 4 categories (not ordered)
 
     normal · oily · dry · combination
