@@ -1325,3 +1325,35 @@ killa92 is 4016 of 10675 images but supplies only 4% of redness positives and 1%
 of negatives, because just 693 images are labelled so far. As it fills in it
 should carry both classes and dilute the enrichment. Re-measure at ~2000 records
 before considering per-source caps.
+
+### 2026-08-11 — a prefilter for unlabelable images: tried, measured, abandoned
+
+**The problem is real.** Quality-rejection rate by source, over 743 records:
+
+    multi        52%  (not-a-face 34, occluded 24, blurry 8)   -> ~1933 of 3749
+    killa92      48%  (occluded 26, blurry 26, dark 4)         -> ~1913 of 4016
+    acne04 8% · acne04full 4% · acnegrading 2% · skindefects 1% · botox 0%
+
+That projects to **3955 unlabelable images, ~158 of 400 remaining annotator
+units** spent producing empty records.
+
+**The fix does not work.** A screen built on `frontend/public/models/face_landmarker.task`
+(already in the repo — no download) was validated against the 743 records whose
+quality is already known, stratified 80 unlabelable / 80 gradeable:
+
+    face detection + blur   precision 65%  recall 51%   22/80 gradeable wrongly dropped
+    face detection only     precision 74%  recall 49%   14/80 gradeable wrongly dropped
+
+A 17-27% false-positive rate DELETES gradeable data, which is worse than the
+waste it was meant to remove — the annotator's own quality gate already handles
+these correctly, it just costs time. Module deleted rather than left half-working
+or tuned until the metric flattered it.
+
+**Why it fails, so nobody repeats it:** MediaPipe's landmarker wants a whole head.
+Much of this corpus is legitimately tight facial crops — acne04 close-ups,
+_multi single-zone frames — which annotators grade without difficulty. Absence of
+a detected face does not imply ungradeable here, so the signal the filter depends
+on is simply not valid on this data.
+
+If revisited: the honest lever is corpus curation (drop `_multi`'s macro-crop
+subfolders wholesale after inspecting them), not a per-image classifier.
