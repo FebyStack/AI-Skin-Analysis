@@ -945,7 +945,7 @@ Labelling the 11.3k unlabelled corpus is now agent-driven:
 
 Run a batch: dispatch `face-labeller` with paths + JSONL out, then
 `.venv/bin/python -m ai.training.dimension.materialize <batch>.jsonl`.
-last Claude session: 2026-08-07 16:48
+last Claude session: 2026-08-11 15:24
 
 ### 2026-08-01 — two bugs found before the first materialize
 
@@ -1300,3 +1300,28 @@ threshold is most likely wrong, which is a better ordering than by column size:
 
 Method per §7.2: clinician grades ~20 per attribute WITHOUT seeing the AI labels,
 then compare. Poor agreement means fix the rubric, never raise the threshold.
+
+### 2026-08-11 — a correct rubric fix made the source confound worse
+
+The acne-independence rule (perilesional erythema -> `acne`, not `redness`) is
+clinically right and it cost something. Acne corpora now yield almost only
+`redness: absent`, so every positive concentrates in the redness-curated sources.
+`redness` TVD went 0.31 (passing) -> **0.436 (blocked)** between 562 and 718
+records:
+
+    present  n=104   multi 26%  skindefects 26%  acne04full 16%  acne04 15%
+    absent   n=168   acnegrading 37%  acne04full 23%  acne04 20%  multi 3%
+
+`multi` supplies 26% of positives against 3% of negatives — 8.7x enrichment.
+
+**The labels are correct and the dataset is still confounded.** A model cannot
+separate "this face has erythema" from "this photo came from the Redness folder"
+when the two coincide. That distinction is worth holding onto: label quality and
+dataset validity are different problems, and fixing the first can worsen the
+second.
+
+Do NOT respond by loosening the rubric back. The remedy is neutral-source data:
+killa92 is 4016 of 10675 images but supplies only 4% of redness positives and 1%
+of negatives, because just 693 images are labelled so far. As it fills in it
+should carry both classes and dilute the enrichment. Re-measure at ~2000 records
+before considering per-source caps.
