@@ -3,7 +3,7 @@ import { goldenFaceReport } from "./testing/face-fixtures";
 import { describe, it, expect } from "vitest";
 import {
   FACE_ANGLES, FACE_DIMENSIONS, FACE_ANALYSIS_ZONES,
-  validateFaceReport,
+  validateFaceReport, markErrors, parseManualPoints, MAX_MARKS, type FindingMark,
 } from "./face";
 
 describe("face contract", () => {
@@ -24,5 +24,32 @@ describe("face contract", () => {
     const g = goldenFaceReport();
     g.overall.score = 1.5;
     expect(validateFaceReport(g).ok).toBe(false);
+  });
+});
+
+const box = (over: Partial<FindingMark> = {}): FindingMark => ({
+  kind: "acne", angle: "front", shape: { type: "box", x: 0.2, y: 0.3, w: 0.05, h: 0.05 },
+  confidence: 0.8, source: "model", ...over,
+});
+
+describe("finding marks", () => {
+  it("accepts reports without marks, with empty marks, and with valid marks", () => {
+    expect(validateFaceReport(goldenFaceReport()).ok).toBe(true);
+    expect(validateFaceReport({ ...goldenFaceReport(), marks: [] }).ok).toBe(true);
+    expect(validateFaceReport({ ...goldenFaceReport(), marks: [box()] }).ok).toBe(true);
+  });
+  it("rejects boxes outside the image, unknown kinds and angles, bad confidence", () => {
+    expect(markErrors([box({ shape: { type: "box", x: 0.98, y: 0.1, w: 0.05, h: 0.05 } })])).toHaveLength(1);
+    expect(markErrors([box({ kind: "freckle" as never })])).toHaveLength(1);
+    expect(markErrors([box({ angle: "back" as never })])).toHaveLength(1);
+    expect(validateFaceReport({ ...goldenFaceReport(), marks: [box({ confidence: 2 })] }).ok).toBe(false);
+  });
+  it("caps the number of marks", () => {
+    expect(markErrors(Array.from({ length: MAX_MARKS + 1 }, () => box()))).toEqual([`at most ${MAX_MARKS} marks`]);
+  });
+  it("parses staff points strictly", () => {
+    expect(parseManualPoints([{ kind: "acne", x: 0.5, y: 0.5 }])).toEqual([{ kind: "acne", x: 0.5, y: 0.5 }]);
+    expect(parseManualPoints([{ kind: "acne", x: 1.5, y: 0.5 }])).toBeNull();
+    expect(parseManualPoints("x")).toBeNull();
   });
 });
