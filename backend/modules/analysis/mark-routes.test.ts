@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
 import request from "supertest";
 import sharp from "sharp";
+import { mkdtempSync, readFileSync, existsSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { createApp } from "../../app/app";
 import { makeTestDeps } from "../../shared/testing";
 import { goldenFaceReport } from "../../../shared/testing/face-fixtures";
@@ -51,5 +54,30 @@ describe("manual marks", () => {
     const res = await request(app).put(`/api/face-scans/${scanId}/images/front/marks`)
       .set("Cookie", claimed.headers["set-cookie"][0]).send({ points: [] });
     expect(res.status).toBe(403);
+  });
+});
+
+describe("localization exam export", () => {
+  it("writes each marked photo with staff points and the model's saved predictions", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "loc-exam-"));
+    process.env.DATASETS_DIR = dir;
+    try {
+      const report: FaceReport = {
+        ...goldenFaceReport(),
+        marks: [{ kind: "acne", angle: "front", confidence: 0.9, source: "model", shape: { type: "box", x: 0.3, y: 0.4, w: 0.1, h: 0.1 } }],
+      };
+      const { app, cookie, scanId } = await setupMarkedScan(report);
+      await request(app).put(`/api/face-scans/${scanId}/images/front/marks`).set("Cookie", cookie)
+        .send({ points: [{ kind: "acne", x: 0.35, y: 0.45 }] });
+      const res = await request(app).post("/api/localization-exam/export").set("Cookie", cookie);
+      expect(res.body.exported).toBe(1);
+      const out = path.join(dir, "localization", "clinic");
+      expect(existsSync(path.join(out, `${scanId}_front.jpg`))).toBe(true);
+      const line = JSON.parse(readFileSync(path.join(out, "marks.jsonl"), "utf8").trim());
+      expect(line.points).toEqual([{ kind: "acne", x: 0.35, y: 0.45 }]);
+      expect(line.predictions).toEqual([{ x: 0.3, y: 0.4, w: 0.1, h: 0.1, confidence: 0.9 }]);
+    } finally {
+      delete process.env.DATASETS_DIR;
+    }
   });
 });

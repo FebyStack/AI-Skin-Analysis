@@ -44,6 +44,8 @@ export interface FaceScanImage {
   createdAt: number;
 }
 
+export interface MarkedImage { scanId: string; angle: string; points: ManualPoint[]; capture: CaptureInfo | null }
+
 export interface ScanRepo {
   create(s: Omit<ScanRecord, "id" | "createdAt">): Promise<ScanRecord>;
   get(id: string): Promise<ScanRecord | null>;
@@ -60,6 +62,7 @@ export interface ScanRepo {
   getScanImage(scanId: string, angle: string): Promise<{ jpeg: Uint8Array } | null>;
   /** Staff ground-truth taps for one image. False when the image does not exist. */
   setManualMarks(scanId: string, angle: string, points: ManualPoint[]): Promise<boolean>;
+  listManuallyMarked(): Promise<MarkedImage[]>;
 
   // Clinician labels → training data for learned analyzers (Track 2).
   setLabel(scanId: string, dimension: string, label: string, labeledBy?: string | null): Promise<boolean>;
@@ -271,6 +274,11 @@ export class MemoryScanRepo implements ScanRepo {
     if (!img) return false;
     img.manualMarks = points;
     return true;
+  }
+  async listManuallyMarked(): Promise<MarkedImage[]> {
+    return [...this.imagesByScan.values()].flat()
+      .filter((i) => i.manualMarks?.length && !this.archived.has(this.key(i.scanId, i.angle)))
+      .map((i) => ({ scanId: i.scanId, angle: i.angle, points: i.manualMarks ?? [], capture: i.capture ?? null }));
   }
 
   private labels = new Map<string, Map<string, string>>(); // scanId → dimension → label
@@ -704,6 +712,20 @@ export class PgScanRepo implements ScanRepo {
       [scanId, angle, JSON.stringify(points)],
     );
     return (r.rowCount ?? 0) > 0;
+  }
+
+  async listManuallyMarked(): Promise<MarkedImage[]> {
+    const { rows } = await this.pool.query(
+      `SELECT scan_id, angle, manual_marks, capture FROM scan_images
+       WHERE manual_marks IS NOT NULL AND jsonb_array_length(manual_marks) > 0 AND archived_at IS NULL
+       ORDER BY created_at`,
+    );
+    return rows.map((r) => ({
+      scanId: String(r.scan_id),
+      angle: String(r.angle),
+      points: (r.manual_marks as ManualPoint[]) ?? [],
+      capture: (r.capture as CaptureInfo | null) ?? null,
+    }));
   }
 
   async setLabel(scanId: string, dimension: string, label: string, labeledBy?: string | null): Promise<boolean> {
