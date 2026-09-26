@@ -5,6 +5,7 @@ import { makeAnalyzeFrame, FACE_MODEL_VERSIONS } from "./frame-adapter";
 import { FaceReportView } from "../results/FaceReportView";
 import { ReportBoundary } from "../results/ReportBoundary";
 import { FindingOverlay } from "../results/FindingOverlay";
+import { Boundary } from "../ui/Boundary";
 import { saveFaceScanWithFallback } from "../../pwa/save-flow";
 import { HistoryView } from "../history/HistoryView";
 import { ScanLabelControl } from "../patients/ScanLabelControl";
@@ -23,9 +24,10 @@ import {
   faceFraction,
 } from "@ai/face/quality/validate";
 import type { FaceGeometry, Pixels } from "@ai/face/types";
-import { FACE_ANGLES, type FaceReport, type FaceAngle, type FindingMark } from "@shared/face";
+import { FACE_ANGLES, type FaceReport, type FaceAngle } from "@shared/face";
 import { faceRect, cropForDetector } from "./face-rect";
 import { detectAcne, DETECTOR_VERSION } from "@ai/face/analyzers/acne-detector";
+import { detectAngles } from "@ai/face/analyzers/detect-angles";
 import { captureInfo } from "./capture-info";
 import { FaceRejectedError, type CapturedAngle } from "../../api/face-client";
 import { SILHOUETTE_YAW_RATIO, maskPaths, outerPathD, svgGuide } from "./phi-mask";
@@ -200,18 +202,23 @@ export function GuidedFaceFlow({ isInvite = false }: { isInvite?: boolean }) {
     }
   }, [holdStreak, view, scan.busy, captureNow]);
 
-  // Photo URLs for the overlay on the result screen; revoked when replaced or unmounted.
-  const resultImages = useMemo(
-    () =>
-      view === "result"
-        ? FACE_ANGLES.flatMap((a) => {
-            const blob = capturedByAngle.current.get(a);
-            return blob ? [{ angle: a, url: URL.createObjectURL(blob) }] : [];
-          })
-        : [],
-    [view],
-  );
-  useEffect(() => () => resultImages.forEach((i) => URL.revokeObjectURL(i.url)), [resultImages]);
+  // Photo URLs for the overlay on the result screen; revoked when replaced or
+  // unmounted. Created inside the effect (not useMemo, which must stay pure) —
+  // StrictMode double-invokes an effect+cleanup pair safely, but would leak a
+  // blob URL from a factory run twice with no matching cleanup.
+  const [resultImages, setResultImages] = useState<{ angle: FaceAngle; url: string }[]>([]);
+  useEffect(() => {
+    if (view !== "result") {
+      setResultImages([]);
+      return;
+    }
+    const images = FACE_ANGLES.flatMap((a) => {
+      const blob = capturedByAngle.current.get(a);
+      return blob ? [{ angle: a, url: URL.createObjectURL(blob) }] : [];
+    });
+    setResultImages(images);
+    return () => images.forEach((i) => URL.revokeObjectURL(i.url));
+  }, [view]);
 
   // When the pipeline finishes, save (local + server) and switch to result view.
   useEffect(() => {
@@ -255,26 +262,26 @@ export function GuidedFaceFlow({ isInvite = false }: { isInvite?: boolean }) {
 
       // Acne pinpoints for the staff overlay: crop → detect → release, one angle at a
       // time, so only one 640px crop is alive (iOS memory). `null` = no detector shipped,
-      // no face geometry on any angle, or too slow — the report then carries no `marks`.
+      // no face angle examined, or too slow — the report then carries no `marks`.
       const detected = await withTimeout(
-        (async () => {
-          let all: FindingMark[] | null = null;
-          for (const a of FACE_ANGLES) {
+        detectAngles(
+          FACE_ANGLES.flatMap((a) => {
             const blob = capturedByAngle.current.get(a);
-            if (!blob) continue;
-            const input = await cropForDetector(blob, geometryByAngle.current.get(a) ?? null, a);
-            if (!input) continue;
-            const marks = await detectAcne([input]);
-            if (marks === null) return null;
-            all = [...(all ?? []), ...marks];
-          }
-          return all;
-        })(),
+            return blob ? [{ angle: a, crop: () => cropForDetector(blob, geometryByAngle.current.get(a) ?? null, a) }] : [];
+          }),
+          detectAcne,
+          Date.now() + REFINE_TIMEOUT_MS,
+        ),
         REFINE_TIMEOUT_MS,
         null,
       );
       if (detected !== null) {
-        report = { ...report, marks: detected, modelVersions: { ...report.modelVersions, acneMarks: DETECTOR_VERSION } };
+        report = {
+          ...report,
+          marks: detected.marks,
+          markedAngles: detected.examined,
+          modelVersions: { ...report.modelVersions, acneMarks: DETECTOR_VERSION },
+        };
       }
 
       try {
@@ -374,7 +381,9 @@ export function GuidedFaceFlow({ isInvite = false }: { isInvite?: boolean }) {
           <FaceReportView report={saved} />
         </ReportBoundary>
         {(!isInvite || PINPOINTS_FOR_PATIENTS) && saved.marks !== undefined ? (
-          <FindingOverlay report={saved} images={resultImages} />
+          <Boundary fallback={null}>
+            <FindingOverlay report={saved} images={resultImages} />
+          </Boundary>
         ) : null}
         {savedScanId && !isInvite && (
           <>

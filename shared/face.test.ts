@@ -52,4 +52,28 @@ describe("finding marks", () => {
     expect(parseManualPoints([{ kind: "acne", x: 1.5, y: 0.5 }])).toBeNull();
     expect(parseManualPoints("x")).toBeNull();
   });
+  it("caps polygon vertices at 256", () => {
+    const okPolygon = Array.from({ length: 256 }, (_, i) => [i / 300, 0.1] as [number, number]);
+    expect(markErrors([box({ shape: { type: "area", polygon: okPolygon } })])).toEqual([]);
+    const tooMany = [...okPolygon, [0.99, 0.1] as [number, number]];
+    expect(markErrors([box({ shape: { type: "area", polygon: tooMany } })])).toHaveLength(1);
+  });
+});
+
+describe("markedAngles", () => {
+  it("accepts a report where every mark's angle was examined", () => {
+    const r = { ...goldenFaceReport(), marks: [box()], markedAngles: ["front"] as const };
+    expect(validateFaceReport(r).ok).toBe(true);
+  });
+  it("rejects duplicate or unknown angles", () => {
+    expect(validateFaceReport({ ...goldenFaceReport(), markedAngles: ["front", "front"] }).ok).toBe(false);
+    expect(validateFaceReport({ ...goldenFaceReport(), markedAngles: ["back"] }).ok).toBe(false);
+  });
+  it("rejects a mark whose angle was not examined", () => {
+    const r = { ...goldenFaceReport(), marks: [box({ angle: "left-45" })], markedAngles: ["front"] };
+    expect(validateFaceReport(r).ok).toBe(false);
+  });
+  it("is absent-safe (older reports never set it)", () => {
+    expect(validateFaceReport({ ...goldenFaceReport(), marks: [box()] }).ok).toBe(true);
+  });
 });

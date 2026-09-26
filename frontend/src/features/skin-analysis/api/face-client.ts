@@ -86,7 +86,10 @@ export async function saveFaceScan(
     body: JSON.stringify({ report, images, patientId, consent: scanConsent() }),
   });
   if (res.status === 401) throw new FaceAuthError();
-  if (res.status === 403 || res.status === 409) {
+  if (res.status >= 400 && res.status < 500) {
+    // Every 4xx here is permanent: a malformed/oversized report (400), an
+    // invite-state refusal (403), or a race (409). None will ever succeed on
+    // retry, so save-flow must never queue it as "offline, will sync later".
     const body = (await res.json().catch(() => ({}))) as { error?: string; inviteState?: string };
     throw new FaceRejectedError(
       body.error ?? "This scan was not accepted.",

@@ -9,6 +9,13 @@ describe("detectAcne without a shipped model", () => {
     vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("offline"); }));
     expect(await detectAcne([])).toBeNull();
   });
+  it("retries the probe on a later call instead of caching the failure forever", async () => {
+    const fetchMock = vi.fn(async () => { throw new Error("offline"); });
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await detectAcne([])).toBeNull();
+    expect(await detectAcne([])).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe("acne detector geometry", () => {

@@ -38,12 +38,13 @@ export async function cropForDetector(
 ): Promise<DetectorInput | null> {
   if (!geometry) return null;
   let bmp: ImageBitmap | null = null;
+  let canvas: HTMLCanvasElement | null = null;
   try {
     bmp = await createImageBitmap(blob);
     const rect = faceRect(geometry, bmp.width, bmp.height);
     if (rect.w < 32 || rect.h < 32) return null;
     const scale = DETECTOR_SIZE / Math.max(rect.w, rect.h);
-    const canvas = document.createElement("canvas");
+    canvas = document.createElement("canvas");
     canvas.width = Math.round(rect.w * scale);
     canvas.height = Math.round(rect.h * scale);
     const ctx = canvas.getContext("2d");
@@ -56,5 +57,11 @@ export async function cropForDetector(
     return null;
   } finally {
     bmp?.close();
+    // iOS reaches its canvas memory ceiling sooner at 1080p — release promptly
+    // rather than waiting on GC.
+    if (canvas) {
+      canvas.width = 0;
+      canvas.height = 0;
+    }
   }
 }

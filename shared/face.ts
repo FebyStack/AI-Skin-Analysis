@@ -130,6 +130,8 @@ export interface FaceReport {
   modelVersions: Record<string, string>;
   /** Where findings are, per captured angle. Present (maybe empty) only when a locator ran. */
   marks?: FindingMark[];
+  /** Angles the locator examined; absent on reports saved before this field existed. */
+  markedAngles?: FaceAngle[];
 }
 
 const in01 = (n: unknown): n is number => typeof n === "number" && n >= 0 && n <= 1 && !Number.isNaN(n);
@@ -139,8 +141,10 @@ function validBox(s: Record<string, unknown>): boolean {
   return in01(x) && in01(y) && in01(w) && in01(h) && w > 0 && h > 0 && x + w <= 1 + 1e-6 && y + h <= 1 + 1e-6;
 }
 
+const MAX_POLYGON_VERTICES = 256;
+
 function validPolygon(p: unknown): boolean {
-  return Array.isArray(p) && p.length >= 3
+  return Array.isArray(p) && p.length >= 3 && p.length <= MAX_POLYGON_VERTICES
     && p.every((pt) => Array.isArray(pt) && pt.length === 2 && in01(pt[0]) && in01(pt[1]));
 }
 
@@ -199,5 +203,15 @@ export function validateFaceReport(x: unknown): { ok: true; report: FaceReport }
     if (!SKIN_TYPES.includes(st.type as SkinType) || !in01(st.confidence)) errors.push("skinType malformed");
   }
   if (r.marks !== undefined) errors.push(...markErrors(r.marks));
+  if (r.markedAngles !== undefined) {
+    const ma = r.markedAngles;
+    const okAngles =
+      Array.isArray(ma) && ma.every((a) => FACE_ANGLES.includes(a as FaceAngle)) && new Set(ma).size === ma.length;
+    if (!okAngles) {
+      errors.push("markedAngles malformed");
+    } else if (Array.isArray(r.marks) && !r.marks.every((m) => ma.includes((m as { angle?: unknown }).angle))) {
+      errors.push("a mark's angle is not in markedAngles");
+    }
+  }
   return errors.length === 0 ? { ok: true, report: x as FaceReport } : { ok: false, errors };
 }

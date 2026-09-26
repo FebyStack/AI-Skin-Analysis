@@ -92,6 +92,10 @@ type OrtSession = import("onnxruntime-web").InferenceSession;
 let sessionPromise: Promise<OrtSession | null> | null = null;
 
 export function ensureAcneDetector(): Promise<OrtSession | null> {
+  // A null result (offline probe, model not shipped yet) must not be cached for
+  // the page's lifetime — a later retry (network back, model dropped in) has to
+  // see it. Only a resolved session is kept; resetting happens before the
+  // caller's await returns, so the next call always sees a clean slate.
   sessionPromise ??= (async () => {
     try {
       const probe = await fetch(DETECTOR_URL, { method: "HEAD" });
@@ -105,16 +109,27 @@ export function ensureAcneDetector(): Promise<OrtSession | null> {
     } catch {
       return null; // not shipped yet, or unreadable
     }
-  })();
+  })().then((session) => {
+    if (!session) sessionPromise = null;
+    return session;
+  });
   return sessionPromise;
 }
 
-/** Acne marks for the inputs, one view at a time (iOS memory). Null = no detector. Never throws. */
-export async function detectAcne(inputs: DetectorInput[]): Promise<FindingMark[] | null> {
+export interface DetectionResult { marks: FindingMark[]; examined: FaceAngle[] }
+
+/**
+ * Acne marks for the inputs, one view at a time (iOS memory). Null = no detector
+ * shipped. Never throws: a view whose `session.run` fails is simply left out of
+ * `examined` — "marks present = detector ran" must hold per angle, not just
+ * for the scan as a whole.
+ */
+export async function detectAcne(inputs: DetectorInput[]): Promise<DetectionResult | null> {
   const session = await ensureAcneDetector();
   if (!session) return null;
   const ort = await import("onnxruntime-web");
   const marks: FindingMark[] = [];
+  const examined: FaceAngle[] = [];
   for (const input of inputs) {
     try {
       shadesOfGrey(input.crop); // before padding, as in training
@@ -122,9 +137,10 @@ export async function detectAcne(inputs: DetectorInput[]): Promise<FindingMark[]
       const tensor = new ort.Tensor("float32", toTensorData(input.crop, lb), [1, 3, SIZE, SIZE]);
       const out = await session.run({ [session.inputNames[0]]: tensor });
       marks.push(...rowsToMarks(out[session.outputNames[0]].data as Float32Array, input, lb));
+      examined.push(input.angle);
     } catch {
-      /* skip this view */
+      /* skip this view — NOT examined */
     }
   }
-  return marks;
+  return { marks, examined };
 }
