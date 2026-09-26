@@ -55,3 +55,12 @@ def test_main_writes_one_class_tree_and_a_split_manifest(tmp_path, monkeypatch):
     manifest = json.loads((out / "split_manifest.json").read_text())
     assert len(manifest["sha256"]) == 64
     assert manifest["images"] == sorted(p.name for p in (out / "images" / "test").glob("*.jpg"))
+
+
+def test_main_refuses_a_nonempty_out(tmp_path, capsys):
+    raw, out = tmp_path / "raw", tmp_path / "out"
+    out.mkdir()
+    (out / "stale.txt").write_text("leftover from a previous run")
+    assert bad.main([str(raw), str(out)]) == 1
+    assert "non-empty" in capsys.readouterr().err
+    assert [p.name for p in out.iterdir()] == ["stale.txt"]  # left untouched

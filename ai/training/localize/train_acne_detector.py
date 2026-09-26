@@ -53,6 +53,8 @@ def main(argv: list[str] | None = None) -> int:
     shutil.move(onnx, OUT / "model.onnx")
     (OUT / "model.json").write_text(json.dumps(model_json(version, metrics), indent=2))
     print(f"{version}: {metrics} -> {OUT}")
+    print("If this candidate replaces a shipped model, bump CACHE_V in frontend/public/sw.js "
+          "and rebuild — installed PWAs cache /models/* cache-first and would otherwise keep the old one.")
     return 0
 
 

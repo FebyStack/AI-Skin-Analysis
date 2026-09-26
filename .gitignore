@@ -58,6 +58,7 @@ node_modules.nosync/
 ai/models/**/progress.json
 ai/models/**/history.jsonl
 ai/models/runs/
+ai/models/acne-detector/runs/
 
 # Normalized training corpora (regenerable: python -m ai.training.normalize_corpus)
 ai/datasets-512/

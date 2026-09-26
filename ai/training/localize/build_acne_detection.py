@@ -92,6 +92,9 @@ def split_manifest(out: Path) -> dict:
 
 def main(argv: list[str]) -> int:
     *raws, out = [Path(a) for a in argv]
+    if out.exists() and any(out.iterdir()):
+        print(f"refusing to write into non-empty OUT: {out}", file=sys.stderr)
+        return 1
     excluded = frozen_exclusions()
     counts = {"train": 0, "val": 0, "test": 0}
     for k, raw in enumerate(raws):
