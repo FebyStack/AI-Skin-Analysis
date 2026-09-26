@@ -10,7 +10,7 @@ Full old→new mapping + rationale: `docs/migration/2026-07-10-hybrid-architectu
 
 - `frontend/` — React SPA (vite root). Feature slice: `frontend/src/features/skin-analysis/`.
 - `backend/` — Express. `modules/{auth,patients,analysis,capture,settings}` (routes + service + repository each), `middleware/`, `app/app.ts` (composition root), `server/index.ts` (Postgres entry) + `index-lite.ts` (in-memory, no Docker). `dashboard/reports/comparison/dataset/training` are empty skeletons for future work.
-- `ai/` — `llm/` (pipeline, prompts, guardrails, critique, Gemini provider), `classifier/` + `shared/` (pure browser ML: classifier, labels, quality, verdict, derived-views), `evaluation/fixtures/` (golden report), `training/` (dummy-model generator), `models/` (registry doc — served ONNX lives in `frontend/public/models/`).
+- `ai/` — `llm/` (pipeline, prompts, guardrails, critique, Gemini provider), `classifier/` + `shared/` (pure browser ML: classifier, labels, quality, verdict, derived-views), `evaluation/fixtures/` (golden report), `training/` (training + ONNX export; `transforms.py` is the single preprocessing source), `models/` (registry doc — served ONNX lives in `frontend/public/models/`).
 - `shared/` — `contract.ts` (single wire contract — the old frontend mirror was deleted after byte-identical verification) + `types.ts` (domain types; feature barrel re-exports them).
 - `database/` — `schema/schema.sql` (self-applied on api boot, idempotent), `backups/` (make backup target).
 - `infrastructure/docker/` — Dockerfile (+`Dockerfile.dockerignore`), compose files (**project name pinned `skinanalysis`** to keep the pre-migration `skinanalysis_skin_data` volume), nginx.conf. Root `Makefile` delegates with `-f … --env-file .env`.
@@ -51,7 +51,7 @@ Plans 1–4 executed and merged. Plan 5 (results/report UI) + Plan 6 (patients/h
 - jsdom polyfills in `frontend/src/test/setup.ts` are load-bearing (broken localStorage, no Blob.text/Worker; `window` guard for node-env test files). Don't delete.
 - `vite.config.ts` `worker.format: "es"` is required by onnxruntime-web.
 - Docker: `Dockerfile.dockerignore` must exclude `.venv` (torch venv at repo root) and node_modules or `COPY . .` breaks native binaries; server bundle is CJS → `dist-server/index.cjs`; pg restore needs `--clean --if-exists` (schema self-applies on boot).
-- Root debris awaiting Febriel's call: `hello.test.ts`, `test-db.js`, `vitest.min.config.ts` (vitest-hang debugging leftovers, committed in a5920b5); committed 8.8MB `frontend/public/models/skin-classifier.onnx.data`.
+- `node_modules` is a real dir inside iCloud again (it was a symlink to `~/skin-analysis-deps/node_modules`, see 2026-07-21). On 2026-09-21 ~90% of it was evicted and in-repo vitest / `npm run verify` stalled on reads. Check `find node_modules -type f -flags +dataless | wc -l` before blaming the harness.
 
 ## Process (for continuity)
 
@@ -945,7 +945,79 @@ Labelling the 11.3k unlabelled corpus is now agent-driven:
 
 Run a batch: dispatch `face-labeller` with paths + JSONL out, then
 `.venv/bin/python -m ai.training.dimension.materialize <batch>.jsonl`.
-last Claude session: 2026-08-11 15:24
+## 2026-09-22 — repo moved off iCloud
+
+**The repo now lives at `~/Developer/Skin analysis`.** On the iCloud-synced Desktop, macOS "Optimize Mac
+Storage" evicted images, source, `.git` (4,436 files) and `node_modules` (15k+); training stalled 99.7% in
+`read()`, `git status` took minutes, and vitest hung. `~/Developer` is not iCloud-managed.
+
+Move notes: copied (not moved) and verified file-by-file — rsync silently timed out on iCloud files in all
+three passes and lost 9,024, including 292 clinic scans; all recovered from the SSD copy and the Desktop
+original with retries (`/tmp/repair_copy.py` pattern). Dataset symlinks (11,739) are now **relative**.
+Venv scripts repointed (53). `npm ci` reinstalled node_modules. Verified in the new location:
+`npm run verify` 383 tests + build, `pytest ai/training` 82 tests.
+The Desktop copy is a fallback until deleted. `refs/heads/main 2` is a real branch (`c10adb44`) whose name
+contains a space — rename it rather than delete: `git branch -m "main 2" recovered-main-2026`.
+
+## 2026-09-21 — public-dataset retrain, frozen exam, datasets moved to SSD
+
+**Where data lives now** (Desktop is iCloud-synced; macOS evicted the images and training stalled on
+`read()` — see Obsidian "iCloud Eviction Stalls Training"):
+- `/Volumes/PortableSSD/Bong/skin-datasets/` — originals + `raw/kaggle_*` (each has `LICENSE_NOTE.txt`)
+- `/Volumes/PortableSSD/Bong/skin-datasets-512/` — normalized corpus; train with
+  `DATASETS_DIR=/Volumes/PortableSSD/Bong/skin-datasets-512`
+- `/Volumes/PortableSSD/Bong/model-checkpoints/` — baseline, run1–run4
+- Local mirrors must be `.nosync` (`ai/datasets-512.nosync`, `ai/datasets-hybrid.nosync`) or iCloud evicts them.
+- SSD is exFAT, 1 MB clusters, USB 2.0 hub (41 MB/s); macOS writes `._*` sidecars → loaders now skip dotfiles.
+
+**Code** (uncommitted): `train_multi.py` keeps the best-val checkpoint (was last epoch), cosine LR,
+`--frozen-test`; `normalize_corpus.py` (longest side 512, JPEG q92, verified writes); `freeze_test.py` +
+`frozen_test.json` (985 exam images: 849 acne/skintype + 136 clinic dimension scans — never train on
+them); `ingest_public.py` (dedup by pHash **and** `subject_group` — pHash alone missed 2,461 copies);
+`ingest_ageing.py`.
+
+**Results on the frozen exam (acne macro-F1 / skintype):** run1 normalized 0.708/0.320 · run2 +326
+manithj 0.719/0.285 · run3 +ageing dims 0.712/0.301 · run4 original acne photos 0.747–0.762/0.287.
+The Jul 31 baseline cannot be re-scored — it trained on ~70% of today's exam; only its logged val
+(0.786/0.328) is honest. **Candidate = run2**: smallest clear-skin shortcut gap (killa92 vs clinic
+recall 99.3/97.7% vs run4 96.7/90.7%, baseline 93.3/81.4%).
+
+**Findings:** ACNE04 full added 0 images (`acnegrading` *is* ACNE04, renamed/resized); manithj was
+mostly re-augmented killa92; public "facial skin ageing" heads scored 0.98–0.99 on their own data and
+0.30–0.43 on clinic scans (flagged most clinic faces "present") → not shipped. Skintype is ~0.3 in every
+run: the signal is not in a single photo. Next lever is clinic photos (acne moderate/severe: 1/0).
+
+## 2026-09-21 — lesion classifier preprocessing now matches training
+
+- `ai/classifier/classifier.ts` `preprocess()` was nearest-neighbour + RGB/255 (0..1); training/serving
+  is `serve_transforms()` (cv2-bilinear `A.Resize` + ImageNet mean/std). Now exported and matching:
+  ≤1.4 grey levels vs the real `serve_transforms()` (old code: 128–173 off). `classifier.test.ts` pins
+  `MODEL_INPUT_SIZE`/`NORM` to `transforms.py` and checks a cv2 golden row. Contract in
+  `frontend/public/models/README.md`: export the bare network; the browser normalises.
+- Provenance: `/models/skin-classifier.onnx` came from `generate_dummy_model.py` (deleted 2026-07-11) —
+  random-weight MobileNetV2, 13 outputs, no normalisation in the graph (regenerated + inspected with
+  `onnx`; its `.onnx.data` size matched the old committed blob exactly). The file exists nowhere now and
+  `useClassifier()` has no callers, so nothing runs this path yet — the fix is for the real model.
+- cv2 5.0 on this Mac resizes via KleidiCV, which rounds ±1 per row: bit-exact parity is impossible.
+- `npm run verify` green (381 tests) in a scratch mirror on `~/skin-analysis-deps` — see the
+  `node_modules` gotcha.
+
+## 2026-09-22 — face export: in-graph colour constancy made exact
+
+- Models trained with `preprocess.color_constancy: true` get `shades_of_gray` **inside the exported
+  ONNX** (`ColorConstancyInGraph`, `ai/training/multi/export_onnx.py`). `face-model.ts` must NOT apply
+  it as well — that would correct twice.
+- Fixed: the wrapper skipped `shades_of_gray`'s `.astype(np.uint8)` truncation, so its output ran
+  0.3–0.5 grey levels bright. Now `round()` on un-normalise + `floor()` after → exact. Pinned by
+  `ai/training/tests/test_export_color_constancy.py` against the real `serve_transforms(color_constancy=True)`.
+  On 19 photos vs training: old export max |Δprob| 0.025, fixed 0.0002, no argmax flips.
+- **UNSHIPPED:** the served `frontend/public/models/face/model.onnx` (face-20260921-131341, exported
+  2026-09-21 22:19) predates the fix. Re-export: `.venv/bin/python -m ai.training.multi.export_onnx
+  --drop-task skintype` (then rebuild if serving `dist/`).
+- iCloud now evicts source too (disk 94% full): empty `__init__.py`s went dataless and in-repo pytest
+  stalled on import. Verified in a scratch copy of the test's import closure.
+
+last Claude session: 2026-09-22 00:29
 
 ### 2026-08-01 — two bugs found before the first materialize
 
