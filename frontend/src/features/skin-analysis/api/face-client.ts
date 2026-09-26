@@ -1,4 +1,4 @@
-import type { FaceReport, FaceAngle, AngleQuality } from "@shared/face";
+import type { FaceReport, FaceAngle, AngleQuality, CaptureInfo } from "@shared/face";
 import { scanConsent } from "../privacy/scan-consent";
 
 export class FaceAuthError extends Error {
@@ -49,6 +49,7 @@ export interface CapturedAngle {
   blob: Blob;
   mime: string;
   quality?: AngleQuality;
+  capture?: CaptureInfo;
 }
 
 type FetchFn = (url: string, init?: RequestInit) => Promise<Response>;
@@ -75,6 +76,7 @@ export async function saveFaceScan(
       image: await blobToBase64(a.blob),
       mime: a.mime,
       quality: a.quality,
+      capture: a.capture,
     })),
   );
   const res = await fetchFn("/api/face-scans", {

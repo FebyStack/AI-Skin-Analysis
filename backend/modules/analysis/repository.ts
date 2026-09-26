@@ -1,3 +1,4 @@
+import type { CaptureInfo } from "../../../shared/face";
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import type { AnalysisReport } from "../../../shared/contract";
@@ -38,6 +39,7 @@ export interface FaceScanImage {
   imageWidth: number;
   imageHeight: number;
   quality: unknown;
+  capture?: CaptureInfo | null;
   createdAt: number;
 }
 
@@ -560,6 +562,7 @@ function rowToScanImage(r: Record<string, unknown>): FaceScanImage {
     imageWidth: Number(r.image_width),
     imageHeight: Number(r.image_height),
     quality: (r.quality as unknown) ?? {},
+    capture: (r.capture as CaptureInfo | null) ?? null,
     createdAt: new Date(r.created_at as string).getTime(),
   };
 }
@@ -644,9 +647,10 @@ export class PgScanRepo implements ScanRepo {
       const out: FaceScanImage[] = [];
       for (const i of imgs) {
         const { rows } = await client.query(
-          `INSERT INTO scan_images (scan_id, angle, image_jpeg, image_width, image_height, quality)
-           VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-          [scanId, i.angle, Buffer.from(i.imageJpeg), i.imageWidth, i.imageHeight, JSON.stringify(i.quality)],
+          `INSERT INTO scan_images (scan_id, angle, image_jpeg, image_width, image_height, quality, capture)
+           VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+          [scanId, i.angle, Buffer.from(i.imageJpeg), i.imageWidth, i.imageHeight, JSON.stringify(i.quality),
+           i.capture ? JSON.stringify(i.capture) : null],
         );
         out.push(rowToScanImage(rows[0]));
       }

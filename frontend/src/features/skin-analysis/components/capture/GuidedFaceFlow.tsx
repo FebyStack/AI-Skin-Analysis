@@ -23,6 +23,7 @@ import {
 } from "@ai/face/quality/validate";
 import type { FaceGeometry, Pixels } from "@ai/face/types";
 import { FACE_ANGLES, type FaceReport, type FaceAngle } from "@shared/face";
+import { captureInfo } from "./capture-info";
 import { FaceRejectedError, type CapturedAngle } from "../../api/face-client";
 import { SILHOUETTE_YAW_RATIO, maskPaths, outerPathD, svgGuide } from "./phi-mask";
 import { useEasedYaw } from "./use-eased-yaw";
@@ -220,9 +221,11 @@ export function GuidedFaceFlow({ isInvite = false }: { isInvite?: boolean }) {
     (async () => {
       setView("saving");
       const angles: CapturedAngle[] = [];
+      const video = camera.videoRef.current;
+      const capture = video ? captureInfo(video) : undefined;
       for (const a of FACE_ANGLES) {
         const blob = capturedByAngle.current.get(a);
-        if (blob) angles.push({ angle: a, blob, mime: "image/jpeg" });
+        if (blob) angles.push({ angle: a, blob, mime: "image/jpeg", capture });
       }
       // Learned models refine acne + skin type when their ONNX is present
       // (offline-safe: no model → deterministic report unchanged). Every

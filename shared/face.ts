@@ -63,6 +63,19 @@ export interface QualityMetrics {
 
 export interface AngleQuality { ok: boolean; issues: string[]; metrics?: QualityMetrics }
 
+/**
+ * Which device and camera took a photo, so model accuracy can be checked per device
+ * as clinic hardware and lighting change. Deliberately coarse: iOS never exposes the
+ * exact model to a web page, so `device` is a staff-assigned name (may be "").
+ */
+export interface CaptureInfo {
+  device: string;   // e.g. "Clinic iPad 1" — localStorage "clinic-device-name"
+  platform: string; // e.g. "iPhone iOS 17.5", from the user agent
+  camera: string;   // track label or facing mode, e.g. "Front Camera"
+  width: number;    // actual capture resolution
+  height: number;
+}
+
 export interface FaceExplanation {
   patientSummary: string;
   education: string;
