@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { listImagesFor } from "../../pwa/local-store";
 import { FACE_DIMENSIONS, type FaceReport } from "@shared/face";
+import { FindingOverlay } from "../results/FindingOverlay";
 
 export interface HistoryRef {
   id: string;
@@ -115,6 +116,8 @@ export function FaceHistoryDetail({ scan, previous }: { scan: HistoryRef; previo
       ) : (
         <p className="text-xs text-ink-tertiary">No images available for this scan.</p>
       )}
+
+      {report?.marks !== undefined ? <FindingOverlay report={report} images={images} /> : null}
 
       {/* Results */}
       {report && (

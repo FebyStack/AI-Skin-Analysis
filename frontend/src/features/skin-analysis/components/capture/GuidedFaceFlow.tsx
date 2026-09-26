@@ -4,6 +4,7 @@ import { useFaceScan } from "../../hooks/use-face-scan";
 import { makeAnalyzeFrame, FACE_MODEL_VERSIONS } from "./frame-adapter";
 import { FaceReportView } from "../results/FaceReportView";
 import { ReportBoundary } from "../results/ReportBoundary";
+import { FindingOverlay } from "../results/FindingOverlay";
 import { saveFaceScanWithFallback } from "../../pwa/save-flow";
 import { HistoryView } from "../history/HistoryView";
 import { ScanLabelControl } from "../patients/ScanLabelControl";
@@ -66,6 +67,9 @@ const MODEL_INPUT = 224;
 // inferences can be very slow, and a stall left the UI stuck on "Saving your
 // scan…". Cap it and save the deterministic report instead.
 const REFINE_TIMEOUT_MS = Number(import.meta.env?.VITE_REFINE_TIMEOUT_MS ?? "20000");
+
+// Pinpoints are staff-only until the clinic localization exam passes (spec §6.3).
+const PINPOINTS_FOR_PATIENTS = import.meta.env?.VITE_PINPOINTS_FOR_PATIENTS === "true";
 
 function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
   return new Promise((resolve) => {
@@ -195,6 +199,19 @@ export function GuidedFaceFlow({ isInvite = false }: { isInvite?: boolean }) {
       void captureNow();
     }
   }, [holdStreak, view, scan.busy, captureNow]);
+
+  // Photo URLs for the overlay on the result screen; revoked when replaced or unmounted.
+  const resultImages = useMemo(
+    () =>
+      view === "result"
+        ? FACE_ANGLES.flatMap((a) => {
+            const blob = capturedByAngle.current.get(a);
+            return blob ? [{ angle: a, url: URL.createObjectURL(blob) }] : [];
+          })
+        : [],
+    [view],
+  );
+  useEffect(() => () => resultImages.forEach((i) => URL.revokeObjectURL(i.url)), [resultImages]);
 
   // When the pipeline finishes, save (local + server) and switch to result view.
   useEffect(() => {
@@ -356,6 +373,9 @@ export function GuidedFaceFlow({ isInvite = false }: { isInvite?: boolean }) {
         <ReportBoundary onViewHistory={isInvite ? undefined : () => setView("history")}>
           <FaceReportView report={saved} />
         </ReportBoundary>
+        {(!isInvite || PINPOINTS_FOR_PATIENTS) && saved.marks !== undefined ? (
+          <FindingOverlay report={saved} images={resultImages} />
+        ) : null}
         {savedScanId && !isInvite && (
           <>
             <ScanLabelControl scanId={savedScanId} dimension="acne" title="Clinician acne grade" labels={ACNE_CLASSES} />
