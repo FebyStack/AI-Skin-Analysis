@@ -12,8 +12,9 @@ def shades_of_gray(img: np.ndarray, p: int = 6) -> np.ndarray:
     per-channel p-norm and divide it out. A grey illuminant is left unchanged.
 
     Measured 2026-09-21 on the frozen exam: room-light colour alone changed 16-19% of acne
-    grades. Runs at 224px, after resize and before Normalize, so the browser port
-    (ai/face/analyzers/face-model.ts) can apply it at the same point.
+    grades. Runs at 224px, after resize and before Normalize. The browser does NOT apply
+    it: multi/export_onnx.py bakes it into the graph (ColorConstancyInGraph), pinned to
+    this function by tests/test_export_color_constancy.py.
     """
     x = img.astype(np.float32)
     illum = np.power(np.mean(np.power(x, p), axis=(0, 1)), 1.0 / p)

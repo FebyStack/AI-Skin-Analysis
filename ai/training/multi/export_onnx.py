@@ -38,10 +38,12 @@ class ColorConstancyInGraph(torch.nn.Module):
         self.register_buffer("std", torch.tensor(NORM["std"]).view(1, 3, 1, 1))
 
     def forward(self, x: torch.Tensor):
-        rgb = (x * self.std + self.mean).clamp(0, 1) * 255
+        # round(): recover the PWA's exact uint8 pixels. floor(): shades_of_gray truncates
+        # via .astype(np.uint8) — without it the output ran 0.3-0.5 grey levels bright.
+        rgb = ((x * self.std + self.mean) * 255).round().clamp(0, 255)
         illum = rgb.pow(self.p).mean(dim=(2, 3), keepdim=True).pow(1.0 / self.p)
         illum = illum / (illum.pow(2).sum(dim=1, keepdim=True).sqrt() + 1e-6)
-        rgb = (rgb / (illum * 3 ** 0.5)).clamp(0, 255)
+        rgb = (rgb / (illum * 3 ** 0.5)).clamp(0, 255).floor()
         return self.net((rgb / 255 - self.mean) / self.std)
 
 
@@ -116,7 +118,9 @@ def main() -> int:
     (dest / "model.json").write_text(json.dumps(meta, indent=2))
     print(f"exported {meta['version']} → {onnx_path} "
           f"({onnx_path.stat().st_size // 1_000_000} MB), outputs: {names}")
-    print("Browser picks it up at /models/face/model.onnx on next load.")
+    if dest.resolve() == DEST.resolve():
+        print("Dev server serves it on next load. Installed PWAs cache /models/* cache-first: bump "
+              "CACHE_V in frontend/public/sw.js, then rebuild — otherwise they keep the old model.")
     return 0
 
 
