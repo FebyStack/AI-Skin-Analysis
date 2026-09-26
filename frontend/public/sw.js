@@ -7,7 +7,7 @@
 // Bump CACHE_V whenever the shell, assets or any /models/* file change (exports overwrite
 // models in place, so installed PWAs never see a new one otherwise) → old caches purged on activate.
 
-const CACHE_V = "skin-v3";
+const CACHE_V = "skin-v4";
 const SHELL_CACHE = `${CACHE_V}-shell`;
 const MODEL_CACHE = `${CACHE_V}-models`;
 const ASSET_CACHE = `${CACHE_V}-assets`;

@@ -39,8 +39,9 @@ def main(argv: list[str] | None = None) -> int:
 
     model = YOLO(str(BASE))
     # Mild colour augmentation only: redness is part of the signal (see ai/training/transforms.py).
+    # Absolute: ultralytics joins a relative project onto its global runs_dir (not this repo).
     model.train(data=args.data, imgsz=640, epochs=args.epochs, patience=15, batch=16, device="mps",
-                hsv_h=0.0, hsv_s=0.3, hsv_v=0.3, project="ai/models/acne-detector/runs", name=version)
+                hsv_h=0.0, hsv_s=0.3, hsv_v=0.3, project=str(Path("ai/models/acne-detector/runs").resolve()), name=version)
     weights = Path(model.trainer.save_dir) / "weights" / "best.pt"
     best = YOLO(str(weights))
     m = best.val(data=args.data, split="test", imgsz=640, verbose=False)
