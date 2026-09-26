@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { FindingOverlay } from "./FindingOverlay";
 import { goldenFaceReport } from "@shared/testing/face-fixtures";
-import type { FindingMark } from "@shared/face";
+import type { FaceReport, FindingMark } from "@shared/face";
 
 const mark = (angle: "front" | "left-45", x: number): FindingMark => ({
   kind: "acne", angle, confidence: 0.9, source: "model", shape: { type: "box", x, y: 0.4, w: 0.02, h: 0.02 },
@@ -32,5 +32,21 @@ describe("FindingOverlay", () => {
   it("says so when the detector ran and found nothing on a photo", () => {
     render(<FindingOverlay report={{ ...goldenFaceReport(), marks: [] }} images={[{ angle: "front", url: "f.jpg" }]} />);
     expect(screen.getByText("No spots marked on this photo.")).toBeTruthy();
+  });
+
+  it("says an angle was never examined instead of claiming zero spots", () => {
+    const report: FaceReport = { ...goldenFaceReport(), marks: [], markedAngles: ["left-45"] };
+    render(<FindingOverlay report={report} images={[{ angle: "front", url: "f.jpg" }]} />);
+    expect(screen.getByText("Not examined for spots.")).toBeTruthy();
+    expect(screen.queryByText("No spots marked on this photo.")).toBeNull();
+  });
+
+  it("renders once images resolve after mount instead of staying blank forever", () => {
+    const report = { ...goldenFaceReport(), marks: [mark("front", 0.3)] };
+    const { rerender } = render(<FindingOverlay report={report} images={[]} />);
+    expect(screen.queryByRole("region", { name: "Finding locations" })).toBeNull();
+    rerender(<FindingOverlay report={report} images={[{ angle: "front", url: "f.jpg" }]} />);
+    expect(screen.getByRole("region", { name: "Finding locations" })).toBeTruthy();
+    expect(screen.getByAltText("front photo")).toBeTruthy();
   });
 });

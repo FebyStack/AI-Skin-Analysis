@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import type { FaceReport, MarkKind } from "@shared/face";
+import type { FaceAngle, FaceReport, MarkKind } from "@shared/face";
 
 const LABEL: Record<MarkKind, string> = {
   acne: "Acne spots", "dark-spot": "Dark spots", redness: "Redness", shine: "Shine",
@@ -9,16 +9,24 @@ const LABEL: Record<MarkKind, string> = {
 /** Staff view: the captured photos with each finding's position drawn on top. */
 export function FindingOverlay({ report, images }: { report: FaceReport; images: { angle: string; url: string }[] }) {
   const marks = report.marks ?? [];
-  const [angle, setAngle] = useState(
-    () => images.find((i) => marks.some((m) => m.angle === i.angle))?.angle ?? images[0]?.angle,
-  );
+  const markedAngles = report.markedAngles;
+  const [angle, setAngle] = useState<string | undefined>(undefined);
   const [hidden, setHidden] = useState<Set<MarkKind>>(new Set());
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
   const kinds = useMemo(() => [...new Set(marks.map((m) => m.kind))], [marks]);
-  const image = images.find((i) => i.angle === angle);
+
+  // Recomputed every render rather than a lazy useState initialiser: `images`
+  // resolves asynchronously (history), so a selection made while images was
+  // still empty must recover once they arrive, not stay stuck on `undefined`.
+  const active = images.some((i) => i.angle === angle)
+    ? angle
+    : (images.find((i) => marks.some((m) => m.angle === i.angle))?.angle ?? images[0]?.angle);
+
+  const image = images.find((i) => i.angle === active);
   if (!image) return null;
-  const here = marks.filter((m) => m.angle === angle);
+  const here = marks.filter((m) => m.angle === active);
   const shown = here.filter((m) => !hidden.has(m.kind));
+  const examined = markedAngles === undefined || markedAngles.includes(active as FaceAngle);
 
   const toggle = (k: MarkKind) =>
     setHidden((h) => {
@@ -41,9 +49,9 @@ export function FindingOverlay({ report, images }: { report: FaceReport; images:
             <button
               key={i.angle}
               type="button"
-              aria-pressed={i.angle === angle}
+              aria-pressed={i.angle === active}
               onClick={() => { setAngle(i.angle); setSize(null); }}
-              className={`min-h-[32px] px-3 text-xs ${i.angle === angle ? "btn-primary" : "btn-secondary"}`}
+              className={`min-h-[32px] px-3 text-xs ${i.angle === active ? "btn-primary" : "btn-secondary"}`}
             >
               {i.angle}
             </button>
@@ -82,7 +90,9 @@ export function FindingOverlay({ report, images }: { report: FaceReport; images:
       </div>
 
       {here.length === 0 ? (
-        <p className="mt-3 text-xs text-ink-tertiary">No spots marked on this photo.</p>
+        <p className="mt-3 text-xs text-ink-tertiary">
+          {examined ? "No spots marked on this photo." : "Not examined for spots."}
+        </p>
       ) : (
         <ul className="mt-3 flex flex-wrap gap-2">
           {kinds.map((k) => (
