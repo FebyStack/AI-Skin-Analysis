@@ -53,7 +53,9 @@ export interface InferenceFn {
   (rgba: Uint8ClampedArray, width: number, height: number): Promise<number[]>;
 }
 
+// Must match IMG_SIZE and NORM in ai/training/transforms.py (pinned by classifier.test.ts).
 export const MODEL_INPUT_SIZE = 224;
+export const NORM = { mean: [0.485, 0.456, 0.406], std: [0.229, 0.224, 0.225] };
 export const CLASSIFIER_THRESHOLD = 0.3;
 
 // Model URL is configured at build time; a real DermNet/HAM10000-class ONNX
@@ -87,7 +89,8 @@ export async function createOnnxInference(modelUrl?: string): Promise<InferenceF
   });
 
   return async (rgba, width, height) => {
-    const tensor = preprocess(ort, rgba, width, height);
+    const size = MODEL_INPUT_SIZE;
+    const tensor = new ort.Tensor("float32", preprocess(rgba, width, height), [1, 3, size, size]);
     const inputName = session.inputNames[0];
     const outputName = session.outputNames[0];
     const result = await session.run({ [inputName]: tensor });
@@ -101,25 +104,34 @@ export async function createOnnxInference(modelUrl?: string): Promise<InferenceF
   };
 }
 
-// Nearest-neighbour resize to MODEL_INPUT_SIZE, NCHW float32, 0..1 normalised.
-function preprocess(
-  ort: typeof import("onnxruntime-web"),
-  rgba: Uint8ClampedArray,
-  width: number,
-  height: number,
-) {
+// RGBA → NCHW float32, reproducing serve_transforms() (default, no colour
+// constancy): A.Resize is cv2 bilinear with pixel-centre alignment, then
+// A.Normalize. The exported graph is the bare network — it does not normalise.
+export function preprocess(rgba: Uint8ClampedArray, width: number, height: number): Float32Array {
   const size = MODEL_INPUT_SIZE;
-  const chw = new Float32Array(3 * size * size);
+  const plane = size * size;
+  const out = new Float32Array(3 * plane);
   for (let y = 0; y < size; y++) {
+    const fy = Math.min(Math.max((y + 0.5) * (height / size) - 0.5, 0), height - 1);
+    const y0 = Math.floor(fy);
+    const y1 = Math.min(y0 + 1, height - 1);
+    const wy = fy - y0;
     for (let x = 0; x < size; x++) {
-      const sx = Math.floor((x / size) * width);
-      const sy = Math.floor((y / size) * height);
-      const si = (sy * width + sx) * 4;
-      const di = y * size + x;
-      chw[di] = rgba[si] / 255;
-      chw[size * size + di] = rgba[si + 1] / 255;
-      chw[2 * size * size + di] = rgba[si + 2] / 255;
+      const fx = Math.min(Math.max((x + 0.5) * (width / size) - 0.5, 0), width - 1);
+      const x0 = Math.floor(fx);
+      const x1 = Math.min(x0 + 1, width - 1);
+      const wx = fx - x0;
+      const i00 = (y0 * width + x0) * 4;
+      const i01 = (y0 * width + x1) * 4;
+      const i10 = (y1 * width + x0) * 4;
+      const i11 = (y1 * width + x1) * 4;
+      for (let c = 0; c < 3; c++) {
+        const top = rgba[i00 + c] + (rgba[i01 + c] - rgba[i00 + c]) * wx;
+        const bottom = rgba[i10 + c] + (rgba[i11 + c] - rgba[i10 + c]) * wx;
+        const v = top + (bottom - top) * wy;
+        out[c * plane + y * size + x] = (v / 255 - NORM.mean[c]) / NORM.std[c];
+      }
     }
   }
-  return new ort.Tensor("float32", chw, [1, 3, size, size]);
+  return out;
 }
