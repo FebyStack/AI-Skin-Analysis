@@ -35,7 +35,7 @@ def rows_from_folders(source: str) -> list[dict]:
         if label is None:
             continue
         for img in label_dir.iterdir():
-            if img.suffix.lower() in IMG_EXTS:
+            if img.suffix.lower() in IMG_EXTS and not img.name.startswith("."):
                 rows.append({"path": str(img), "label": label, "group": subject_group(img.stem)})
     return rows
 

@@ -2,7 +2,7 @@
 
 Run in a normal terminal (torch import hangs under some sandboxed shells):
 
-    cd "/Users/febrielotud/Desktop/Skin analysis"
+    cd <repo root>
     .venv/bin/python -m ai.inference.verify_sam
 
 Requires the vendored clone installed: `cd MobileSAM && pip install -e .`

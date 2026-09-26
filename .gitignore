@@ -58,3 +58,8 @@ node_modules.nosync/
 ai/models/**/progress.json
 ai/models/**/history.jsonl
 ai/models/runs/
+
+# Normalized training corpora (regenerable: python -m ai.training.normalize_corpus)
+ai/datasets-512/
+ai/datasets-512.nosync/
+ai/datasets-hybrid.nosync/
