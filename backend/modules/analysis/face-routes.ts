@@ -209,7 +209,13 @@ export function createFaceScanRoutes(deps: AppDeps, auth: RequestHandler): Route
     }
     const { imageJpeg: _img, ...rest } = scan;
     const angles = await deps.scans.listImages(scan.id);
-    res.json({ scan: rest, angles });
+    // Manual marks are staff-only ground truth (spec: "pinpoints are staff-only") — an
+    // invite session must never see them, even for the scan it created itself.
+    const safeAngles =
+      req.session?.role === "invite"
+        ? angles.map(({ manualMarks: _mm, ...a }) => a)
+        : angles;
+    res.json({ scan: rest, angles: safeAngles });
   });
 
   router.get("/api/face-scans/:id/images/:angle", auth, async (req, res) => {

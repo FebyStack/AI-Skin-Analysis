@@ -30,6 +30,13 @@ def match(points: list[dict], predictions: list[dict]) -> int:
     return hits
 
 
+def group_by(rows: list[dict], key: str) -> dict[str, list[dict]]:
+    groups: dict[str, list[dict]] = defaultdict(list)
+    for r in rows:
+        groups[r.get(key, "unknown")].append(r)
+    return groups
+
+
 def score(rows: list[dict]) -> dict:
     points = sum(len(r["points"]) for r in rows)
     predictions = sum(len(r["predictions"]) for r in rows)
@@ -48,12 +55,19 @@ def main(argv: list[str]) -> int:
     s = score(rows)
     print(f"overall  photos={s['photos']}  recall={s['recall']:.2f}  precision={s['precision']:.2f}  "
           f"count error={s['count_mae']:.2f}")
-    by_device: dict[str, list[dict]] = defaultdict(list)
-    for r in rows:
-        by_device[r.get("device", "unknown")].append(r)
-    for device, rs in sorted(by_device.items()):
+    for device, rs in sorted(group_by(rows, "device").items()):
         d = score(rs)
         print(f"  {device:24} photos={d['photos']}  recall={d['recall']:.2f}  precision={d['precision']:.2f}")
+    models = group_by(rows, "model")
+    for model, rs in sorted(models.items()):
+        m = score(rs)
+        print(f"  model={model:24} photos={m['photos']}  recall={m['recall']:.2f}  precision={m['precision']:.2f}")
+    if len(models) > 1:
+        # A "locked exam" score is only meaningful for one detector at a time — mixing
+        # versions would let an old model's easy wins hide a new model's regressions.
+        print(f"NOT YET — rows come from {len(models)} different detector models; "
+              "re-export from a single model version to score it")
+        return 0
     passed = s["photos"] >= MIN_PHOTOS and s["recall"] >= MIN_RECALL and s["precision"] >= MIN_PRECISION
     print("PASS — may be shown to patients" if passed
           else f"NOT YET — needs >= {MIN_PHOTOS} photos with recall and precision >= {MIN_RECALL:.2f}")
