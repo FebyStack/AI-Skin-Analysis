@@ -5,8 +5,9 @@ export function cameraConstraints(mode: CaptureMode): MediaStreamConstraints {
   return {
     video: {
       facingMode: mode === "face" ? "user" : "environment",
-      width: { ideal: 1280 },
-      height: { ideal: 720 },
+      // 1080p for face scans: at 720p a small lesion spans only a few pixels.
+      width: { ideal: mode === "face" ? 1920 : 1280 },
+      height: { ideal: mode === "face" ? 1080 : 720 },
     },
     audio: false,
   };

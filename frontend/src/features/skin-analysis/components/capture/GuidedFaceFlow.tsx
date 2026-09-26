@@ -22,7 +22,9 @@ import {
   faceFraction,
 } from "@ai/face/quality/validate";
 import type { FaceGeometry, Pixels } from "@ai/face/types";
-import { FACE_ANGLES, type FaceReport, type FaceAngle } from "@shared/face";
+import { FACE_ANGLES, type FaceReport, type FaceAngle, type FindingMark } from "@shared/face";
+import { faceRect, cropForDetector } from "./face-rect";
+import { detectAcne, DETECTOR_VERSION } from "@ai/face/analyzers/acne-detector";
 import { captureInfo } from "./capture-info";
 import { FaceRejectedError, type CapturedAngle } from "../../api/face-client";
 import { SILHOUETTE_YAW_RATIO, maskPaths, outerPathD, svgGuide } from "./phi-mask";
@@ -39,27 +41,6 @@ const CHECK_MS = 350;
 const HOLD_CHECKS = 5;        // ~1.75s of CONTINUOUS good pose
 const ARM_DELAY_MS = 1000;    // grace after each step appears, to read + get set
 const CENTER_MAX = 0.32;      // face must be near frame centre, not just facing it
-
-// Face bbox (pixel coords, 15% margin) from normalized MediaPipe landmarks.
-function faceRect(g: FaceGeometry, w: number, h: number) {
-  let minX = 1, minY = 1, maxX = 0, maxY = 0;
-  for (const l of g.landmarks) {
-    if (l.x < minX) minX = l.x;
-    if (l.y < minY) minY = l.y;
-    if (l.x > maxX) maxX = l.x;
-    if (l.y > maxY) maxY = l.y;
-  }
-  const mx = (maxX - minX) * 0.15;
-  const my = (maxY - minY) * 0.15;
-  const x = Math.max(0, Math.floor((minX - mx) * w));
-  const y = Math.max(0, Math.floor((minY - my) * h));
-  return {
-    x,
-    y,
-    w: Math.min(w, Math.ceil((maxX + mx) * w)) - x,
-    h: Math.min(h, Math.ceil((maxY + my) * h)) - y,
-  };
-}
 
 // Grab the current video frame as a JPEG blob (persisted to Postgres + IndexedDB).
 async function frameToJpeg(video: HTMLVideoElement | null): Promise<Blob | null> {
@@ -253,6 +234,30 @@ export function GuidedFaceFlow({ isInvite = false }: { isInvite?: boolean }) {
           REFINE_TIMEOUT_MS,
           base, // too slow → save the deterministic report rather than hang
         );
+      }
+
+      // Acne pinpoints for the staff overlay: crop → detect → release, one angle at a
+      // time, so only one 640px crop is alive (iOS memory). `null` = no detector shipped,
+      // no face geometry on any angle, or too slow — the report then carries no `marks`.
+      const detected = await withTimeout(
+        (async () => {
+          let all: FindingMark[] | null = null;
+          for (const a of FACE_ANGLES) {
+            const blob = capturedByAngle.current.get(a);
+            if (!blob) continue;
+            const input = await cropForDetector(blob, geometryByAngle.current.get(a) ?? null, a);
+            if (!input) continue;
+            const marks = await detectAcne([input]);
+            if (marks === null) return null;
+            all = [...(all ?? []), ...marks];
+          }
+          return all;
+        })(),
+        REFINE_TIMEOUT_MS,
+        null,
+      );
+      if (detected !== null) {
+        report = { ...report, marks: detected, modelVersions: { ...report.modelVersions, acneMarks: DETECTOR_VERSION } };
       }
 
       try {

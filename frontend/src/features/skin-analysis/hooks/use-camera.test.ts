@@ -11,6 +11,11 @@ describe("cameraConstraints", () => {
       facingMode: "environment",
     });
   });
+
+  it("asks for 1080p on face scans so small lesions span enough pixels", () => {
+    expect(cameraConstraints("face").video).toMatchObject({ width: { ideal: 1920 }, height: { ideal: 1080 } });
+    expect(cameraConstraints("closeup").video).toMatchObject({ width: { ideal: 1280 }, height: { ideal: 720 } });
+  });
 });
 
 describe("isSecureContextForCamera", () => {
