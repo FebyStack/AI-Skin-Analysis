@@ -945,7 +945,7 @@ Labelling the 11.3k unlabelled corpus is now agent-driven:
 
 Run a batch: dispatch `face-labeller` with paths + JSONL out, then
 `.venv/bin/python -m ai.training.dimension.materialize <batch>.jsonl`.
-## 2026-09-27 — finding pinpoints, Phase 1 (branch `feat/finding-pinpoints`, not pushed)
+## 2026-09-27 — finding pinpoints, Phase 1 (merged locally into `design/sev-clinic-dark-gold`; PR #5)
 
 Staff see a circle on each detected acne spot per photo angle, with a per-angle count ("Where findings
 are"); patients don't (`VITE_PINPOINTS_FOR_PATIENTS` off). Spec
@@ -994,8 +994,8 @@ original with retries (`/tmp/repair_copy.py` pattern). Dataset symlinks (11,739)
 Venv scripts repointed (53). `npm ci` reinstalled node_modules. Verified in the new location:
 `npm run verify` 383 tests + build, `pytest ai/training` 82 tests.
 The Desktop copy was moved to the Trash on 2026-09-27 (empty it to reclaim ~0.8 GB); ultralytics'
-global `runs_dir`/`weights_dir` now point at `ai/models/acne-detector/{runs,weights}`. `refs/heads/main 2` is a real branch (`c10adb44`) whose name
-contains a space — rename it rather than delete: `git branch -m "main 2" recovered-main-2026`.
+global `runs_dir`/`weights_dir` now point at `ai/models/acne-detector/{runs,weights}`. The branch `main 2` (`c10adb44`;
+the space in its name broke `git fetch`) was renamed to `recovered-main-2026` on 2026-09-27.
 
 ## 2026-09-21 — public-dataset retrain, frozen exam, datasets moved to SSD
 
