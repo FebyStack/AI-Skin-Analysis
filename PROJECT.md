@@ -958,7 +958,8 @@ are"); patients don't (`VITE_PINPOINTS_FOR_PATIENTS` off). Spec
   `ai/models/acne-detector/runs/` (gitignored).
 - **Scored like the clinic exam** (box centres as taps, `eval_marks.score`): cut-off 0.35 → recall 0.15 /
   precision 0.79 (ACNE04 whole-face subset: recall 0.01); **0.15 → 0.50 / 0.61, best F1**; 0.10 →
-  0.69 / 0.39. The cut-off is `VITE_ACNE_BOX_MIN_CONF` (spec default 0.35) — **decision pending**.
+  0.69 / 0.39. **Febriel chose 0.15** (2026-09-27): default of `VITE_ACNE_BOX_MIN_CONF` in
+  `acne-detector.ts` (spec had 0.35). The export's NMS floor is 0.10 — lower needs a re-export.
 - **Browser parity verified:** TS preprocessing = Python (≤ 1/255), onnxruntime-web rows = Python
   onnxruntime (≤ 6e-5), final marks vs ultralytics IoU 0.99.
 - **Patient bar:** ≥ 50 tap-marked clinic photos, recall and precision ≥ 0.70
@@ -973,10 +974,11 @@ are"); patients don't (`VITE_PINPOINTS_FOR_PATIENTS` off). Spec
   640×640 stretch (need a retrain, M12/M13); history overlay lacks a `Boundary`; MarkSpots error copy
   on save-only failure; Postgres SQL tests need a DB.
 
-**Next:** (1) decide the cut-off; (2) live checks — staff scan shows "Where findings are"; a private
-scan link shows none; Queue → Mark spots → Save; export from the staff console
+**Next:** (1) live checks — staff scan shows "Where findings are"; a private scan link shows none;
+Queue → Mark spots → Save; export from the staff console
 `await (await fetch("/api/localization-exam/export", { method: "POST" })).json()`; run `eval_marks`;
-3 iPad scans at 1080p; (3) merge decision; (4) collect ≥ 50 tap-marked clinic photos. Biggest model
+3 iPad scans at 1080p; (2) review/merge the GitHub PR into `design/sev-clinic-dark-gold` (already merged
+locally); (3) collect ≥ 50 tap-marked clinic photos. Biggest model
 lever after that: higher-resolution lesion data (tiles) or clinic-marked training photos kept apart
 from the exam.
 

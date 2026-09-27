@@ -107,7 +107,7 @@ Assembly script (`ai/training/localize/build_acne_detection.py`):
   model → no marks, report unchanged).
 - Per captured angle, sequentially (iOS memory): crop the face rect from the full-resolution frame (the
   existing `faceRect`, 15% margin) → resize so the longer side is 640 → Shades-of-Grey on the crop → pad
-  to 640×640 with grey 114 → run → keep boxes with confidence ≥ `VITE_ACNE_BOX_MIN_CONF` (default 0.35) →
+  to 640×640 with grey 114 → run → keep boxes with confidence ≥ `VITE_ACNE_BOX_MIN_CONF` (default 0.15; was 0.35 until the 2026-09-27 public-test sweep) →
   map back to normalised full-frame coordinates. Shades-of-Grey runs **before** padding so the grey border
   cannot skew the illuminant estimate — matching training, where it runs on whole images.
 - NMS in the exported graph (`nms=True`, verified on ultralytics 8.4.92): output `output0` [1,300,6], rows

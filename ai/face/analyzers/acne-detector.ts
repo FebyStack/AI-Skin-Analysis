@@ -12,7 +12,9 @@ export const DETECTOR_URL =
 export const DETECTOR_VERSION = "yolo11n-acne";
 const SIZE = 640;
 const PAD = 114;
-const MIN_CONF = Number(import.meta.env?.VITE_ACNE_BOX_MIN_CONF ?? "0.35");
+// 0.15 = best F1 on the public test, scored like the clinic exam (PROJECT.md 2026-09-27);
+// at 0.35 the detector found 1% of lesions on whole-face photos. The export's NMS floor is 0.10.
+const MIN_CONF = Number(import.meta.env?.VITE_ACNE_BOX_MIN_CONF ?? "0.15");
 
 /** The face region of one captured frame, resized so its longer side is 640. */
 export interface DetectorInput {

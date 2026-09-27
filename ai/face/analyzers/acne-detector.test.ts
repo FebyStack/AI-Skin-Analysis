@@ -39,6 +39,13 @@ describe("acne detector geometry", () => {
     expect(rowsToMarks(new Float32Array([10, 10, 20, 20, 0.2, 0, 0, 0, 0, 0, 0, 0]), input, letterbox(640, 640), 0.35)).toEqual([]);
   });
 
+  it("defaults to the 0.15 cut-off (best F1 on the public test, 2026-09-27)", () => {
+    const input: DetectorInput = { angle: "front", crop: tiny, rect: { x: 0, y: 0, w: 640, h: 640 }, frame: { w: 640, h: 640 } };
+    const box = (score: number) => new Float32Array([10, 10, 20, 20, score, 0]);
+    expect(rowsToMarks(box(0.15), input, letterbox(640, 640))).toHaveLength(1);
+    expect(rowsToMarks(box(0.14), input, letterbox(640, 640))).toEqual([]);
+  });
+
   it("pads with ultralytics grey outside the crop", () => {
     const t = toTensorData({ data: new Uint8ClampedArray([255, 0, 0, 255]), width: 1, height: 1 }, { scale: 1, padX: 0, padY: 0 });
     expect(t[0]).toBe(1);
