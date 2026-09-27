@@ -1,12 +1,13 @@
 // Service worker for AI Skin Analysis PWA.
 // Strategies:
 //   /api/*        → network-only (auth-gated, never cached).
-//   /models/*     → cache-first (immutable ML task/weight files).
+//   /models/*     → cache-first (ML task/weight files).
 //   assets/*      → cache-first (Vite emits hashed filenames).
 //   navigations   → network-first, falling back to cached shell.
-// Bump CACHE_V whenever the shell/assets change → old caches purged on activate.
+// Bump CACHE_V whenever the shell, assets or any /models/* file change (exports overwrite
+// models in place, so installed PWAs never see a new one otherwise) → old caches purged on activate.
 
-const CACHE_V = "skin-v2";
+const CACHE_V = "skin-v4";
 const SHELL_CACHE = `${CACHE_V}-shell`;
 const MODEL_CACHE = `${CACHE_V}-models`;
 const ASSET_CACHE = `${CACHE_V}-assets`;

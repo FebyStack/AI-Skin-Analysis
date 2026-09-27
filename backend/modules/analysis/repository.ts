@@ -1,3 +1,4 @@
+import type { CaptureInfo, ManualPoint } from "../../../shared/face";
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import type { AnalysisReport } from "../../../shared/contract";
@@ -38,8 +39,12 @@ export interface FaceScanImage {
   imageWidth: number;
   imageHeight: number;
   quality: unknown;
+  capture?: CaptureInfo | null;
+  manualMarks?: ManualPoint[] | null;
   createdAt: number;
 }
+
+export interface MarkedImage { scanId: string; angle: string; points: ManualPoint[]; capture: CaptureInfo | null }
 
 export interface ScanRepo {
   create(s: Omit<ScanRecord, "id" | "createdAt">): Promise<ScanRecord>;
@@ -55,6 +60,9 @@ export interface ScanRepo {
   addImages(scanId: string, imgs: Omit<FaceScanImage, "id" | "scanId" | "createdAt">[]): Promise<FaceScanImage[]>;
   listImages(scanId: string): Promise<Omit<FaceScanImage, "imageJpeg">[]>;
   getScanImage(scanId: string, angle: string): Promise<{ jpeg: Uint8Array } | null>;
+  /** Staff ground-truth taps for one image. False when the image does not exist. */
+  setManualMarks(scanId: string, angle: string, points: ManualPoint[]): Promise<boolean>;
+  listManuallyMarked(): Promise<MarkedImage[]>;
 
   // Clinician labels → training data for learned analyzers (Track 2).
   setLabel(scanId: string, dimension: string, label: string, labeledBy?: string | null): Promise<boolean>;
@@ -259,6 +267,18 @@ export class MemoryScanRepo implements ScanRepo {
   async getScanImage(scanId: string, angle: string): Promise<{ jpeg: Uint8Array } | null> {
     const hit = (this.imagesByScan.get(scanId) ?? []).find((i) => i.angle === angle);
     return hit ? { jpeg: hit.imageJpeg } : null;
+  }
+  async setManualMarks(scanId: string, angle: string, points: ManualPoint[]): Promise<boolean> {
+    if (this.archived.has(this.key(scanId, angle))) return false;
+    const img = (this.imagesByScan.get(scanId) ?? []).find((i) => i.angle === angle);
+    if (!img) return false;
+    img.manualMarks = points;
+    return true;
+  }
+  async listManuallyMarked(): Promise<MarkedImage[]> {
+    return [...this.imagesByScan.values()].flat()
+      .filter((i) => i.manualMarks?.length && !this.archived.has(this.key(i.scanId, i.angle)))
+      .map((i) => ({ scanId: i.scanId, angle: i.angle, points: i.manualMarks ?? [], capture: i.capture ?? null }));
   }
 
   private labels = new Map<string, Map<string, string>>(); // scanId → dimension → label
@@ -560,6 +580,8 @@ function rowToScanImage(r: Record<string, unknown>): FaceScanImage {
     imageWidth: Number(r.image_width),
     imageHeight: Number(r.image_height),
     quality: (r.quality as unknown) ?? {},
+    capture: (r.capture as CaptureInfo | null) ?? null,
+    manualMarks: (r.manual_marks as ManualPoint[] | null) ?? null,
     createdAt: new Date(r.created_at as string).getTime(),
   };
 }
@@ -644,9 +666,10 @@ export class PgScanRepo implements ScanRepo {
       const out: FaceScanImage[] = [];
       for (const i of imgs) {
         const { rows } = await client.query(
-          `INSERT INTO scan_images (scan_id, angle, image_jpeg, image_width, image_height, quality)
-           VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-          [scanId, i.angle, Buffer.from(i.imageJpeg), i.imageWidth, i.imageHeight, JSON.stringify(i.quality)],
+          `INSERT INTO scan_images (scan_id, angle, image_jpeg, image_width, image_height, quality, capture)
+           VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+          [scanId, i.angle, Buffer.from(i.imageJpeg), i.imageWidth, i.imageHeight, JSON.stringify(i.quality),
+           i.capture ? JSON.stringify(i.capture) : null],
         );
         out.push(rowToScanImage(rows[0]));
       }
@@ -663,7 +686,7 @@ export class PgScanRepo implements ScanRepo {
   async listImages(scanId: string): Promise<Omit<FaceScanImage, "imageJpeg">[]> {
     if (!isValidUuid(scanId)) return [];
     const { rows } = await this.pool.query(
-      `SELECT id, scan_id, angle, image_width, image_height, quality, created_at
+      `SELECT id, scan_id, angle, image_width, image_height, quality, capture, manual_marks, created_at
        FROM scan_images WHERE scan_id = $1 AND archived_at IS NULL ORDER BY created_at`,
       [scanId],
     );
@@ -680,6 +703,29 @@ export class PgScanRepo implements ScanRepo {
       [scanId, angle],
     );
     return rows[0] ? { jpeg: rows[0].image_jpeg as Uint8Array } : null;
+  }
+
+  async setManualMarks(scanId: string, angle: string, points: ManualPoint[]): Promise<boolean> {
+    if (!isValidUuid(scanId)) return false;
+    const r = await this.pool.query(
+      `UPDATE scan_images SET manual_marks = $3 WHERE scan_id = $1 AND angle = $2 AND archived_at IS NULL`,
+      [scanId, angle, JSON.stringify(points)],
+    );
+    return (r.rowCount ?? 0) > 0;
+  }
+
+  async listManuallyMarked(): Promise<MarkedImage[]> {
+    const { rows } = await this.pool.query(
+      `SELECT scan_id, angle, manual_marks, capture FROM scan_images
+       WHERE manual_marks IS NOT NULL AND jsonb_array_length(manual_marks) > 0 AND archived_at IS NULL
+       ORDER BY created_at`,
+    );
+    return rows.map((r) => ({
+      scanId: String(r.scan_id),
+      angle: String(r.angle),
+      points: (r.manual_marks as ManualPoint[]) ?? [],
+      capture: (r.capture as CaptureInfo | null) ?? null,
+    }));
   }
 
   async setLabel(scanId: string, dimension: string, label: string, labeledBy?: string | null): Promise<boolean> {

@@ -1,0 +1,22 @@
+{
+  "name": "yolo11n-acne",
+  "version": "acne-det-20260926-145228",
+  "classes": [
+    "acne"
+  ],
+  "img_size": 640,
+  "preprocess": {
+    "color_constancy": true,
+    "letterbox_pad": 114
+  },
+  "output": {
+    "name": "output0",
+    "rows": "x1,y1,x2,y2,score,class",
+    "nms": true
+  },
+  "metrics": {
+    "test_map50": 0.3429,
+    "test_precision": 0.4353,
+    "test_recall": 0.3822
+  }
+}

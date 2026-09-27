@@ -162,6 +162,10 @@ CREATE INDEX IF NOT EXISTS scan_events_kind ON scan_events (kind, at DESC);
 -- Archive instead of destroy: a deleted image is hidden for a retention window
 -- and can be restored, then purged. NULL = live.
 ALTER TABLE scan_images ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ;
+-- Device/camera that took the image (shared/face.ts CaptureInfo), for per-device accuracy.
+ALTER TABLE scan_images ADD COLUMN IF NOT EXISTS capture JSONB;
+-- Staff-tapped ground truth for the localization exam (shared/face.ts ManualPoint[]).
+ALTER TABLE scan_images ADD COLUMN IF NOT EXISTS manual_marks JSONB;
 CREATE INDEX IF NOT EXISTS scan_images_archived ON scan_images (archived_at);
 
 -- Scan invites: a private link giving an outside patient a limited number of

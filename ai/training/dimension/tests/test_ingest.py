@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import pytest
+from PIL import Image
 
 from ai.training.dimension import ingest
 from ai.training.dimension.labels import PRESENCE_CLASSES, normalize_presence
@@ -24,7 +25,8 @@ def _make_tree(root):
     for source, cls in [("multi", "present"), ("multi", "absent"), ("scans", "present")]:
         d = root / "redness" / source / cls
         d.mkdir(parents=True, exist_ok=True)
-        (d / f"{source}_{cls}.jpg").write_bytes(b"x")
+        # Real JPEGs: clinic scans are phash-regrouped, which opens each file.
+        Image.new("RGB", (8, 8)).save(d / f"{source}_{cls}.jpg")
 
 
 def test_collect_defaults_to_clinic_scans_only(tmp_path, monkeypatch):

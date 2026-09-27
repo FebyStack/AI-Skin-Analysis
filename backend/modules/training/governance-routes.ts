@@ -19,7 +19,7 @@ import {
 //   2. A better production model is never replaced automatically. Deployment is
 //      a human click, and the API refuses to promote a candidate that scores
 //      worse unless the caller explicitly forces it.
-function datasetsDir(): string {
+export function datasetsDir(): string {
   return process.env.DATASETS_DIR ?? path.resolve(process.cwd(), "ai/datasets");
 }
 function modelsDir(): string {

@@ -88,11 +88,13 @@ class MultiTaskDataset(Dataset):
     """Yields (image, task_index, label_index). Each sample carries exactly one
     task's label — the train loop masks the loss to that task's head."""
 
-    def __init__(self, rows: list[dict], training: bool):
+    def __init__(self, rows: list[dict], training: bool, lighting: bool = False,
+                 color_constancy: bool = False):
         self.rows = rows
         self.task_index = {t: i for i, t in enumerate(TASKS)}
         self.label_index = {t: {c: i for i, c in enumerate(cs)} for t, cs in TASKS.items()}
-        self.tf = train_transforms(face=True) if training else serve_transforms()
+        self.tf = (train_transforms(face=True, lighting=lighting, color_constancy=color_constancy)
+                   if training else serve_transforms(color_constancy=color_constancy))
 
     def __len__(self) -> int:
         return len(self.rows)

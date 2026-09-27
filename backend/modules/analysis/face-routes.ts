@@ -1,6 +1,6 @@
 import { Router, type Request, type RequestHandler } from "express";
 import type { AppDeps } from "../../shared/deps";
-import { validateFaceReport, type FaceReport } from "../../../shared/face";
+import { validateFaceReport, type CaptureInfo, type FaceReport } from "../../../shared/face";
 import { builtinFaceExplanation } from "../../../ai/llm/fallback/face-education";
 import { compressToJpeg } from "../../utils/image";
 import { dHash } from "../../utils/image-hash";
@@ -12,6 +12,16 @@ interface IncomingImage {
   image?: string;
   mime?: string;
   quality?: { ok?: boolean; issues?: string[] };
+  capture?: unknown;
+}
+
+/** Keep only the five known fields, bounded — the body is client-controlled. */
+export function parseCapture(raw: unknown): CaptureInfo | null {
+  if (!raw || typeof raw !== "object") return null;
+  const c = raw as Record<string, unknown>;
+  const str = (v: unknown) => (typeof v === "string" ? v.slice(0, 80) : "");
+  const int = (v: unknown) => (Number.isInteger(v) && (v as number) > 0 && (v as number) < 20000 ? (v as number) : 0);
+  return { device: str(c.device), platform: str(c.platform), camera: str(c.camera), width: int(c.width), height: int(c.height) };
 }
 
 const VALID_ANGLES = new Set(["front", "left-45", "right-45", "left-profile", "right-profile", "forehead", "chin"]);
@@ -123,6 +133,7 @@ export function createFaceScanRoutes(deps: AppDeps, auth: RequestHandler): Route
         imageWidth: compressed.width,
         imageHeight: compressed.height,
         quality: img.quality ?? {},
+        capture: parseCapture(img.capture),
       });
     }
     await deps.scans.addImages(scan.id, scanImages);
@@ -198,7 +209,13 @@ export function createFaceScanRoutes(deps: AppDeps, auth: RequestHandler): Route
     }
     const { imageJpeg: _img, ...rest } = scan;
     const angles = await deps.scans.listImages(scan.id);
-    res.json({ scan: rest, angles });
+    // Manual marks are staff-only ground truth (spec: "pinpoints are staff-only") — an
+    // invite session must never see them, even for the scan it created itself.
+    const safeAngles =
+      req.session?.role === "invite"
+        ? angles.map(({ manualMarks: _mm, ...a }) => a)
+        : angles;
+    res.json({ scan: rest, angles: safeAngles });
   });
 
   router.get("/api/face-scans/:id/images/:angle", auth, async (req, res) => {

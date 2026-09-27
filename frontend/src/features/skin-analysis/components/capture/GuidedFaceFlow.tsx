@@ -4,6 +4,8 @@ import { useFaceScan } from "../../hooks/use-face-scan";
 import { makeAnalyzeFrame, FACE_MODEL_VERSIONS } from "./frame-adapter";
 import { FaceReportView } from "../results/FaceReportView";
 import { ReportBoundary } from "../results/ReportBoundary";
+import { FindingOverlay } from "../results/FindingOverlay";
+import { Boundary } from "../ui/Boundary";
 import { saveFaceScanWithFallback } from "../../pwa/save-flow";
 import { HistoryView } from "../history/HistoryView";
 import { ScanLabelControl } from "../patients/ScanLabelControl";
@@ -23,6 +25,10 @@ import {
 } from "@ai/face/quality/validate";
 import type { FaceGeometry, Pixels } from "@ai/face/types";
 import { FACE_ANGLES, type FaceReport, type FaceAngle } from "@shared/face";
+import { faceRect, cropForDetector } from "./face-rect";
+import { detectAcne, DETECTOR_VERSION } from "@ai/face/analyzers/acne-detector";
+import { detectAngles } from "@ai/face/analyzers/detect-angles";
+import { captureInfo } from "./capture-info";
 import { FaceRejectedError, type CapturedAngle } from "../../api/face-client";
 import { SILHOUETTE_YAW_RATIO, maskPaths, outerPathD, svgGuide } from "./phi-mask";
 import { useEasedYaw } from "./use-eased-yaw";
@@ -38,27 +44,6 @@ const CHECK_MS = 350;
 const HOLD_CHECKS = 5;        // ~1.75s of CONTINUOUS good pose
 const ARM_DELAY_MS = 1000;    // grace after each step appears, to read + get set
 const CENTER_MAX = 0.32;      // face must be near frame centre, not just facing it
-
-// Face bbox (pixel coords, 15% margin) from normalized MediaPipe landmarks.
-function faceRect(g: FaceGeometry, w: number, h: number) {
-  let minX = 1, minY = 1, maxX = 0, maxY = 0;
-  for (const l of g.landmarks) {
-    if (l.x < minX) minX = l.x;
-    if (l.y < minY) minY = l.y;
-    if (l.x > maxX) maxX = l.x;
-    if (l.y > maxY) maxY = l.y;
-  }
-  const mx = (maxX - minX) * 0.15;
-  const my = (maxY - minY) * 0.15;
-  const x = Math.max(0, Math.floor((minX - mx) * w));
-  const y = Math.max(0, Math.floor((minY - my) * h));
-  return {
-    x,
-    y,
-    w: Math.min(w, Math.ceil((maxX + mx) * w)) - x,
-    h: Math.min(h, Math.ceil((maxY + my) * h)) - y,
-  };
-}
 
 // Grab the current video frame as a JPEG blob (persisted to Postgres + IndexedDB).
 async function frameToJpeg(video: HTMLVideoElement | null): Promise<Blob | null> {
@@ -84,6 +69,9 @@ const MODEL_INPUT = 224;
 // inferences can be very slow, and a stall left the UI stuck on "Saving your
 // scan…". Cap it and save the deterministic report instead.
 const REFINE_TIMEOUT_MS = Number(import.meta.env?.VITE_REFINE_TIMEOUT_MS ?? "20000");
+
+// Pinpoints are staff-only until the clinic localization exam passes (spec §6.3).
+const PINPOINTS_FOR_PATIENTS = import.meta.env?.VITE_PINPOINTS_FOR_PATIENTS === "true";
 
 function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
   return new Promise((resolve) => {
@@ -214,15 +202,35 @@ export function GuidedFaceFlow({ isInvite = false }: { isInvite?: boolean }) {
     }
   }, [holdStreak, view, scan.busy, captureNow]);
 
+  // Photo URLs for the overlay on the result screen; revoked when replaced or
+  // unmounted. Created inside the effect (not useMemo, which must stay pure) —
+  // StrictMode double-invokes an effect+cleanup pair safely, but would leak a
+  // blob URL from a factory run twice with no matching cleanup.
+  const [resultImages, setResultImages] = useState<{ angle: FaceAngle; url: string }[]>([]);
+  useEffect(() => {
+    if (view !== "result") {
+      setResultImages([]);
+      return;
+    }
+    const images = FACE_ANGLES.flatMap((a) => {
+      const blob = capturedByAngle.current.get(a);
+      return blob ? [{ angle: a, url: URL.createObjectURL(blob) }] : [];
+    });
+    setResultImages(images);
+    return () => images.forEach((i) => URL.revokeObjectURL(i.url));
+  }, [view]);
+
   // When the pipeline finishes, save (local + server) and switch to result view.
   useEffect(() => {
     if (!scan.report || view !== "capture") return;
     (async () => {
       setView("saving");
       const angles: CapturedAngle[] = [];
+      const video = camera.videoRef.current;
+      const capture = video ? captureInfo(video) : undefined;
       for (const a of FACE_ANGLES) {
         const blob = capturedByAngle.current.get(a);
-        if (blob) angles.push({ angle: a, blob, mime: "image/jpeg" });
+        if (blob) angles.push({ angle: a, blob, mime: "image/jpeg", capture });
       }
       // Learned models refine acne + skin type when their ONNX is present
       // (offline-safe: no model → deterministic report unchanged). Every
@@ -250,6 +258,30 @@ export function GuidedFaceFlow({ isInvite = false }: { isInvite?: boolean }) {
           REFINE_TIMEOUT_MS,
           base, // too slow → save the deterministic report rather than hang
         );
+      }
+
+      // Acne pinpoints for the staff overlay: crop → detect → release, one angle at a
+      // time, so only one 640px crop is alive (iOS memory). `null` = no detector shipped,
+      // no face angle examined, or too slow — the report then carries no `marks`.
+      const detected = await withTimeout(
+        detectAngles(
+          FACE_ANGLES.flatMap((a) => {
+            const blob = capturedByAngle.current.get(a);
+            return blob ? [{ angle: a, crop: () => cropForDetector(blob, geometryByAngle.current.get(a) ?? null, a) }] : [];
+          }),
+          detectAcne,
+          Date.now() + REFINE_TIMEOUT_MS,
+        ),
+        REFINE_TIMEOUT_MS,
+        null,
+      );
+      if (detected !== null) {
+        report = {
+          ...report,
+          marks: detected.marks,
+          markedAngles: detected.examined,
+          modelVersions: { ...report.modelVersions, acneMarks: DETECTOR_VERSION },
+        };
       }
 
       try {
@@ -348,6 +380,11 @@ export function GuidedFaceFlow({ isInvite = false }: { isInvite?: boolean }) {
         <ReportBoundary onViewHistory={isInvite ? undefined : () => setView("history")}>
           <FaceReportView report={saved} />
         </ReportBoundary>
+        {(!isInvite || PINPOINTS_FOR_PATIENTS) && saved.marks !== undefined ? (
+          <Boundary fallback={null}>
+            <FindingOverlay report={saved} images={resultImages} />
+          </Boundary>
+        ) : null}
         {savedScanId && !isInvite && (
           <>
             <ScanLabelControl scanId={savedScanId} dimension="acne" title="Clinician acne grade" labels={ACNE_CLASSES} />

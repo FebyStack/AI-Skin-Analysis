@@ -17,18 +17,66 @@ import torch
 
 from ai.training.multi.model import MultiHeadNet, output_names
 from ai.training.promote import near_chance_tasks
+from ai.training.transforms import NORM
 
 MODEL_DIR = Path("ai/models/face/candidate")
 DEST = Path("frontend/public/models/face")
+
+
+class ColorConstancyInGraph(torch.nn.Module):
+    """Shades-of-Grey inside the exported graph, for models trained with it.
+
+    The browser (ai/face/analyzers/face-model.ts) feeds mean/std-normalised 224px pixels.
+    Undo that, divide out the illuminant exactly as transforms.shades_of_gray does, and
+    re-normalise — so the PWA needs no preprocessing change and cannot drift from training.
+    """
+
+    def __init__(self, net: torch.nn.Module, p: int = 6):
+        super().__init__()
+        self.net, self.p = net, p
+        self.register_buffer("mean", torch.tensor(NORM["mean"]).view(1, 3, 1, 1))
+        self.register_buffer("std", torch.tensor(NORM["std"]).view(1, 3, 1, 1))
+
+    def forward(self, x: torch.Tensor):
+        # round(): recover the PWA's exact uint8 pixels. floor(): shades_of_gray truncates
+        # via .astype(np.uint8) — without it the output ran 0.3-0.5 grey levels bright.
+        rgb = ((x * self.std + self.mean) * 255).round().clamp(0, 255)
+        illum = rgb.pow(self.p).mean(dim=(2, 3), keepdim=True).pow(1.0 / self.p)
+        illum = illum / (illum.pow(2).sum(dim=1, keepdim=True).sqrt() + 1e-6)
+        rgb = (rgb / (illum * 3 ** 0.5)).clamp(0, 255).floor()
+        return self.net((rgb / 255 - self.mean) / self.std)
+
+
+class KeepHeads(torch.nn.Module):
+    """Export only some heads. The PWA reads outputs by name, so a missing head simply
+    leaves its rule-based estimate in place (ai/face/analyzers/face-model.ts)."""
+
+    def __init__(self, net: torch.nn.Module, keep: list[int]):
+        super().__init__()
+        self.net, self.keep = net, keep
+
+    def forward(self, x: torch.Tensor):
+        out = self.net(x)
+        return tuple(out[i] for i in self.keep)
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--force", action="store_true",
                     help="export even if a head scores near chance (it will ship to users)")
+    ap.add_argument("--drop-task", action="append", default=[], metavar="TASK",
+                    help="leave a head out of the export (repeatable), e.g. a near-chance skintype")
+    ap.add_argument("--dest", type=Path, default=DEST,
+                    help="output dir (default: the PWA's served models dir)")
     args = ap.parse_args()
 
     meta = json.loads((MODEL_DIR / "model.json").read_text())
+    drop = set(args.drop_task)
+    if drop:
+        meta = {**meta, "dropped_tasks": sorted(drop),
+                "tasks": {t: c for t, c in meta["tasks"].items() if t not in drop},
+                "metrics": {k: v for k, v in (meta.get("metrics") or {}).items()
+                            if not any(k == f"val_macro_f1_{t}" for t in drop)}}
 
     # DEST is served to the browser — this writes straight to production, with no
     # promotion step in between. A head at chance carries a real-looking
@@ -45,10 +93,18 @@ def main() -> int:
     net = MultiHeadNet(pretrained=False)
     net.load_state_dict(torch.load(MODEL_DIR / "current.pt", map_location="cpu", weights_only=True))
     net.eval()
+    if meta.get("preprocess", {}).get("color_constancy"):
+        net = ColorConstancyInGraph(net).eval()
 
-    DEST.mkdir(parents=True, exist_ok=True)
-    onnx_path = DEST / "model.onnx"
-    names = output_names()
+    all_names = output_names()
+    keep = [i for i, n in enumerate(all_names) if n.removeprefix("logits_") not in drop]
+    if drop:
+        net = KeepHeads(net, keep).eval()
+
+    dest = args.dest
+    dest.mkdir(parents=True, exist_ok=True)
+    onnx_path = dest / "model.onnx"
+    names = [all_names[i] for i in keep]
     torch.onnx.export(
         net,
         torch.randn(1, 3, 224, 224),
@@ -59,10 +115,12 @@ def main() -> int:
         opset_version=17,
         dynamo=False,
     )
-    (DEST / "model.json").write_text(json.dumps(meta, indent=2))
+    (dest / "model.json").write_text(json.dumps(meta, indent=2))
     print(f"exported {meta['version']} → {onnx_path} "
           f"({onnx_path.stat().st_size // 1_000_000} MB), outputs: {names}")
-    print("Browser picks it up at /models/face/model.onnx on next load.")
+    if dest.resolve() == DEST.resolve():
+        print("Dev server serves it on next load. Installed PWAs cache /models/* cache-first: bump "
+              "CACHE_V in frontend/public/sw.js, then rebuild — otherwise they keep the old model.")
     return 0
 
 

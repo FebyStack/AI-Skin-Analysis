@@ -11,6 +11,7 @@ import { createAuthRoutes } from "../modules/auth/routes";
 import { createPatientRoutes } from "../modules/patients/routes";
 import { createLesionRoutes } from "../modules/analysis/lesion-routes";
 import { createFaceScanRoutes } from "../modules/analysis/face-routes";
+import { createMarkRoutes } from "../modules/analysis/mark-routes";
 import { createCaptureRoutes } from "../modules/capture/routes";
 import { createModelsRoutes } from "../modules/models/routes";
 import { createTrainingRoutes } from "../modules/training/routes";
@@ -72,6 +73,7 @@ export function createApp(deps: AppDeps): Express {
   // Invite links reach the face-scan routes (which scope reads to their own
   // scans) and nothing else.
   app.use(createFaceScanRoutes(deps, auth));
+  app.use(createMarkRoutes(deps, clinician));
 
   // Clinic staff only.
   app.use(createPatientRoutes(deps, clinician));

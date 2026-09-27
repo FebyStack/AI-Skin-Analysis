@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { QUALITY_MIN_SCORE, type QualityResult } from "@shared/image-quality";
+import { FACE_ANGLES, type FaceAngle } from "@shared/face";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { MarkSpots } from "./MarkSpots";
 import { CheckIcon, CrossIcon, WarningIcon } from "../ui/icons";
 
 export interface QueueAngle {
@@ -65,6 +67,7 @@ export function ImageManager({
   const [active, setActive] = useState(0);
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
+  const [marking, setMarking] = useState(false);
   const [confirm, setConfirm] = useState<"image" | "scan" | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -105,14 +108,18 @@ export function ImageManager({
     <div className="grid gap-4 sm:grid-cols-[1fr_13rem]">
       <div>
         {/* Viewer */}
-        <div className="relative aspect-[3/4] w-full overflow-hidden rounded-xl border border-hairline bg-black">
-          <img
-            src={src}
-            alt={current?.angle ?? ""}
-            className="h-full w-full object-contain transition-transform"
-            style={{ transform: `scale(${zoom}) rotate(${rotation}deg)` }}
-          />
-        </div>
+        {marking && current ? (
+          <MarkSpots scanId={scanId} angle={current.angle} src={src} />
+        ) : (
+          <div className="relative aspect-[3/4] w-full overflow-hidden rounded-xl border border-hairline bg-black">
+            <img
+              src={src}
+              alt={current?.angle ?? ""}
+              className="h-full w-full object-contain transition-transform"
+              style={{ transform: `scale(${zoom}) rotate(${rotation}deg)` }}
+            />
+          </div>
+        )}
 
         {/* Viewer controls */}
         <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -121,7 +128,8 @@ export function ImageManager({
               <button
                 key={z}
                 onClick={() => setZoom(z)}
-                className={`min-h-[32px] rounded-lg px-2 text-xs font-medium ${
+                disabled={marking}
+                className={`min-h-[32px] rounded-lg px-2 text-xs font-medium disabled:opacity-50 ${
                   zoom === z
                     ? "bg-gold text-gold-ink"
                     : "border border-hairline-strong bg-surface-raised text-ink-secondary"
@@ -131,9 +139,21 @@ export function ImageManager({
               </button>
             ))}
           </div>
+          {/* No model marks exist for close-ups (only FACE_ANGLES are ever detected/scored),
+              so offering this on forehead/chin just leads to a PUT that 404s forever. */}
+          {current && FACE_ANGLES.includes(current.angle as FaceAngle) && (
+            <button
+              onClick={() => setMarking((m) => !m)}
+              aria-pressed={marking}
+              className="btn-secondary min-h-[32px] px-2 text-xs"
+            >
+              {marking ? "Done marking" : "Mark spots"}
+            </button>
+          )}
           <button
             onClick={() => setRotation((r) => (r + 90) % 360)}
-            className="btn-secondary min-h-[32px] px-2 text-xs"
+            disabled={marking}
+            className="btn-secondary min-h-[32px] px-2 text-xs disabled:opacity-50"
           >
             Rotate 90°
           </button>

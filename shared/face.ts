@@ -63,6 +63,40 @@ export interface QualityMetrics {
 
 export interface AngleQuality { ok: boolean; issues: string[]; metrics?: QualityMetrics }
 
+/**
+ * Which device and camera took a photo, so model accuracy can be checked per device
+ * as clinic hardware and lighting change. Deliberately coarse: iOS never exposes the
+ * exact model to a web page, so `device` is a staff-assigned name (may be "").
+ */
+export interface CaptureInfo {
+  device: string;   // e.g. "Clinic iPad 1" — localStorage "clinic-device-name"
+  platform: string; // e.g. "iPhone iOS 17.5", from the user agent
+  camera: string;   // track label or facing mode, e.g. "Front Camera"
+  width: number;    // actual capture resolution
+  height: number;
+}
+
+export const MARK_KINDS = ["acne", "dark-spot", "redness", "shine", "under-eye", "wrinkle", "eye-bag"] as const;
+export type MarkKind = (typeof MARK_KINDS)[number];
+export const MAX_MARKS = 500;
+
+/** Position in the captured image of `angle`, normalised to 0..1 (resolution-independent). */
+export type MarkShape =
+  | { type: "box"; x: number; y: number; w: number; h: number }
+  | { type: "area"; polygon: [number, number][] };
+
+/** Where one finding is. Counts are per angle — one lesion shows in several photos. */
+export interface FindingMark {
+  kind: MarkKind;
+  angle: FaceAngle;
+  shape: MarkShape;
+  confidence: number;                 // 0..1; 1 for measurements
+  source: "model" | "measurement";
+}
+
+/** A staff-tapped ground-truth point, normalised to the stored image. */
+export interface ManualPoint { kind: MarkKind; x: number; y: number }
+
 export interface FaceExplanation {
   patientSummary: string;
   education: string;
@@ -94,9 +128,52 @@ export interface FaceReport {
   disclaimer: string;
   pipelineVersion: number;
   modelVersions: Record<string, string>;
+  /** Where findings are, per captured angle. Present (maybe empty) only when a locator ran. */
+  marks?: FindingMark[];
+  /** Angles the locator examined; absent on reports saved before this field existed. */
+  markedAngles?: FaceAngle[];
 }
 
 const in01 = (n: unknown): n is number => typeof n === "number" && n >= 0 && n <= 1 && !Number.isNaN(n);
+
+function validBox(s: Record<string, unknown>): boolean {
+  const { x, y, w, h } = s;
+  return in01(x) && in01(y) && in01(w) && in01(h) && w > 0 && h > 0 && x + w <= 1 + 1e-6 && y + h <= 1 + 1e-6;
+}
+
+const MAX_POLYGON_VERTICES = 256;
+
+function validPolygon(p: unknown): boolean {
+  return Array.isArray(p) && p.length >= 3 && p.length <= MAX_POLYGON_VERTICES
+    && p.every((pt) => Array.isArray(pt) && pt.length === 2 && in01(pt[0]) && in01(pt[1]));
+}
+
+export function markErrors(marks: unknown): string[] {
+  if (!Array.isArray(marks)) return ["marks must be an array"];
+  if (marks.length > MAX_MARKS) return [`at most ${MAX_MARKS} marks`];
+  const errors: string[] = [];
+  marks.forEach((m, i) => {
+    const r = (m ?? {}) as Record<string, unknown>;
+    const s = (r.shape ?? {}) as Record<string, unknown>;
+    const shapeOk = s.type === "box" ? validBox(s) : s.type === "area" ? validPolygon(s.polygon) : false;
+    if (!MARK_KINDS.includes(r.kind as MarkKind) || !FACE_ANGLES.includes(r.angle as FaceAngle)
+      || !shapeOk || !in01(r.confidence) || (r.source !== "model" && r.source !== "measurement")) {
+      errors.push(`mark ${i} malformed`);
+    }
+  });
+  return errors;
+}
+
+export function parseManualPoints(raw: unknown): ManualPoint[] | null {
+  if (!Array.isArray(raw) || raw.length > MAX_MARKS) return null;
+  const out: ManualPoint[] = [];
+  for (const p of raw) {
+    const r = (p ?? {}) as Record<string, unknown>;
+    if (!MARK_KINDS.includes(r.kind as MarkKind) || !in01(r.x) || !in01(r.y)) return null;
+    out.push({ kind: r.kind as MarkKind, x: r.x, y: r.y });
+  }
+  return out;
+}
 
 export function validateFaceReport(x: unknown): { ok: true; report: FaceReport } | { ok: false; errors: string[] } {
   const errors: string[] = [];
@@ -124,6 +201,17 @@ export function validateFaceReport(x: unknown): { ok: true; report: FaceReport }
   if (r.skinType != null) {
     const st = r.skinType as Record<string, unknown>;
     if (!SKIN_TYPES.includes(st.type as SkinType) || !in01(st.confidence)) errors.push("skinType malformed");
+  }
+  if (r.marks !== undefined) errors.push(...markErrors(r.marks));
+  if (r.markedAngles !== undefined) {
+    const ma = r.markedAngles;
+    const okAngles =
+      Array.isArray(ma) && ma.every((a) => FACE_ANGLES.includes(a as FaceAngle)) && new Set(ma).size === ma.length;
+    if (!okAngles) {
+      errors.push("markedAngles malformed");
+    } else if (Array.isArray(r.marks) && !r.marks.every((m) => ma.includes((m as { angle?: unknown }).angle))) {
+      errors.push("a mark's angle is not in markedAngles");
+    }
   }
   return errors.length === 0 ? { ok: true, report: x as FaceReport } : { ok: false, errors };
 }

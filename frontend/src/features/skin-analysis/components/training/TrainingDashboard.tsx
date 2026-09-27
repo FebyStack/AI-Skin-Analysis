@@ -3,6 +3,7 @@ import { GovernancePanel } from "./GovernancePanel";
 import { AnalyticsDashboard } from "./AnalyticsDashboard";
 import { ArchivePanel } from "./ArchivePanel";
 import { InviteManager } from "./InviteManager";
+import { DeviceNamePanel } from "./DeviceNamePanel";
 
 // Mirrors the JSON the trainer + evaluator write (train.py / history.py).
 interface EpochPoint {
@@ -196,6 +197,7 @@ export function TrainingDashboard() {
         On-device model training — live progress and how each model improved across retrains. For detailed
         curves, run <code className="text-gold">tensorboard --logdir ai/models/runs</code>.
       </p>
+      <DeviceNamePanel />
       <InviteManager />
       <AnalyticsDashboard />
       <GovernancePanel />
