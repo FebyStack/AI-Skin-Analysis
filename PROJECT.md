@@ -945,6 +945,41 @@ Labelling the 11.3k unlabelled corpus is now agent-driven:
 
 Run a batch: dispatch `face-labeller` with paths + JSONL out, then
 `.venv/bin/python -m ai.training.dimension.materialize <batch>.jsonl`.
+## 2026-09-27 — finding pinpoints, Phase 1 (branch `feat/finding-pinpoints`, not pushed)
+
+Staff see a circle on each detected acne spot per photo angle, with a per-angle count ("Where findings
+are"); patients don't (`VITE_PINPOINTS_FOR_PATIENTS` off). Spec
+`docs/superpowers/specs/2026-09-26-finding-pinpoints-design.md`, plan
+`docs/superpowers/plans/2026-09-26-finding-pinpoints-phase1.md`. Final review clean after one fix wave.
+
+- **Detector** `yolo11n-acne`, run `acne-det-20260926-145228` (60 epochs) → served from
+  `frontend/public/models/acne-detector/model.onnx` (gitignored; `model.json` committed). Public test
+  (564 photos, 6,764 boxes): mAP50 0.343, precision 0.435, recall 0.382. Run record (curves, results.csv):
+  `ai/models/acne-detector/runs/` (gitignored).
+- **Scored like the clinic exam** (box centres as taps, `eval_marks.score`): cut-off 0.35 → recall 0.15 /
+  precision 0.79 (ACNE04 whole-face subset: recall 0.01); **0.15 → 0.50 / 0.61, best F1**; 0.10 →
+  0.69 / 0.39. The cut-off is `VITE_ACNE_BOX_MIN_CONF` (spec default 0.35) — **decision pending**.
+- **Browser parity verified:** TS preprocessing = Python (≤ 1/255), onnxruntime-web rows = Python
+  onnxruntime (≤ 6e-5), final marks vs ultralytics IoU 0.99.
+- **Patient bar:** ≥ 50 tap-marked clinic photos, recall and precision ≥ 0.70
+  (`.venv.nosync/bin/python -m ai.training.localize.eval_marks`); never passes when rows mix models.
+- **Shipping a retrained detector:** bump `CACHE_V` in `frontend/public/sw.js` **and** `DETECTOR_VERSION` in
+  `ai/face/analyzers/acne-detector.ts` — the exam groups rows by it.
+- **DB:** `scan_images.manual_marks` JSONB (and `capture`) is **UNAPPLIED** — `schema.sql` adds it on the
+  next API boot.
+- **Capture:** face 1920×1080 (was 720p). iPad 3-scans-in-a-row memory check pending; fallback is
+  1280×720 in `cameraConstraints` (+ the Task 5 camera test).
+- **Parked:** per-angle deadline only (M2); no unsaved-taps prompt (M4); pHash grouping and Roboflow's
+  640×640 stretch (need a retrain, M12/M13); history overlay lacks a `Boundary`; MarkSpots error copy
+  on save-only failure; Postgres SQL tests need a DB.
+
+**Next:** (1) decide the cut-off; (2) live checks — staff scan shows "Where findings are"; a private
+scan link shows none; Queue → Mark spots → Save; export from the staff console
+`await (await fetch("/api/localization-exam/export", { method: "POST" })).json()`; run `eval_marks`;
+3 iPad scans at 1080p; (3) merge decision; (4) collect ≥ 50 tap-marked clinic photos. Biggest model
+lever after that: higher-resolution lesion data (tiles) or clinic-marked training photos kept apart
+from the exam.
+
 ## 2026-09-22 — repo moved off iCloud
 
 **The repo now lives at `~/Developer/Skin analysis`.** On the iCloud-synced Desktop, macOS "Optimize Mac
@@ -956,7 +991,8 @@ three passes and lost 9,024, including 292 clinic scans; all recovered from the 
 original with retries (`/tmp/repair_copy.py` pattern). Dataset symlinks (11,739) are now **relative**.
 Venv scripts repointed (53). `npm ci` reinstalled node_modules. Verified in the new location:
 `npm run verify` 383 tests + build, `pytest ai/training` 82 tests.
-The Desktop copy is a fallback until deleted. `refs/heads/main 2` is a real branch (`c10adb44`) whose name
+The Desktop copy was moved to the Trash on 2026-09-27 (empty it to reclaim ~0.8 GB); ultralytics'
+global `runs_dir`/`weights_dir` now point at `ai/models/acne-detector/{runs,weights}`. `refs/heads/main 2` is a real branch (`c10adb44`) whose name
 contains a space — rename it rather than delete: `git branch -m "main 2" recovered-main-2026`.
 
 ## 2026-09-21 — public-dataset retrain, frozen exam, datasets moved to SSD
